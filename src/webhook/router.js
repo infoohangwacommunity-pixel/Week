@@ -10,19 +10,13 @@
  * Messages are normalized (Stage 10) and enqueued (Stage 6).
  */
 
-import { Router } from 'express';
+import express from 'express';
 import { randomUUID } from 'crypto';
 import config from '../config/index.js';
-import { logger, runWithContext, extractTraceContext, addTraceContext } from '../observability/index.js';
-import { createPool } from '../db/index.js';
-import { createQueue, getDebounceJobId, cancelPendingDebounceJob, acquireStudentLock } from '../queue/index.js';
-import { createWhatsAppClient } from '../messaging/whatsappClient.js';
+import { logger, runWithContext } from '../observability/index.js';
 import { enqueueStudentMessage } from './enqueue.js';
 
-const router = Router();
-
-// Capture raw body for signature verification
-router.use(express.raw({ limit: '1mb', type: 'application/json' }));
+const router = express.Router();
 
 /**
  * GET handler - challenge verification
@@ -48,7 +42,7 @@ router.get('/', (req, res) => {
  */
 router.post('/', async (req, res) => {
   const start = Date.now();
-  const rawBody = req.body instanceof Buffer ? req.body.toString('utf-8') : req.body;
+  const rawBody = req.body instanceof globalThis.Buffer ? req.body.toString('utf-8') : req.body;
   
   let correlationId;
   try {

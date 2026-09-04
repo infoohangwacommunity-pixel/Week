@@ -56,7 +56,7 @@ export function splitResponseIntoChunks(content) {
       }
       
       const sentences = paragraph.match(
-        /[^.!?]+[.!?]+|[^.!?]+$/g
+        /[^.!?]+[.!?]+|[^.!?]+$/g,
       ) || [paragraph];
       
       for (const sentence of sentences) {

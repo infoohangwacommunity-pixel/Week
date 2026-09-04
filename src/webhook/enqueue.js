@@ -29,7 +29,7 @@ export async function enqueueStudentMessage(phoneNumber, messageId, message, dat
       `INSERT INTO messages (id, wax_id, direction, content, message_type, created_at)
        VALUES ($1, NULL, 'inbound', $2, $3, NOW())
        ON CONFLICT (id) DO NOTHING`,
-      [messageId, JSON.stringify(message), message.type]
+      [messageId, JSON.stringify(message), message.type],
     );
 
     // Get or create WaxID for this phone number
@@ -75,7 +75,7 @@ async function resolveWaxID(pool, phoneNumber) {
        LIMIT 1
      )
      RETURNING id`,
-    []
+    [],
   );
   
   return result.rows[0].id;
@@ -93,18 +93,3 @@ async function createRedisClient(config) {
   return redis;
 }
 
-/**
- * Create BullMQ queue
- */
-function createQueue(name, redis) {
-  const { Queue } = await import('bullmq');
-  const { IORedis } = await import('bullmq');
-  
-  return new Queue(name, {
-    connection: new IORedis(redis),
-    defaultJobOptions: {
-      removeOnComplete: 100,
-      removeOnFail: 100,
-    },
-  });
-}
