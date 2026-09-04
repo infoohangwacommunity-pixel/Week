@@ -57,6 +57,7 @@ const configSchema = z.object({
   QUEUE_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
   QUEUE_RETRY_DELAY_BASE_MS: z.coerce.number().int().min(100).default(1000),
   QUEUE_RETRY_DELAY_MAX_MS: z.coerce.number().int().min(1000).default(60000),
+  QUEUE_LOCK_DURATION_MS: z.coerce.number().int().min(1000).default(30000),
 
   // --- RESPONSE ---
   RESPONSE_MAX_CHUNK_CHARS: z.coerce.number().int().min(100).default(1000),

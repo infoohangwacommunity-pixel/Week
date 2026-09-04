@@ -82,7 +82,8 @@ export function getDebounceJobId(waxId) {
 /**
  * Acquire a distributed lock for a student using Redlock
  */
-export async function acquireStudentLock(redis, waxId, duration = 30000) {
+export async function acquireStudentLock(redis, waxId, config) {
+  const duration = config.QUEUE_LOCK_DURATION_MS || 30000;
   const lockKey = `lock:student:${waxId}`;
   const lockValue = randomUUID();
   
