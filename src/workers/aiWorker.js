@@ -4,8 +4,10 @@
  * 
  * This is the entry point for the BullMQ worker that processes AI tasks.
  * It connects to Redis, sets up queue consumers, and handles graceful shutdown.
+ * Also includes a minimal health HTTP server for Railway health checks.
  */
 
+import http from 'http';
 import config from './config/index.js';
 import { logger } from './observability/index.js';
 import { createPool } from './db/index.js';
@@ -35,4 +37,20 @@ const workers = await setupWorkers({ redis, pool, logger });
 
 logger.info({ concurrency: config.QUEUE_WORKER_CONCURRENCY }, 'Worker setup complete');
 
-export default { workers, redis, pool };
+// Minimal health server for Railway health checks
+const healthServer = http.createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', worker: 'running' }));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+const healthPort = config.WORKER_HEALTH_PORT || 3001;
+healthServer.listen(healthPort, () => {
+  logger.info({ port: healthPort }, 'Worker health server started');
+});
+
+export default { workers, redis, pool, healthServer };

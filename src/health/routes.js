@@ -1,8 +1,9 @@
 /**
  * WaxPrep - Health Check Routes
  * 
- * Simple liveness probe that confirms the server is running.
- * Does not check external dependencies - that's for readiness probes.
+ * Implements liveness (/health) and readiness (/ready) probes.
+ * Liveness: instant check if process is alive.
+ * Readiness: checks critical dependencies (DB, Redis).
  */
 
 import { Router } from 'express';
@@ -10,7 +11,8 @@ import { Router } from 'express';
 const router = Router();
 
 /**
- * Basic health check - server is alive
+ * Liveness probe - is the process alive?
+ * Returns immediately without checking dependencies.
  */
 router.get('/', (req, res) => {
   res.status(200).json({
@@ -21,34 +23,33 @@ router.get('/', (req, res) => {
 });
 
 /**
- * Detailed health check - includes dependency status
- * (Implemented in Stage 7)
+ * Readiness probe - is the service ready to accept traffic?
+ * Checks database connectivity.
  */
-router.get('/detailed', async (req, res) => {
-  const health = {
-    status: 'ok',
-    service: 'waxprep-webhook',
-    timestamp: new Date().toISOString(),
-    dependencies: {
-      database: 'unknown',
-      redis: 'unknown',
-    },
-  };
+router.get('/ready', async (req, res) => {
+  const checks = {};
+  let allHealthy = true;
 
+  // Database check
   try {
-    // Placeholder for database check (Stage 7)
-    // const dbStatus = await checkDatabase(pool);
-    // health.dependencies.database = dbStatus;
-
-    // Placeholder for Redis check (Stage 7)
-    // const redisStatus = await checkRedis(redis);
-    // health.dependencies.redis = redisStatus;
-
-    res.status(200).json(health);
+    const start = Date.now();
+    const pool = req.app.get('dbPool');
+    await pool.query('SELECT 1', [], { timeout: 5000 });
+    checks.database = { status: 'ok', latencyMs: Date.now() - start };
   } catch (err) {
-    health.status = 'degraded';
-    res.status(503).json(health);
+    checks.database = {
+      status: 'error',
+      message: 'Database connection failed',
+    };
+    allHealthy = false;
   }
+
+  const statusCode = allHealthy ? 200 : 503;
+  res.status(statusCode).json({
+    status: allHealthy ? 'ready' : 'not_ready',
+    checks,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export default router;

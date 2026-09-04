@@ -30,6 +30,9 @@ registerGracefulShutdown({ logger, pool });
 // Create Express app
 const app = express();
 
+// Store pool reference for health checks
+app.set('dbPool', pool);
+
 // Middleware: Parse JSON bodies
 app.use(express.json({ limit: '1mb' }));
 
@@ -89,7 +92,18 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
+
 const PORT = config.PORT;
+
+// Startup validation - verify database connection before listening
+try {
+  await pool.query('SELECT 1');
+  logger.info('Database connection verified');
+} catch (err) {
+  logger.fatal({ err }, 'Database connection failed at startup');
+  process.exit(1);
+}
+
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT, env: config.NODE_ENV }, 'Webhook server started');
 });
