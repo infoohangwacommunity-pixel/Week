@@ -13,6 +13,7 @@ import { logger, runWithContext } from './observability/index.js';
 import { createPool } from './db/index.js';
 import { registerGlobalErrorHandlers, registerGracefulShutdown } from './errors/index.js';
 import healthRoutes from './health/routes.js';
+import webhookRouter from './webhook/router.js';
 
 // Load configuration first - this validates all environment variables
 logger.info({ config: config.logSafeConfig() }, 'Configuration loaded');
@@ -61,6 +62,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/health', healthRoutes);
+app.use('/webhook/whatsapp', webhookRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
