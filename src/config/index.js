@@ -1,0 +1,123 @@
+/**
+ * WaxPrep - Configuration Module
+ * 
+ * This module loads and validates all environment variables using Zod.
+ * It provides a centralized, type-safe configuration registry.
+ * 
+ * All application code imports from this module - never read process.env directly.
+ */
+
+import { z } from 'zod';
+import dotenv from 'dotenv';
+
+// Load .env files in development only (Railway injects env vars in production)
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    dotenv.config({ override: true });
+  } catch {
+    // If .env doesn't exist, that's ok in production
+  }
+}
+
+// Define the complete configuration schema
+const configSchema = z.object({
+  // --- RUNTIME ---
+  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+
+  // --- DATABASE ---
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
+  DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(5000),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
+
+  // --- REDIS ---
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+
+  // --- WHATSAPP ---
+  WHATSAPP_VERIFY_TOKEN: z.string().min(1, 'WHATSAPP_VERIFY_TOKEN is required'),
+  WHATSAPP_APP_SECRET: z.string().min(1, 'WHATSAPP_APP_SECRET is required'),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().min(1, 'WHATSAPP_PHONE_NUMBER_ID is required'),
+  WHATSAPP_API_VERSION: z.string().min(1, 'WHATSAPP_API_VERSION is required').default('v21.0'),
+  WHATSAPP_API_BASE_URL: z.string().url().default('https://graph.facebook.com'),
+
+  // --- AI PROVIDER ---
+  AI_PRIMARY_PROVIDER: z.string().min(1, 'AI_PRIMARY_PROVIDER is required'),
+  AI_PRIMARY_MODEL: z.string().min(1, 'AI_PRIMARY_MODEL is required'),
+  AI_PRIMARY_API_KEY: z.string().min(1, 'AI_PRIMARY_API_KEY is required'),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
+  AI_MAX_TOKENS: z.coerce.number().int().min(100).default(1024),
+  AI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.7),
+
+  // --- QUEUE ---
+  QUEUE_DEBOUNCE_WINDOW_MS: z.coerce.number().int().min(500).max(30000).default(3000),
+  QUEUE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
+  QUEUE_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
+  QUEUE_RETRY_DELAY_BASE_MS: z.coerce.number().int().min(100).default(1000),
+  QUEUE_RETRY_DELAY_MAX_MS: z.coerce.number().int().min(1000).default(60000),
+  QUEUE_LOCK_DURATION_MS: z.coerce.number().int().min(1000).default(30000),
+
+  // --- RESPONSE ---
+  RESPONSE_MAX_CHUNK_CHARS: z.coerce.number().int().min(100).default(1000),
+  RESPONSE_TYPING_INDICATOR_ENABLED: z.enum(['true', 'false']).transform(v => v === 'true').default('true'),
+
+  // --- SESSION ---
+  SESSION_INACTIVITY_TIMEOUT_MS: z.coerce.number().int().min(60000).default(1800000),
+
+  // --- IDENTITY ---
+  PHONE_HMAC_SECRET: z.string().min(32, 'PHONE_HMAC_SECRET must be at least 32 characters'),
+
+  // --- CIRCUIT BREAKER ---
+  CIRCUIT_BREAKER_THRESHOLD: z.coerce.number().int().min(1).default(5),
+  CIRCUIT_BREAKER_DURATION_MS: z.coerce.number().int().min(1000).default(60000),
+
+  // --- SHUTDOWN ---
+  WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(5000).default(30000),
+
+  // --- ERROR MESSAGES ---
+  AI_FAILURE_STUDENT_MESSAGE: z.string().min(1).default('Sorry, I\'m having a bit of trouble right now. Could you send your message again in a moment?'),
+});
+
+// Parse and validate environment variables
+const parsed = configSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error('❌ Configuration validation failed:');
+  for (const error of parsed.error.errors) {
+    console.error(`  - ${error.path.join('.')}: ${error.message}`);
+  }
+  console.error('\nPlease check your .env.local or Railway environment variables.');
+  console.error('See .env.example for all required variables.');
+  process.exit(1);
+}
+
+// Create frozen configuration object
+const config = Object.freeze(parsed.data);
+
+/**
+ * Returns a log-safe version of the config with secrets redacted
+ */
+export function logSafeConfig() {
+  return {
+    NODE_ENV: config.NODE_ENV,
+    PORT: config.PORT,
+    LOG_LEVEL: config.LOG_LEVEL,
+    DATABASE_URL: config.DATABASE_URL.replace(/password=[^&]+/, 'password=[REDACTED]'),
+    REDIS_URL: config.REDIS_URL.replace(/:(.+?)@/, ':[REDACTED]@'),
+    WHATSAPP_VERIFY_TOKEN: '[REDACTED]',
+    WHATSAPP_APP_SECRET: '[REDACTED]',
+    WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,
+    WHATSAPP_API_VERSION: config.WHATSAPP_API_VERSION,
+    AI_PRIMARY_PROVIDER: config.AI_PRIMARY_PROVIDER,
+    AI_PRIMARY_MODEL: config.AI_PRIMARY_MODEL,
+    AI_PRIMARY_API_KEY: '[REDACTED]',
+    AI_TIMEOUT_MS: config.AI_TIMEOUT_MS,
+    QUEUE_DEBOUNCE_WINDOW_MS: config.QUEUE_DEBOUNCE_WINDOW_MS,
+    RESPONSE_MAX_CHUNK_CHARS: config.RESPONSE_MAX_CHUNK_CHARS,
+    PHONE_HMAC_SECRET: '[REDACTED]',
+  };
+}
+
+export default config;
