@@ -3,12 +3,15 @@
  * WaxPrep - Message Enqueueing
  * 
  * Handles enqueuing student messages for AI processing.
- * Implements debouncing, per-student locking, and message persistence.
+ * Implements debouncing, WaxID resolution, and message persistence.
  */
 
 import { createPool } from '../db/index.js';
-import { createQueue, getDebounceJobId, cancelPendingDebounceJob } from '../queue/index.js';
+import { createQueue } from '../queue/index.js';
+import { resolveWaxID } from '../identity/waxId.js';
+import { getOrCreateSession, getUnprocessedMessages, getConversationHistory } from '../session/manager.js';
 import { randomUUID } from 'crypto';
+import { logger } from '../observability/index.js';
 
 /**
  * Enqueue a student message for AI processing
@@ -17,68 +20,70 @@ import { randomUUID } from 'crypto';
  * - If a pending job exists for this student, remove it
  * - Create a new delayed job with the debounce window
  * - Persist the message to the database
+ * - Resolve WaxID and session
  */
-export async function enqueueStudentMessage(phoneNumber, messageId, message, databaseUrl, redisUrl, debounceWindowMs, logger) {
+export async function enqueueStudentMessage(phoneNumber, messageId, message, databaseUrl, redisUrl, debounceWindowMs, log) {
   const pool = await createPool({ DATABASE_URL: databaseUrl });
   const redis = await createRedisClient({ REDIS_URL: redisUrl });
   const queue = createQueue('student-messages', redis);
   
   try {
-    // Persist message to database
+    // Parse message content if it's a buffer
+    const messageContent = message.type === 'text' ? message.text?.body : null;
+    const messageType = message.type;
+    
+    // Resolve WaxID for this phone number
+    const waxId = await resolveWaxID(pool, phoneNumber);
+    log = log.child({ waxId, messageId });
+
+    // Get or create session
+    const session = await getOrCreateSession(pool, waxId);
+    log = log.child({ sessionId: session.id });
+
+    // Persist message to database (with WaxID and session)
     await pool.query(
-      `INSERT INTO messages (id, wax_id, direction, content, message_type, created_at)
-       VALUES ($1, NULL, 'inbound', $2, $3, NOW())
+      `INSERT INTO messages (id, wax_id, session_id, direction, content, message_type, created_at)
+       VALUES ($1, $2, $3, 'inbound', $4, $5, NOW())
        ON CONFLICT (id) DO NOTHING`,
-      [messageId, JSON.stringify(message), message.type],
+      [messageId, waxId, session.id, messageContent, messageType]
     );
 
-    // Get or create WaxID for this phone number
-    // (WaxID resolution is implemented in Stage 12)
-    const waxId = await resolveWaxID(pool, phoneNumber);
-
     // Cancel any pending debounce job for this student
-    await cancelPendingDebounceJob(queue, waxId);
+    const debounceJobId = `debounce:student:${waxId}`;
+    try {
+      const existingJob = await queue.getJob(debounceJobId);
+      if (existingJob) {
+        await existingJob.remove();
+        log.debug({ debounceJobId }, 'Cancelled pending debounce job');
+      }
+    } catch (err) {
+      log.warn({ err }, 'Failed to cancel pending debounce job');
+    }
 
     // Add new debounce job
     await queue.add('process-student-messages', {
       waxId,
       messageId,
+      sessionId: session.id,
       _trace: {
         correlationId: randomUUID(),
         waxId,
         messageId,
+        sessionId: session.id,
       },
     }, {
-      jobId: getDebounceJobId(waxId),
+      jobId: debounceJobId,
       delay: debounceWindowMs,
     });
 
-    logger.info({ waxId, messageId }, 'Message enqueued for processing');
+    log.info({ waxId, messageId, sessionId: session.id }, 'Message enqueued for processing');
+  } catch (err) {
+    log.error({ err }, 'Failed to enqueue message');
+    throw err;
   } finally {
     await pool.end();
     await redis.disconnect();
   }
-}
-
-/**
- * Resolve WaxID for a phone number
- * Creates a new WaxID if the phone number is not known
- */
-async function resolveWaxID(pool, phoneNumber) {
-  // Stage 12: Full WaxID resolution with hashing and profile storage
-  // For now, create a simple mapping
-  const result = await pool.query(
-    `INSERT INTO students (id, created_at)
-     SELECT gen_random_uuid(), NOW()
-     WHERE NOT EXISTS (
-       SELECT 1 FROM students WHERE deleted_at IS NULL
-       LIMIT 1
-     )
-     RETURNING id`,
-    [],
-  );
-  
-  return result.rows[0].id;
 }
 
 /**
@@ -93,3 +98,18 @@ async function createRedisClient(config) {
   return redis;
 }
 
+/**
+ * Create BullMQ queue
+ */
+function createQueue(name, redis) {
+  const { Queue } = await import('bullmq');
+  const { IORedis } = await import('bullmq');
+  
+  return new Queue(name, {
+    connection: new IORedis(redis),
+    defaultJobOptions: {
+      removeOnComplete: 100,
+      removeOnFail: 100,
+    },
+  });
+}

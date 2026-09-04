@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto';
 import config from '../config/index.js';
 import { logger, runWithContext } from '../observability/index.js';
 import { enqueueStudentMessage } from './enqueue.js';
+import { verifyWebhookSignature, isDuplicateMessage, validateWebhookPayload } from './security.js';
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ router.get('/', (req, res) => {
  */
 router.post('/', async (req, res) => {
   const start = Date.now();
-  const rawBody = req.body instanceof globalThis.Buffer ? req.body.toString('utf-8') : req.body;
+  const rawBody = req.body instanceof globalThis.Buffer ? req.body : req.body;
   
   let correlationId;
   try {
@@ -53,13 +54,27 @@ router.post('/', async (req, res) => {
       
       log.info({ bodyLength: rawBody.length }, 'Webhook POST received');
 
+      // Verify signature
+      const signatureHeader = req.headers['x-hub-signature-256'];
+      if (!verifyWebhookSignature(rawBody, signatureHeader, config.WHATSAPP_APP_SECRET)) {
+        log.warn('Signature verification failed');
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+
       // Parse payload
       let payload;
       try {
-        payload = JSON.parse(rawBody);
+        payload = JSON.parse(rawBody.toString('utf-8'));
       } catch (err) {
         log.error({ err }, 'Invalid JSON in webhook payload');
         return res.status(400).json({ error: 'Invalid JSON' });
+      }
+
+      // Validate payload structure
+      const validation = validateWebhookPayload(payload);
+      if (!validation.valid) {
+        log.warn({ error: validation.error }, 'Payload validation failed');
+        return res.status(400).json({ error: validation.error });
       }
 
       // Check if this is a status update (not a message)
@@ -86,6 +101,12 @@ router.post('/', async (req, res) => {
         
         log = log.child({ messageId, from, messageType });
         
+        // Check for duplicate/replay
+        if (isDuplicateMessage(messageId)) {
+          log.debug({ messageId }, 'Duplicate message - already processed');
+          continue;
+        }
+
         // Only process supported message types
         if (!['text', 'image', 'audio'].includes(messageType)) {
           log.warn({ messageType }, 'Unsupported message type - acknowledging but not processing');
