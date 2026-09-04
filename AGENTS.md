@@ -525,3 +525,152 @@ auditable where appropriate;
 selectively persisted;
 resistant to accidental contamination.
 The AI should receive useful context, not an uncontrolled transcript dump.
+22. LEARNING INTELLIGENCE
+Systems such as:
+Bayesian Knowledge Tracing;
+evidence tracking;
+misconception representation;
+assessment verification;
+retrieval;
+embeddings;
+knowledge-state estimation;
+are permitted as infrastructure.
+However, they must not silently become rigid pedagogical controllers.
+For example:
+GOOD:
+BKT estimates the student's knowledge state.
+The AI receives that estimate as evidence.
+The AI decides what to do with it.
+BAD:
+IF mastery < 0.60
+THEN force lesson X.
+The first provides intelligence to the AI.
+The second replaces the AI's judgment with deterministic tutoring logic.
+23. ERROR HANDLING
+Errors must be handled predictably.
+Distinguish:
+user-facing errors;
+infrastructure failures;
+provider failures;
+validation failures;
+database failures;
+queue failures;
+tool failures;
+security failures.
+Do not silently swallow important errors.
+Do not expose secrets or internal infrastructure details to students.
+24. TESTING
+Testing is mandatory for meaningful functionality.
+Prefer:
+unit tests for deterministic infrastructure;
+integration tests for subsystem interactions;
+contract tests for external interfaces;
+security tests for isolation and authorization;
+AI evaluation tests for model behavior;
+regression tests for previously discovered failures.
+Do not claim something works without verification.
+For AI behavior, distinguish:
+Software correctness
+from:
+Educational/AI quality
+Both matter, but they are measured differently.
+25. THE BUILD ORDER
+Do not jump directly into advanced AI features because they are exciting.
+WaxPrep is built as a dependency graph.
+The general progression is:
+Foundation
+    ↓
+Runtime
+    ↓
+Communication
+    ↓
+Identity
+    ↓
+Persistence
+    ↓
+Message infrastructure
+    ↓
+Basic AI
+    ↓
+Context
+    ↓
+Memory
+    ↓
+Orchestration
+    ↓
+Tools
+    ↓
+Student model
+    ↓
+Evidence
+    ↓
+Knowledge estimation
+    ↓
+Assessment
+    ↓
+Misconceptions
+    ↓
+Retrieval
+    ↓
+Safety hardening
+    ↓
+Evaluation
+    ↓
+Production hardening
+Do not implement downstream systems before their required foundations exist unless there is a clear engineering reason.
+26. CURRENT PRODUCT SCOPE
+WaxPrep is currently focused on proving and building the core tutoring experience.
+The first priority is:
+Student
+  ↓
+WhatsApp
+  ↓
+Webhook
+  ↓
+WaxPrep backend
+  ↓
+Identity
+  ↓
+Conversation/context
+  ↓
+AI
+  ↓
+Response
+  ↓
+WhatsApp
+  ↓
+Student
+Everything else should support this core loop.
+27. CURRENTLY DEFERRED
+Do NOT prioritize:
+dashboards;
+student analytics dashboards;
+student data export interfaces;
+payment systems;
+subscription infrastructure;
+billing;
+revenue tracking;
+cost-observation dashboards;
+commercial analytics;
+sophisticated administrative portals;
+unnecessary enterprise features.
+These belong to later stages when the core product justifies them.
+Do not let deferred business infrastructure distort the core architecture.
+28. FINAL DECISION RULE
+When uncertain, ask:
+Is this code giving the AI a better capability, better information, safer operation, better reliability, or better evidence?
+If yes, it is probably aligned.
+Then ask:
+Is this code deciding what the student should be taught instead of allowing the AI to reason about it?
+If yes, STOP and review the design.
+29. FINAL PRINCIPLE
+The coding agent has freedom to engineer.
+The coding agent does NOT have freedom to redefine WaxPrep.
+The coding agent has freedom to improve infrastructure.
+The coding agent does NOT have freedom to hardcode educational intelligence.
+The coding agent has freedom to work quickly on a safe branch.
+The coding agent does NOT have freedom to destroy the repository.
+Most important rule
+AI should have freedom to reason.
+The coding agent should have freedom to build.
+Neither should have freedom to destroy the project's foundations.
