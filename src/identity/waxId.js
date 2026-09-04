@@ -48,7 +48,7 @@ export async function resolveWaxID(pool, phoneNumber) {
      WHERE phone_hash = $1 
        AND deleted_at IS NULL
      LIMIT 1`,
-    [phoneHash]
+    [phoneHash],
   );
 
   if (existing.rows.length > 0) {
@@ -63,7 +63,7 @@ export async function resolveWaxID(pool, phoneNumber) {
     `INSERT INTO students (id, phone_hash, created_at)
      VALUES ($1, $2, NOW())
      ON CONFLICT (id) DO NOTHING`,
-    [waxId, phoneHash]
+    [waxId, phoneHash],
   );
 
   logger.info({ waxId, phoneHash: phoneHash.substring(0, 8) + '...' }, 'Created new WaxID');
@@ -85,7 +85,7 @@ export async function getWaxIDByPhone(pool, phoneNumber) {
      WHERE phone_hash = $1 
        AND deleted_at IS NULL
      LIMIT 1`,
-    [phoneHash]
+    [phoneHash],
   );
 
   return result.rows.length > 0 ? result.rows[0].id : null;
@@ -104,7 +104,7 @@ export async function waxIDExists(pool, waxId) {
      WHERE id = $1 
        AND deleted_at IS NULL
      LIMIT 1`,
-    [waxId]
+    [waxId],
   );
 
   return result.rows.length > 0;
@@ -124,7 +124,7 @@ export async function deleteWaxID(pool, waxId) {
      WHERE id = $1 
        AND deleted_at IS NULL
      RETURNING id`,
-    [waxId]
+    [waxId],
   );
 
   return result.rows.length > 0;
@@ -146,7 +146,7 @@ export async function getOrCreateWaxID(pool, phoneNumber) {
      FROM students 
      WHERE id = $1 
        AND deleted_at IS NULL`,
-    [waxId]
+    [waxId],
   );
 
   return {

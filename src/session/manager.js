@@ -32,7 +32,7 @@ export async function getOrCreateSession(pool, waxId) {
        AND last_activity_at > $2
      ORDER BY last_activity_at DESC
      LIMIT 1`,
-    [waxId, inactiveThreshold]
+    [waxId, inactiveThreshold],
   );
 
   if (existing.rows.length > 0) {
@@ -45,7 +45,7 @@ export async function getOrCreateSession(pool, waxId) {
     `INSERT INTO sessions (id, wax_id, started_at, last_activity_at)
      VALUES (gen_random_uuid(), $1, NOW(), NOW())
      RETURNING id, wax_id, started_at, last_activity_at`,
-    [waxId]
+    [waxId],
   );
 
   logger.info({ sessionId: result.rows[0].id, waxId }, 'Created new session');
@@ -64,7 +64,7 @@ export async function updateSessionActivity(pool, sessionId) {
      SET last_activity_at = NOW()
      WHERE id = $1
        AND ended_at IS NULL`,
-    [sessionId]
+    [sessionId],
   );
 }
 
@@ -80,7 +80,7 @@ export async function endSession(pool, sessionId) {
      SET ended_at = NOW()
      WHERE id = $1
        AND ended_at IS NULL`,
-    [sessionId]
+    [sessionId],
   );
 }
 
@@ -117,7 +117,7 @@ export async function getConversationHistory(pool, waxId, limit = 20, sessionId 
   
   // Sort ascending for context
   return result.rows.sort((a, b) => 
-    new Date(a.created_at) - new Date(b.created_at)
+    new Date(a.created_at) - new Date(b.created_at),
   );
 }
 
@@ -136,7 +136,7 @@ export async function getUnprocessedMessages(pool, waxId) {
        AND direction = 'inbound'
        AND deleted_at IS NULL
      ORDER BY created_at ASC`,
-    [waxId]
+    [waxId],
   );
 
   return result.rows;
@@ -160,7 +160,7 @@ export async function getLastResponseTimestamp(pool, waxId, sessionId) {
        AND deleted_at IS NULL
      ORDER BY created_at DESC
      LIMIT 1`,
-    sessionId ? [waxId, sessionId] : [waxId]
+    sessionId ? [waxId, sessionId] : [waxId],
   );
 
   return result.rows.length > 0 ? new Date(result.rows[0].created_at) : null;
@@ -180,7 +180,7 @@ export async function markMessageAsProcessed(pool, messageId, sessionId) {
          session_id = $2
      WHERE id = $1
        AND wax_id IS NULL`,
-    [messageId, sessionId]
+    [messageId, sessionId],
   );
 }
 
@@ -196,7 +196,7 @@ export async function getMessageByWhatsAppId(pool, whatsappMessageId) {
     `SELECT * FROM messages
      WHERE id = $1
        AND deleted_at IS NULL`,
-    [whatsappMessageId]
+    [whatsappMessageId],
   );
 
   return result.rows.length > 0 ? result.rows[0] : null;
