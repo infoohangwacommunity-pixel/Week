@@ -246,4 +246,282 @@ Question 1
 Question 2
 Question 3
 Question 4
-Then start tutoring
+Then start tutoring unless the founder explicitly changes the philosophy.
+6. CONFIGURATION OVER CODE
+WaxPrep follows a configuration-driven architecture.
+The project should maintain a clear runtime configuration registry.
+Anything that is genuinely environment-specific, operationally tunable, or reasonably expected to change without changing the underlying architecture should NOT be unnecessarily hardcoded.
+Examples include:
+API credentials;
+provider selection;
+model selection;
+fallback providers;
+timeout values;
+retry counts;
+queue settings;
+debounce duration;
+response limits;
+memory limits;
+session durations;
+rate limits;
+feature flags;
+configurable thresholds;
+logging levels;
+external service configuration;
+deployment-specific behavior.
+These should normally be represented through environment variables / Railway variables and loaded through a centralized configuration layer.
+Do not scatter process.env.* throughout the application.
+Prefer:
+Railway Environment Variables
+        ↓
+Configuration Registry
+        ↓
+Validated Runtime Configuration
+        ↓
+Application Components
+Configuration must be:
+validated;
+typed where practical;
+documented;
+centrally loaded;
+safely defaulted where appropriate;
+explicit about required vs optional values.
+NEVER put secrets in source code.
+NEVER commit real API keys.
+NEVER hardcode credentials.
+NEVER treat .env.example as a place for real secrets.
+7. DO NOT BUILD DEFERRED BUSINESS FEATURES EARLY
+WaxPrep is currently in foundational product construction.
+Do NOT prematurely build:
+dashboards;
+admin dashboards;
+student analytics dashboards;
+student-data export interfaces;
+sophisticated reporting interfaces;
+payment systems;
+subscription systems;
+billing systems;
+cost-observation dashboards;
+revenue infrastructure;
+commercial analytics;
+unnecessary business intelligence;
+complicated terms-and-conditions interfaces;
+large administrative portals;
+multi-tenant enterprise infrastructure;
+unnecessary CRM systems.
+These may eventually become important.
+They are NOT current priorities.
+Do not allow these features to distract from the tutoring engine.
+Basic internal engineering observability needed to keep the system reliable is different from building a business analytics dashboard.
+8. PRIVACY AND DATA MINIMIZATION
+WaxPrep is intended for students and may serve minors.
+Treat student information as sensitive.
+Follow data minimization.Do not allow these features to distract from the tutoring engine.
+Basic internal engineering observability needed to keep the system reliable is different from building a business analytics dashboard.
+8. PRIVACY AND DATA MINIMIZATION
+WaxPrep is intended for students and may serve minors.
+Treat student information as sensitive.
+Follow data minimization.
+Do not collect information simply because it could be useful someday.
+Do not automatically turn every conversation detail into durable memory.
+Do not store unnecessary:
+precise location;
+government identification numbers;
+unrelated third-party information;
+sensitive personal information;
+inferred psychological labels;
+unnecessary health information;
+family-conflict details.
+Student identity must remain isolated.
+A student's memory must never be retrievable by another student.
+Never trust an identifier supplied solely by the conversational model for authorization.
+Authorization belongs to deterministic infrastructure.
+9. SAFETY
+Safety is infrastructure, not tutoring logic.
+WaxPrep may contain deterministic safety mechanisms for genuinely serious situations such as:
+self-harm;
+abuse disclosure;
+immediate danger.
+These are legitimate exceptions to the normal AI-first rule because they are duty-of-care mechanisms.
+However, the safety exception must remain narrow.
+Do not turn safety infrastructure into a general-purpose pedagogical decision tree.
+Do not use "safety" as an excuse to hardcode ordinary tutoring behavior.
+10. GIT SAFETY — EXTREMELY IMPORTANT
+The repository has previously suffered serious branch damage.
+Therefore Git safety is a first-class engineering requirement.
+NEVER:
+delete main;
+rename main;
+rename another branch to main;
+force-push without explicit real-time founder authorization;
+rewrite shared history;
+reset shared branches;
+blindly merge branches;
+assume master is disposable;
+assume dev is disposable;
+assume staging is disposable;
+delete branches because they "look old";
+execute destructive Git commands merely because a task seems to require them.
+Treat every branch as potentially valuable.
+11. MAIN BRANCH PROTECTION
+Never work directly on main.
+At the beginning of every implementation session:
+git branch --show-current
+If currently on main, do not begin implementation there.
+Create or switch to an appropriate work branch.
+Before starting meaningful work, record the starting commit SHA:
+git rev-parse HEAD
+The exact starting state must remain recoverable.
+12. BRANCH NAMING
+Use clear work branches.
+Examples:
+feature/identity
+feature/whatsapp-ingestion
+feature/memory
+feature/ai-orchestration
+feature/configuration
+fix/webhook-verification
+research/stage-01
+research/stage-02
+The exact naming convention may evolve, but branch purpose must be obvious.
+Never rename a branch into main without explicit founder authorization.
+13. MERGES REQUIRE HUMAN AUTHORIZATION
+The coding agent MUST NOT merge automatically.
+Before a merge:
+verify the current branch;
+verify the source branch;
+verify the target branch;
+inspect the commits;
+inspect the diff;
+run appropriate tests;
+confirm there are no unexpected deletions;
+report exactly what will happen;
+ask the founder for explicit authorization.
+The founder must explicitly authorize the specific merge.
+Do not interpret vague instructions such as:
+"merge it"
+as permission to guess the source or target.
+State:
+Source: feature/example
+Target: main
+and request confirmation.
+14. DESTRUCTIVE OPERATIONS REQUIRE A STOP
+STOP and ask before:
+deleting a branch;
+renaming a branch;
+force-pushing;
+rewriting shared history;
+resetting a shared branch;
+deleting large numbers of files;
+destructive database migrations;
+irreversible data transformations;
+removing major architecture;
+changing foundational philosophy;
+changing agent governance;
+introducing potentially unsafe access;
+changing production infrastructure in a destructive manner.
+Do not proceed until explicitly authorized.15. CHECKPOINTS
+Make small, logical commits.
+Avoid giant commits containing unrelated work.
+A meaningful milestone should be recoverable.
+Before large changes:
+inspect repository state;
+record current SHA;
+understand affected files;
+implement incrementally;
+test;
+review diff;
+checkpoint.
+Never make a giant architectural change with no recoverable intermediate state.
+16. DOCUMENTATION REQUIREMENT
+Meaningful architectural work must be documented.
+Do not allow the codebase to become the only explanation of why something exists.
+For significant changes, update the appropriate documentation area.
+At minimum, maintain the living documentation section in WAXPREP_TODO.md where appropriate.
+For major decisions, include:
+what changed;
+why it changed;
+alternatives considered when relevant;
+important trade-offs;
+dependencies;
+consequences;
+whether the decision is temporary or foundational.
+Do not create documentation for the sake of creating documentation.
+Documentation exists to preserve engineering knowledge.
+17. WHEN TOUCHING THE SYSTEM
+Before modifying an existing component:
+locate the component;
+inspect its callers;
+inspect its dependencies;
+inspect its data contracts;
+inspect relevant environment variables;
+inspect tests;
+understand what consumes its output;
+determine whether the change affects other layers.
+Never modify a function merely because its implementation looks ugly.
+Understand its role first.
+18. NO ORPHAN FEATURES
+Every feature must have a reason to exist.
+Before implementing something, identify:
+Why does this exist?
+What problem does it solve?
+Who uses it?
+What depends on it?
+What does it depend on?
+What happens if it fails?
+What data does it touch?
+Does it belong to infrastructure or intelligence?
+If those questions cannot be answered, research or ask before implementation.
+19. AI PROVIDER ABSTRACTION
+The application should not become structurally dependent on one model provider.
+Provider-specific code should be isolated behind an abstraction.
+The rest of the tutoring system should communicate with an AI interface rather than directly depending on one vendor's API shape.
+This allows:
+provider replacement;
+fallback;
+model experimentation;
+reliability improvements;
+cost optimization later;
+provider-specific capabilities without contaminating the architecture.
+Provider choice itself should be configuration-driven.
+Do not hardcode a provider as an architectural assumption unless explicitly justified.
+20. TOOLS
+AI tools must follow least privilege.
+A tool should have:
+a clear purpose;
+a defined input contract;
+a defined output contract;
+authorization boundaries;
+student isolation;
+validation;
+error handling;
+logging where appropriate.
+Do not expose administrative or destructive capabilities to the tutoring model unnecessarily.
+A tutoring model should not automatically have access to:
+billing operations;
+system administration;
+unrestricted database operations;
+arbitrary file deletion;
+arbitrary account modification.
+Review tool combinations, not only individual tools.
+21. MEMORY
+Memory is infrastructure supporting intelligence.
+Do not turn memory into a dumping ground.
+Different forms of memory may include:
+working context;
+episodic memory;
+durable profile facts;
+student model;
+knowledge state;
+evidence;
+summaries;
+retrieved context.
+Each memory type must have a reason for existing.
+Memory should be:
+student-scoped;
+privacy-aware;
+retrievable;
+auditable where appropriate;
+selectively persisted;
+resistant to accidental contamination.
+The AI should receive useful context, not an uncontrolled transcript dump.
