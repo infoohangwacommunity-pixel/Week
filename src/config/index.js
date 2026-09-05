@@ -51,6 +51,31 @@ const configSchema = z.object({
   AI_MAX_TOKENS: z.coerce.number().int().min(100).default(1024),
   AI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.7),
 
+  // --- AI PROVIDER - ANTHROPIC ---
+  AI_ANTHROPIC_API_KEY: z.string().optional(),
+  AI_ANTHROPIC_MODEL: z.string().optional(),
+  AI_ANTHROPIC_BASE_URL: z.string().optional(),
+  
+  // --- AI PROVIDER - OPENAI ---
+  AI_OPENAI_API_KEY: z.string().optional(),
+  AI_OPENAI_MODEL: z.string().optional(),
+  AI_OPENAI_BASE_URL: z.string().optional(),
+  
+  // --- AI PROVIDER - GROQ ---
+  AI_GROQ_API_KEY: z.string().optional(),
+  AI_GROQ_MODEL: z.string().optional(),
+  
+  // --- AI FAKE PROVIDER (for development/testing) ---
+  AI_FAKE_RESPONSE: z.string().optional().default('This is a simulated response from the Fake AI Provider.'),
+  AI_FAKE_LATENCY_MS: z.coerce.number().int().min(0).default(500),
+  AI_FAKE_SIMULATE_FAILURE: z.enum(['true', 'false']).transform(v => v === 'true').default('false'),
+  AI_FAKE_FAILURE_MESSAGE: z.string().optional().default('Simulated failure for testing'),
+  AI_FAKE_FAILURE_TYPE: z.string().optional().default('PROVIDER_SERVER_ERROR'),
+  
+  // --- AI SYSTEM PROMPT ---
+  AI_SYSTEM_PROMPT_PATH: z.string().optional(),
+  
+  // --- QUEUE ---
   // --- QUEUE ---
   QUEUE_DEBOUNCE_WINDOW_MS: z.coerce.number().int().min(500).max(30000).default(3000),
   QUEUE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
@@ -114,7 +139,12 @@ export function logSafeConfig() {
     AI_PRIMARY_MODEL: config.AI_PRIMARY_MODEL,
     AI_PRIMARY_API_KEY: '[REDACTED]',
     AI_TIMEOUT_MS: config.AI_TIMEOUT_MS,
-    QUEUE_DEBOUNCE_WINDOW_MS: config.QUEUE_DEBOUNCE_WINDOW_MS,
+    AI_MAX_TOKENS: config.AI_MAX_TOKENS,
+    AI_TEMPERATURE: config.AI_TEMPERATURE,
+    AI_ANTHROPIC_API_KEY: config.AI_ANTHROPIC_API_KEY ? '[REDACTED]' : undefined,
+    AI_OPENAI_API_KEY: config.AI_OPENAI_API_KEY ? '[REDACTED]' : undefined,
+    AI_GROQ_API_KEY: config.AI_GROQ_API_KEY ? '[REDACTED]' : undefined,
+    QUEUE_DEBOUNCE_WINDOW_MS: config.QUEUE_DEBOUNCE_WINDOW_MS,S,
     RESPONSE_MAX_CHUNK_CHARS: config.RESPONSE_MAX_CHUNK_CHARS,
     PHONE_HMAC_SECRET: '[REDACTED]',
   };
