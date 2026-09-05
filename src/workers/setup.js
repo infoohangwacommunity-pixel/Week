@@ -18,7 +18,6 @@ export async function setupWorkers({ redis, pool }) {
   const workers = [];
 
   // Setup AI processing worker
-
   const aiWorker = new Worker(
     'ai-processing',
     async (job) => {
@@ -35,14 +34,51 @@ export async function setupWorkers({ redis, pool }) {
         log.info('Processing AI job');
 
         try {
-          // TODO: Implement AI processing logic here
-          // This is a placeholder for Stage 14+ implementation
-          await processAIJob(job, pool, log);
+          // Import AI service (lazy to avoid circular dependencies)
+          const { AIService } = await import('../ai/AIService.js');
+          const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
           
-          log.info('AI job completed successfully');
-        } catch (err) {
-          log.error({ err }, 'AI job failed');
-          throw err; // Re-throw to trigger retry
+          // Initialize provider factory
+          const providerRegistry = await ProviderFactory.initializeProviders();
+          log.info({ provider: providerRegistry.current }, 'AI provider initialized');
+          
+          // Create AI service
+          const aiService = new AIService({
+            providerFactory: providerRegistry.primary,
+            promptBuilder: null, // Will be initialized in AIService
+            database: () => Promise.resolve(pool),
+          });
+          
+          // Complete the AI request
+          const response = await aiService.complete({
+            waxId: trace.waxId,
+            sessionId: trace.sessionId,
+            messages: trace.messages || [],
+            context: { correlationId: trace.correlationId },
+          });
+          
+          // Log successful response
+          log.info({
+            provider: response.provider,
+            model: response.model,
+            finishReason: response.finishReason,
+            tokens: `${response.usage.inputTokens}/${response.usage.outputTokens}`,
+            latency: `${response.latencyMs}ms`,
+          }, 'AI request completed');
+          
+          // TODO: Queue outbound message with response.content
+          // This will be implemented in Stage 11+
+          
+        } catch (error) {
+          // Error is already normalized by AIService
+          log.error({
+            errorType: error.errorType,
+            message: error.providerMessage,
+            isRetryable: error.isRetryable,
+          }, 'AI request failed');
+          
+          // Re-throw to trigger BullMQ retry logic
+          throw error;
         }
       });
     },
@@ -68,28 +104,6 @@ export async function setupWorkers({ redis, pool }) {
   logger.info({ concurrency: config.QUEUE_WORKER_CONCURRENCY }, 'AI worker setup complete');
 
   return workers;
-}
-
-/**
- * Process an AI job
- * TODO: Implement full AI processing logic
- */
-async function processAIJob(job, pool, log) {
-  const { waxId, messages } = job.data;
-
-  log.info({ waxId, messageCount: messages?.length }, 'Processing AI job');
-
-  // Placeholder implementation
-  // In Stage 14+, this will:
-  // 1. Fetch conversation history for the student
-  // 2. Assemble AI context
-  // 3. Call the AI provider
-  // 4. Process and validate the response
-  // 5. Queue outbound messages
-
-  await new Promise((resolve) => {
-    setTimeout(resolve, 1000);
-  }); // Simulate work
 }
 
 export default setupWorkers;
