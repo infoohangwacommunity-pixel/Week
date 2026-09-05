@@ -16,6 +16,7 @@
 
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
+import { MemoryRetriever } from '../memory/index.js';
 
 /**
  * Token budget slot constants (from research document)
@@ -24,7 +25,9 @@ import { logger } from '../observability/index.js';
 const TOKEN_SLOTS = Object.freeze({
   SYSTEM_PROMPT: 1200,
   RESPONSE_RESERVATION: 1024,
-  FUTURE_MEMORY: 800,
+  FUTURE_MEMORY: 400,
+  MEMORY_FACTS: 400,
+  MEMORY_EPISODES: 600,
   FUTURE_TOOLS: 400,
   FUTURE_RETRIEVAL: 1200,
   CURRENT_MESSAGE: 400,
@@ -56,6 +59,13 @@ export class ContextAssembler {
     try {
       // Fetch recent conversation history
       const conversationHistory = await this.fetchConversationHistory({ waxId, sessionId });
+
+      // Retrieve relevant memories (Stage 25)
+      const memoryRetriever = new MemoryRetriever(waxId);
+      const memories = await memoryRetriever.retrieveRelevantMemories({
+        sessionId,
+        currentMessage,
+      });
 
       // Build messages array
       const messages = this.buildMessagesArray({
@@ -149,12 +159,16 @@ export class ContextAssembler {
    */
   validateAlternatingRoles(messages) {
     if (messages.length === 0) {
-      return { hasError: false };
+      return {
+      memories,
+       hasError: false };
     }
 
     for (let i = 1; i < messages.length; i++) {
       if (messages[i].role === messages[i - 1].role) {
         return {
+      memories,
+      
           hasError: true,
           error: 'Consecutive same-role messages detected',
           waxId: messages[i].waxId,
@@ -163,7 +177,9 @@ export class ContextAssembler {
       }
     }
 
-    return { hasError: false };
+    return {
+      memories,
+       hasError: false };
   }
 
   /**
@@ -270,6 +286,8 @@ export class ContextAssembler {
     }
 
     return {
+      memories,
+      
       messages,
       historyTurnCount,
       currentMessageCount,
@@ -296,7 +314,7 @@ export class ContextAssembler {
    * @param {Object} options.systemPromptTokens - Estimated system prompt tokens
    * @returns {Object} - Context with budget information
    */
-  applyTokenBudget({ messages, historyTurnCount, currentMessageCount }, systemPromptTokens = 800) {
+  applyTokenBudget({ messages, historyTurnCount, currentMessageCount }, memories = null, systemPromptTokens = 800) {
     // Slot-based budget allocation from research
     const {
       SYSTEM_PROMPT: SYSTEM_PROMPT_SLOT,
@@ -314,13 +332,8 @@ export class ContextAssembler {
 
     // Calculate history budget using slot allocation
     const HISTORY_BUDGET = TOTAL_CONTEXT_BUDGET
-      - SYSTEM_PROMPT_SLOT
-      - RESPONSE_RESERVATION
-      - FUTURE_MEMORY
-      - FUTURE_TOOLS
-      - FUTURE_RETRIEVAL
-      - CURRENT_MESSAGE
-      - SAFETY_MARGIN;
+      - SYSTEM_PROMPT - RESPONSE_RESERVATION - MEMORY_FACTS - MEMORY_EPISODES
+      - MEMORY_FUTURE - FUTURE_TOOLS - FUTURE_RETRIEVAL - CURRENT_MESSAGE - SAFETY_MARGIN;
 
     // Estimate token usage
     const estimatedTokens = this.estimateTokenCount(messages);
@@ -356,6 +369,8 @@ export class ContextAssembler {
     const historyEstimate = estimatedTokens - currentMessageEstimate;
 
     return {
+      memories,
+      
       messages: finalMessages,
       historyTurnCount,
       currentMessageCount,
@@ -426,7 +441,9 @@ export class ContextAssembler {
    */
   truncateMessages({ messages, maxTokens }) {
     if (messages.length === 0) {
-      return { messages: [], tokens: 0, removedTurns: 0 };
+      return {
+      memories,
+       messages: [], tokens: 0, removedTurns: 0 };
     }
 
     // Calculate tokens for each message
@@ -439,7 +456,9 @@ export class ContextAssembler {
     let totalTokens = messageTokens.reduce((sum, m) => sum + m.tokens, 0);
 
     if (totalTokens <= maxTokens) {
-      return { messages: messageTokens, tokens: totalTokens, removedTurns: 0 };
+      return {
+      memories,
+       messages: messageTokens, tokens: totalTokens, removedTurns: 0 };
     }
 
     // Remove oldest complete turns (user + assistant pairs)
@@ -490,7 +509,9 @@ export class ContextAssembler {
 
     const finalTokens = truncated.reduce((sum, m) => sum + m.tokens, 0);
 
-    return { messages: truncated, tokens: finalTokens, removedTurns };
+    return {
+      memories,
+       messages: truncated, tokens: finalTokens, removedTurns };
   }
 }
 
