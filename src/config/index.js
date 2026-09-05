@@ -103,6 +103,15 @@ const configSchema = z.object({
 
   // --- ERROR MESSAGES ---
   AI_FAILURE_STUDENT_MESSAGE: z.string().min(1).default('Sorry, I\'m having a bit of trouble right now. Could you send your message again in a moment?'),
+
+  // --- CONTEXT (Stage 18) ---
+  CONTEXT_MAX_HISTORY_MESSAGES: z.coerce.number().int().min(1).default(20),
+  CONTEXT_MAX_INPUT_TOKENS: z.coerce.number().int().min(100).default(4000),
+  CONTEXT_RESPONSE_TOKEN_BUDGET: z.coerce.number().int().min(100).default(1024),
+
+  // --- ORCHESTRATION (Stage 20) ---
+  AI_FALLBACK_PROVIDER: z.string().optional(),
+  AI_ORCHESTRATOR_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60000),
 });
 
 // Parse and validate environment variables
