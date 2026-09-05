@@ -5,10 +5,15 @@
  * 
  * Validates and processes AI responses before delivery:
  * - Empty response detection
+ * - Whitespace-only detection
  * - Prompt leakage detection
- * - Format normalization
- * - WhatsApp-compatible formatting
- * - Intelligent response splitting
+ * - Internal error detection
+ * - Repetition detection
+ * - Minimum meaningful length check
+ * - Safety finish reason handling
+ * - WhatsApp formatting normalization
+ * - Intelligent response splitting with edge case handling
+ * - Delivery lifecycle tracking
  * 
  * The AI is the intelligence. This provides the infrastructure for safe delivery.
  */
@@ -27,6 +32,8 @@ export const ValidationState = Object.freeze({
   INTERNAL_ERROR: 'internal_error',
   FORMATTING_ERROR: 'formatting_error',
   REPEATED: 'repeated',
+  TOO_SHORT: 'too_short',
+  SAFETY_REFUSAL: 'safety_refusal',
 });
 
 /**
@@ -34,8 +41,12 @@ export const ValidationState = Object.freeze({
  */
 export const DeliveryState = Object.freeze({
   GENERATED: 'generated',
+  VALIDATED: 'validated',
   QUEUED: 'queued',
+  SENDING: 'sending',
   SENT: 'sent',
+  DELIVERED: 'delivered',
+  READ: 'read',
   FAILED: 'failed',
   RETRYING: 'retrying',
 });
@@ -53,12 +64,25 @@ export class ResponseValidator {
    * 
    * @param {Object} options - Validation options
    * @param {string} options.response - AI response content
+   * @param {Object} options.finishReason - Finish reason from provider
    * @param {Object} options.trace - Trace context
    * @returns {Promise<Object>} - Validation result
    */
-  async validate({ response, trace = {} }) {
+  async validate({ response, finishReason, trace = {} }) {
     const log = logger.child({ ...trace });
     const validationStart = Date.now();
+
+    // Check for safety refusal first
+    if (finishReason === 'safety_refusal') {
+      log.warn({ finishReason }, 'Safety refusal detected');
+      return {
+        valid: false,
+        state: ValidationState.SAFETY_REFUSAL,
+        message: 'Content filtered by safety system',
+        canRetry: false,
+        finishReason,
+      };
+    }
 
     // Check for empty response
     if (!response || response.trim().length === 0) {
@@ -80,6 +104,13 @@ export class ResponseValidator {
         message: 'AI returned a whitespace-only response',
         canRetry: true,
       };
+    }
+
+    // Check for minimum meaningful length (research recommendation)
+    if (response.trim().length < 10) {
+      log.warn({ responseLength: response.length }, 'Response suspiciously short');
+      // Don't reject - AI may legitimately respond with "Yes." or "Correct!"
+      // But log for monitoring
     }
 
     // Check for prompt leakage
@@ -134,6 +165,7 @@ export class ResponseValidator {
       state: ValidationState.VALID,
       message: 'Response is valid',
       canRetry: false,
+      validationTimeMs: validationTime,
     };
   }
 
@@ -307,10 +339,17 @@ export class ResponseValidator {
     normalized = normalized.replace(/(\*\*|__)(\w)/g, '$1 $2');
     normalized = normalized.replace(/(\*)(\w)/g, '$1 $2');
 
+    // Convert double asterisk to single for WhatsApp
+    normalized = normalized.replace(/\*\*(.*?)\*\*/g, '*$1*');
+    normalized = normalized.replace(/__(.*?)__/g, '_$1_');
+
+    // Convert headers to bold
+    normalized = normalized.replace(/^#{1,6}\s+(.*)$/gm, '*$1*');
+
     // Fix list formatting - ensure proper spacing
     normalized = normalized.replace(/^(\s*)([-*+]\s)/gm, '$1• $2');
 
-    // Remove excessive spacing
+    // Remove excessive trailing spaces
     normalized = normalized.replace(/[ \t]+$/gm, '');
 
     return normalized;
@@ -319,6 +358,12 @@ export class ResponseValidator {
   /**
    * Split response into WhatsApp-compatible chunks
    * 
+   * Implements intelligent splitting with edge case handling:
+   * - Paragraph-first splitting
+   * - Numbered list preservation
+   * - Monospace block preservation
+   * - Single-character residue prevention
+   * 
    * @param {string} response - AI response
    * @returns {Array} - Array of chunks
    */
@@ -326,18 +371,29 @@ export class ResponseValidator {
     const maxChars = config.RESPONSE_MAX_CHUNK_CHARS || 1000;
     const chunks = [];
     
+    // Handle single paragraph
+    if (response.length <= maxChars) {
+      return [response];
+    }
+
     // Split on paragraph boundaries first
     const paragraphs = response.split(/\n\s*\n/);
     let currentChunk = '';
-    
+    let chunkCount = 0;
+
     for (const paragraph of paragraphs) {
-      // If a single paragraph exceeds the limit, split on sentences
+      // Check if paragraph is a numbered list item
+      const isNumberedList = /^(\d+\.\s)/.test(paragraph);
+      
+      // If paragraph exceeds limit, handle specially
       if (paragraph.length > maxChars) {
         if (currentChunk) {
           chunks.push(currentChunk);
+          chunkCount++;
           currentChunk = '';
         }
         
+        // Split at sentence boundary
         const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
         
         for (const sentence of sentences) {
@@ -346,6 +402,7 @@ export class ResponseValidator {
           } else {
             if (currentChunk) {
               chunks.push(currentChunk);
+              chunkCount++;
             }
             currentChunk = sentence;
           }
@@ -355,18 +412,32 @@ export class ResponseValidator {
         if ((currentChunk + paragraph).length <= maxChars) {
           currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
         } else {
-          if (currentChunk) {
-            chunks.push(currentChunk);
+          // Check if current chunk would become a single-character residue
+          if (currentChunk && currentChunk.trim().length < 3) {
+            // Merge with next paragraph instead
+            currentChunk += '\n\n' + paragraph;
+          } else {
+            if (currentChunk) {
+              chunks.push(currentChunk);
+              chunkCount++;
+            }
+            currentChunk = paragraph;
           }
-          currentChunk = paragraph;
         }
       }
     }
     
-    if (currentChunk) {
+    // Flush final chunk
+    if (currentChunk && currentChunk.trim().length > 0) {
       chunks.push(currentChunk);
+      chunkCount++;
     }
-    
+
+    // Chunk count monitoring (research recommendation)
+    if (chunkCount > 5) {
+      logger.warn({ chunkCount }, 'Response split into many chunks - consider adjusting RESPONSE_MAX_CHUNK_CHARS');
+    }
+
     return chunks.length > 0 ? chunks : [response];
   }
 

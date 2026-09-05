@@ -9,6 +9,9 @@
  * - Structured output support
  * - Response metadata capture
  * - AI invocation logging
+ * - Request idempotency
+ * - Provider capability awareness
+ * - Complete observability
  * 
  * Business logic never calls providers directly.
  * All AI requests flow through the orchestrator.
@@ -32,6 +35,48 @@ const RETRYABLE_ERRORS = [
   'PROVIDER_TIMEOUT',
   'NETWORK_ERROR',
 ];
+
+/**
+ * Provider capability registry (research recommendation)
+ */
+const PROVIDER_CAPABILITIES = {
+  anthropic: {
+    supportsText: true,
+    supportsImageInput: true,
+    supportsToolCalling: true,
+    supportsPromptCaching: true,
+    supportsStructuredOutput: true,
+    maxContextTokens: 1000000,
+    maxOutputTokens: 8192,
+  },
+  openai: {
+    supportsText: true,
+    supportsImageInput: true,
+    supportsToolCalling: true,
+    supportsPromptCaching: false,
+    supportsStructuredOutput: true,
+    maxContextTokens: 128000,
+    maxOutputTokens: 4096,
+  },
+  groq: {
+    supportsText: true,
+    supportsImageInput: false,
+    supportsToolCalling: false,
+    supportsPromptCaching: false,
+    supportsStructuredOutput: false,
+    maxContextTokens: 131072,
+    maxOutputTokens: 8192,
+  },
+  fake: {
+    supportsText: true,
+    supportsImageInput: false,
+    supportsToolCalling: false,
+    supportsPromptCaching: false,
+    supportsStructuredOutput: false,
+    maxContextTokens: 100000,
+    maxOutputTokens: 4096,
+  },
+};
 
 /**
  * AIOrchestrator - Central AI orchestration layer
@@ -100,12 +145,14 @@ export class AIOrchestrator {
         sessionId,
         correlationId,
         promptVersion,
+        responseSchema: null, // Stage 20: default to free text
       });
 
       const tokenEstimate = estimateTokenUsage(request);
       
       requestLog.info({
         messageCount: contextResult.messages.length,
+        historyTurnCount: contextResult.historyTurnCount,
         estimatedTokens: contextResult.estimatedTokens,
         tokenBudget: contextResult.tokenBudget,
       }, 'Context assembled, preparing AI request');
@@ -116,12 +163,14 @@ export class AIOrchestrator {
         waxId,
         sessionId,
         correlationId,
+        contextResult,
       });
 
       // Step 5: Validate response (Stage 19)
       requestLog.info('Validating response');
       const validation = await this.responseValidator.validate({
         response: providerResponse.content,
+        finishReason: providerResponse.finishReason,
         trace: { correlationId },
       });
 
@@ -164,6 +213,9 @@ export class AIOrchestrator {
         model: providerResponse.model,
         latencyMs,
         tokens: providerResponse.usage,
+        historyTurnCount: contextResult.historyTurnCount,
+        contextWasTruncated: contextResult.truncationOccurred,
+        fallbackUsed: providerResponse.fallbackUsed || false,
       }, 'AI request completed successfully');
 
       // Step 7: Persist metadata
@@ -176,6 +228,7 @@ export class AIOrchestrator {
         tokenEstimate,
         startTime,
         validation,
+        contextResult,
       });
 
       // Step 8: Update delivery state to queued
@@ -246,13 +299,17 @@ export class AIOrchestrator {
    * @param {string} options.waxId - Student identifier
    * @param {string} options.sessionId - Session identifier
    * @param {string} options.correlationId - Correlation ID
+   * @param {Object} options.contextResult - Context assembly result
    * @returns {Promise<Object>} - AI response
    */
-  async callProviderWithFallback(request, { waxId, sessionId, correlationId }) {
+  async callProviderWithFallback(request, { waxId, sessionId, correlationId, contextResult }) {
     const primaryProvider = config.AI_PRIMARY_PROVIDER;
     const fallbackProvider = config.AI_FALLBACK_PROVIDER;
     
     let lastError;
+    let fallbackAttempted = false;
+    let fallbackProviderUsed = null;
+    let fallbackModelUsed = null;
 
     // Try primary provider
     try {
@@ -262,6 +319,7 @@ export class AIOrchestrator {
       return {
         ...response,
         fallbackUsed: false,
+        fallbackAttempted: false,
       };
     } catch (error) {
       lastError = error;
@@ -271,22 +329,34 @@ export class AIOrchestrator {
         error: error.message,
       }, 'Primary provider failed');
 
-      // Check if we should try fallback
+      // Check if we should try fallback (only on availability errors)
       const shouldRetry = this.shouldUseFallback(error) && fallbackProvider;
       
       if (shouldRetry) {
         // Try fallback provider
         try {
+          fallbackAttempted = true;
           this.logger.info({ fallbackProvider }, 'Attempting fallback provider');
           
           const provider = await this.getProvider(fallbackProvider);
           const response = await provider.complete(request);
           
+          fallbackProviderUsed = fallbackProvider;
+          fallbackModelUsed = config.AI_FALLBACK_MODEL || 'unknown';
+          
+          this.logger.info({
+            primaryProvider,
+            fallbackProvider,
+            fallbackModel: fallbackModelUsed,
+          }, 'Fallback provider succeeded');
+          
           return {
             ...response,
             fallbackUsed: true,
+            fallbackAttempted: true,
             originalProvider: primaryProvider,
-            fallbackProvider: fallbackProvider,
+            fallbackProvider: fallbackProviderUsed,
+            fallbackModel: fallbackModelUsed,
           };
         } catch (fallbackError) {
           this.logger.error({
@@ -308,6 +378,8 @@ export class AIOrchestrator {
 
   /**
    * Determine if fallback should be used
+   * 
+   * Only fallback on availability errors, NOT on correctness errors
    * 
    * @param {Error} error - Error from primary provider
    * @returns {boolean} - Whether to use fallback
@@ -359,7 +431,7 @@ export class AIOrchestrator {
    * 
    * @param {Object} options - Metadata options
    */
-  async persistMetadata({ waxId, sessionId, correlationId, request, response, tokenEstimate, startTime, validation }) {
+  async persistMetadata({ waxId, sessionId, correlationId, request, response, tokenEstimate, startTime, validation, contextResult }) {
     const pool = await this.db.createPool(config);
     const completedAt = Date.now();
     const latencyMs = completedAt - startTime;
@@ -384,10 +456,15 @@ export class AIOrchestrator {
           started_at,
           completed_at,
           latency_ms,
-          provider_request_id
+          provider_request_id,
+          context_turn_count,
+          context_was_truncated,
+          validation_passed,
+          chunk_count
         ) VALUES (
           $1, $2, $3, $4, $5, $6, 'success', $7, 0,
-          $8, $9, $10, $11, $12, $13, $14, $15, $16
+          $8, $9, $10, $11, $12, $13, $14, $15, $16,
+          $17, $18, $19, $20
         )
         ON CONFLICT (correlation_id) DO UPDATE SET
           status = EXCLUDED.status,
@@ -399,7 +476,11 @@ export class AIOrchestrator {
           total_tokens = EXCLUDED.total_tokens,
           cached_input_tokens = EXCLUDED.cached_input_tokens,
           cache_write_tokens = EXCLUDED.cache_write_tokens,
-          provider_request_id = EXCLUDED.provider_request_id
+          provider_request_id = EXCLUDED.provider_request_id,
+          context_turn_count = EXCLUDED.context_turn_count,
+          context_was_truncated = EXCLUDED.context_was_truncated,
+          validation_passed = EXCLUDED.validation_passed,
+          chunk_count = EXCLUDED.chunk_count
       `, [
         waxId,
         sessionId,
@@ -417,6 +498,10 @@ export class AIOrchestrator {
         new Date(completedAt),
         latencyMs,
         response.providerRequestId,
+        contextResult.historyTurnCount || 0,
+        contextResult.truncationOccurred || false,
+        validation.valid,
+        1, // chunk_count - will be updated after delivery
       ]);
     } catch (error) {
       this.logger.error({ error: error.message }, 'Failed to persist metadata');
