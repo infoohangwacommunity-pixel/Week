@@ -112,6 +112,28 @@ const configSchema = z.object({
   // --- ORCHESTRATION (Stage 20) ---
   AI_FALLBACK_PROVIDER: z.string().optional(),
   AI_ORCHESTRATOR_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60000),
+
+  // --- LEARNING INTELLIGENCE (Stage 29 - RWEA) ---
+  MASTERY_RECENCY_HALFLIFE_DAYS: z.coerce.number().int().min(1).default(30),
+  // How quickly recent evidence matters more. 30 days = evidence halves in influence after 30 days.
+  
+  HINT_PENALTY_COEFFICIENT: z.coerce.number().min(0).max(1).default(0.3),
+  // How strongly hint use penalizes evidence. 0.3 = each hint reduces evidence weight by ~23%.
+  
+  SENSITIVITY: z.coerce.number().min(0.5).default(2.0),
+  // Controls how sharply mastery responds to evidence. Higher = more responsive.
+  
+  MASTERY_BASELINE: z.coerce.number().min(0).max(0.5).default(0.10),
+  // Baseline mastery for new concepts (before any evidence).
+  
+  DECAY_LAMBDA: z.coerce.number().min(0).default(0.015),
+  // Time decay rate for forgetting. 0.015 ≈ 46-day half-life.
+  
+  STUDENT_MODEL_TOKEN_BUDGET: z.coerce.number().int().min(100).default(500),
+  // Maximum tokens for student model context in AI prompts.
+  
+  STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS: z.coerce.number().int().min(1).default(6),
+  // Maximum age of cached snapshot before forcing refresh.
 });
 
 // Parse and validate environment variables
@@ -153,9 +175,16 @@ export function logSafeConfig() {
     AI_ANTHROPIC_API_KEY: config.AI_ANTHROPIC_API_KEY ? '[REDACTED]' : undefined,
     AI_OPENAI_API_KEY: config.AI_OPENAI_API_KEY ? '[REDACTED]' : undefined,
     AI_GROQ_API_KEY: config.AI_GROQ_API_KEY ? '[REDACTED]' : undefined,
-    QUEUE_DEBOUNCE_WINDOW_MS: config.QUEUE_DEBOUNCE_WINDOW_MS,S,
+    QUEUE_DEBOUNCE_WINDOW_MS: config.QUEUE_DEBOUNCE_WINDOW_MS,
     RESPONSE_MAX_CHUNK_CHARS: config.RESPONSE_MAX_CHUNK_CHARS,
     PHONE_HMAC_SECRET: '[REDACTED]',
+    MASTERY_RECENCY_HALFLIFE_DAYS: config.MASTERY_RECENCY_HALFLIFE_DAYS,
+    HINT_PENALTY_COEFFICIENT: config.HINT_PENALTY_COEFFICIENT,
+    SENSITIVITY: config.SENSITIVITY,
+    MASTERY_BASELINE: config.MASTERY_BASELINE,
+    DECAY_LAMBDA: config.DECAY_LAMBDA,
+    STUDENT_MODEL_TOKEN_BUDGET: config.STUDENT_MODEL_TOKEN_BUDGET,
+    STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS: config.STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS,
   };
 }
 
