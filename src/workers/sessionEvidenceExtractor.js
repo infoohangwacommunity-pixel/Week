@@ -16,7 +16,7 @@
  * and knowledge states are updated.
  */
 
-import { MisconceptionTracker } from './misconceptions/MisconceptionTracker.js';
+import { MisconceptionTracker } from '../learning/misconceptions/MisconceptionTracker.js';
 import { EVIDENCE_TYPES } from '../learning/evidence/EvidenceTaxonomy.js';
 
 /**
