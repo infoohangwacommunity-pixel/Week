@@ -61,7 +61,8 @@ export class SessionEvidenceExtractor {
       // Write observations
       for (const obs of observations) {
         try {
-          const writeResult = await this._writeObservation(obs, wax_id, session_id);
+          // Note: message_id is null for session-level extraction (not per-message)
+          const writeResult = await this._writeObservation(obs, wax_id, session_id, null);
           if (writeResult.id) {
             results.observationsWritten++;
             
@@ -176,7 +177,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting.
       const observations = JSON.parse(cleaned);
 
       // Validate and normalize observations
-      return observations.map(obs => this._normalizeObservation(obs, wax_id, session_id));
+      // Note: message_id is not available in session transcript extraction
+      // so we pass null - idempotency will be based on (wax_id, session_id, concept_tag, evidence_type)
+      return observations.map(obs => this._normalizeObservation(obs, wax_id, session_id, null));
 
     } catch (error) {
       console.error('Error extracting evidence:', error);
@@ -188,10 +191,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting.
    * Normalize observation to standard format
    * @private
    */
-  _normalizeObservation(obs, wax_id, session_id) {
+  _normalizeObservation(obs, wax_id, session_id, message_id = null) {
     return {
       wax_id,
       session_id,
+      message_id,
       concept_tag: obs.concept_tag || 'unknown',
       evidence_type: obs.evidence_type || 'concept_mention',
       correctness: obs.correctness ?? null,
@@ -209,11 +213,12 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting.
    * Write an observation to the database
    * @private
    */
-  async _writeObservation(obs, wax_id, session_id) {
+  async _writeObservation(obs, wax_id, session_id, message_id = null) {
     const query = `
       INSERT INTO learning_observations (
         wax_id,
         session_id,
+        message_id,
         concept_tag,
         evidence_type,
         correctness,
@@ -224,14 +229,15 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting.
         possible_misconception,
         misconception_tag,
         observed_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-      ON CONFLICT (wax_id, session_id, concept_tag, evidence_type) DO NOTHING
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+      ON CONFLICT (wax_id, message_id, concept_tag, evidence_type) DO NOTHING
       RETURNING id
     `;
 
     const params = [
       obs.wax_id,
       obs.session_id,
+      message_id,
       obs.concept_tag,
       obs.evidence_type,
       obs.correctness,

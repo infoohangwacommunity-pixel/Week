@@ -221,12 +221,14 @@ export class EvidenceWriter {
 
   /**
    * Mark a knowledge state as stale when new evidence arrives
+   * 
+   * Updates last_computed_at timestamp. The knowledge state will be recomputed
+   * on next access if a snapshot exists (snapshot will be invalidated).
+   * 
    * @private
    */
   async _markKnowledgeStateStale(wax_id, concept_tag) {
-    // This is a placeholder - the actual implementation may use a different mechanism
-    // For now, we could update last_computed_at or set a flag
-    // The knowledge state will be recomputed on next access
+    // Update last_computed_at to trigger recomputation on next snapshot generation
     await this.pool.query(
       'UPDATE knowledge_states SET last_computed_at = NOW() WHERE wax_id = $1 AND concept_tag = $2',
       [wax_id, concept_tag]
