@@ -39,2584 +39,2210 @@ I have the full brief. Let me do targeted research on the most critical technica
 
 I have everything I need. This will be the most important document in the WaxPrep project. Writing it now in full.
 
----
 
-# WAXPREP — PERSISTENT MEMORY ARCHITECTURE
-## STAGES 22–26: THE DEFINITIVE PRODUCTION BLUEPRINT
-### Memory Schema · Core Facts · Episodic Learning · Retrieval · Confidence & Provenance
-### Principal Research Architect — September 2026
 
----
 
-# FOUNDATIONAL PRINCIPLE: WHAT MEMORY MEANS FOR WAXPREP
 
-Before any technical discussion, understand what memory means in this system and why it is not what most developers think it is.
 
-The model itself remembers nothing. When WaxPrep sends a message to Claude, Anthropic's server processes that request in total isolation from every previous request ever made. There is no continuity on the provider's side. Every API call is born and dies with zero connection to what came before. This is not a limitation of Claude specifically — it is how all transformer-based LLMs work at the API level.
 
-WaxPrep's memory system is the engineering that creates the illusion of continuity across this technical amnesia. But it is not an illusion designed to deceive. It is infrastructure designed to serve genuine intelligence. The AI does not merely retrieve facts and recite them back. The AI receives evidence, reasons over that evidence with its full intelligence, and produces original understanding. WaxPrep's memory system is the filing cabinet. The AI is the brilliant analyst who reads what is in the cabinet and thinks.
+Huge brief. Let me do rigorous research on the most critical technical and educational science questions before writing.
 
-This distinction is the single most important architectural principle of Stages 22–26:
-
-**WaxPrep stores evidence. The AI interprets evidence. Infrastructure does not interpret. AI does not store.**
-
-Every schema design decision, every retrieval algorithm, every confidence rule — all of it flows from this principle. When you are unsure about a design decision, ask: am I replacing AI reasoning with infrastructure logic? If yes, stop and redesign.
-
-The second most important principle: **a student's memory belongs only to that student.** The WaxID isolation established in Stage 12 is absolute. No query, no retrieval, no background job should ever produce memory from Student A when processing Student B's request. This is a hard correctness requirement, not a performance optimization.
+I have deep research from the academic literature. Now writing the complete document.
 
 ---
 
-# PART ONE: THE MEMORY LANDSCAPE IN 2026
-
-## 1. What the Research Actually Shows
-
-The state of agentic memory in mid-2026 is best understood by what the benchmarks reveal. The LoCoMo benchmark — covering single-hop, multi-hop, open-domain, and temporal recall — shows that current systems perform well on single-hop factual recall and poorly on almost everything else. As conversation history grows, performance degrades faster than context grows. Most systems that score well on accuracy require 26,000+ tokens per query — not production viable. A December 2025 benchmark study found that a plain filesystem storing memories as markdown files scored 74% on standard memory tasks — beating dedicated vector databases. [Medium](https://medium.com/@brian-curry-research/the-memory-problem-building-persistent-queryable-memory-for-production-ai-agents-dccb1e293887)
-
-This finding is counterintuitive and important. It tells us that the fundamental value of a memory system is not the storage technology — it is the quality of what is written and the discipline of what is retrieved. A system that writes precise, structured, well-provenanced facts and retrieves them cleanly will outperform a system that stores everything with embeddings and retrieves semantically.
-
-For WaxPrep at Stage 22–26, this means: build the write path with extreme care. Get the memory taxonomy right. Get the confidence model right. Get the provenance model right. The retrieval technology can evolve. The schema design is much harder to change.
-
-The AI agent memory market has reached $6.27 billion in 2026. That growth reflects a hard-earned industry realization: the model is not the product. The memory is. An agent with a frontier-class model but no persistent memory is a genius with amnesia. It might give you a brilliant answer today and then greet you as a stranger tomorrow. [AI Magicx](https://www.aimagicx.com/blog/ai-agent-memory-architecture-developer-guide-2026)
-
-Every practical AI agent problem eventually becomes a memory problem. Context windows now exceed 1 million tokens; persistence across sessions is still zero. An agent that cannot recall the context of a prior conversation cannot serve a user across sessions. [Datapace](https://datapace.ai/blog/ai-agent-memory-layer-architecture-guide-2026)
-
-## 2. The Four Memory Types — Cognitive Architecture Basis
-
-Cognitive science and AI engineering both recognize four distinct memory types. WaxPrep's architecture covers all four, though it implements them at different stages.
-
-**Working Memory (In-Context):** The active conversation currently in the context window. This is Stage 18's domain. Fast, immediate, bounded by the context window. Zero persistence between sessions. WaxPrep already has this.
-
-**Episodic Memory:** Records of specific past experiences. What happened in previous sessions, when, with what outcome. This is the autobiographical record of the student's journey with WaxPrep. Stage 24 builds this.
-
-**Semantic Memory (Core Facts):** Stable facts about the student — their name, their school, the exam they are preparing for, their strengths, their persistent misconceptions. These are general truths distilled from experience rather than raw transcripts of individual events. Stage 23 builds this.
-
-**Procedural Memory:** How to act — instructions, learned strategies, behavioral rules. For WaxPrep, this is the AI's own teaching approach, which is never stored in the memory system. It lives in the system prompt (Stage 17). WaxPrep does not build procedural memory in the student's memory store — the AI's teaching approach is the AI's own intelligence, not something WaxPrep prescribes.
-
-A common mistake is to treat "long-term memory" as a fourth peer alongside episodic and procedural. It is not. It is the umbrella that contains all three. [Ml4devs](https://www.ml4devs.com/what-is/agent-memory/)
-
-Understanding this prevents a category error: "long-term memory" is not a type of memory. Episodic and semantic memories are both long-term. The distinction is what kind of knowledge they hold.
-
-## 3. The Append-Only Architecture — Why It Matters
-
-Research published in late 2025 proposes a unified temporal-semantic-relational schema for agent memory combining time-series context, vector embeddings, and graph-style entity relationships in a single PostgreSQL-backed, append-only database. The append-only constraint matters architecturally: it prevents data decoherence, the failure mode where updating or deleting memories creates inconsistencies between what the agent remembers and what actually happened. [Datapace](https://datapace.ai/blog/ai-agent-memory-layer-architecture-guide-2026)
-
-Append-only is the architectural foundation of WaxPrep's memory system. No memory record is ever updated in place. No memory record is ever hard-deleted. Every change produces a new record that either supersedes or reinforces the existing record. The old record remains permanently, with a status of `superseded` or `archived`.
-
-This is not merely a database design preference. It is a correctness requirement for three reasons:
-
-First, provenance. If a memory is updated in place, the original source is lost. You cannot answer: "When did WaxPrep learn that this student was preparing for WAEC?" or "What evidence supported the belief that this student misunderstood force?"
-
-Second, auditability. The Nigeria Data Protection Act and general educational ethics require that a system dealing with minors can produce a complete audit trail of what information was held about a student and when it was acquired.
-
-Third, AI reasoning quality. A fact confirmed five times and a fact contradicted twice end up looking identical without explicit state tracking — same shape, same weight, same retrieval priority. That is not a storage bug; it is a missing dimension. Append-only storage preserves the history of confidence changes, which enables the AI to reason about the reliability of its own knowledge. [Mem0](https://mem0.ai/blog/state-of-ai-agent-memory-2026)
+# WAXPREP — PHASE F: LEARNING INTELLIGENCE INFRASTRUCTURE
+## STAGES 27–34: COMPLETE TECHNICAL AND EDUCATIONAL SPECIFICATION
+### Research-Backed Architecture for AI-First Conversational Tutoring
+### September 2026
 
 ---
 
-# PART TWO: STAGE 22 — PERSISTENT MEMORY SCHEMA AND STORAGE
+# EXECUTIVE SUMMARY
 
-## 4. Memory Architecture Comparison
+This document is the complete specification for WaxPrep's Learning Intelligence Infrastructure, covering Stages 27 through 34. It answers the fundamental question the brief requires: is the proposed architecture actually correct for an AI-first conversational tutor serving Nigerian secondary students in 2026?
 
-Before designing the schema, understand the available architectural approaches and why WaxPrep should choose the one it does.
+The short answer is: the direction is correct but the implementation details require significant modification. The core philosophical position — infrastructure produces evidence, AI interprets evidence — is strongly validated by recent research (Scarlatos, Baker & Lan, LAK 2025; Sonkar & Baraniuk, 2023). However, several specific design choices in the proposed stages are either insufficient, over-engineered for the current stage, or based on assumptions that do not hold for a conversational WhatsApp-based tutor with sparse data.
 
-### 4.1 Relational Memory (PostgreSQL)
+The critical finding is this: classical Bayesian Knowledge Tracing is not the best starting point for WaxPrep in 2026, for reasons specific to the WhatsApp conversational context. What WaxPrep actually needs is a lightweight, interpretable evidence accumulation model that the AI uses as input evidence, not a predictive accuracy model designed for structured problem sets. The document specifies exactly what that means and how to build it.
 
-Data is stored in structured tables with defined schemas. Relationships between data are expressed through foreign keys and joins. Queries are expressed in SQL. The schema enforces data integrity through constraints.
+Five structural modifications to the proposed stages are recommended:
 
-Strengths for WaxPrep: ACID guarantees prevent partial writes from corrupting memory state. Foreign key constraints enforce WaxID isolation at the database level. SQL makes complex queries (find all misconceptions for this student about physics, ordered by confidence) straightforward. PostgreSQL is already deployed (Stage 3). No new infrastructure. Mature tooling. The entire infrastructure team (currently one person) already knows the database.
+First, the evidence collection pipeline (Stage 28) should be built before the knowledge state schema (Stage 27), because the schema must be designed around the actual evidence you can reliably collect, not around an idealized model. The order should be Stage 28 first, then Stage 27.
 
-Weaknesses: Schema changes require migrations. Unstructured or variable-structure data is awkward to represent. Semantic similarity search requires the `pgvector` extension.
+Second, Bayesian Knowledge Tracing with four parameters should not be implemented. A simpler recency-weighted mastery accumulator with temporal decay is more appropriate for WaxPrep's data characteristics and produces results that are more interpretable by the AI.
 
-### 4.2 Document Memory (MongoDB, Firestore)
+Third, misconception detection (Stage 31) must be LLM-assisted, not rule-based. The infrastructure only stores the output of LLM analysis. The LLM does the analysis. This is architecturally consistent with the philosophy but requires a specific implementation pattern.
 
-Data is stored as JSON documents. Schema is flexible — each document can have different fields. Queries are expressed as document filters.
+Fourth, formative assessment (Stage 32) should not attempt to create a separate assessment module. Assessment is already embedded in tutoring conversation. The assessment pipeline extracts evidence from what already happens.
 
-Strengths: Flexible schema accommodates variable-structure memory entries. No migration needed to add new fields.
+Fifth, the student model context interface (Stage 34) is the most important stage. Everything else builds toward it. It should be designed first (as a specification) so all earlier stages know what they are building toward.
 
-Weaknesses: No ACID multi-document transactions (MongoDB has limited multi-document transactions; Firestore has limited cross-collection transactions). WaxID isolation enforcement is application-level only. No native SQL. Requires new infrastructure. Harder to express relational queries (find all memories for this student where confidence > 0.7 and category = 'misconception', ordered by recency). No native vector search.
+---
 
-### 4.3 Graph Memory (Neo4j, Graphiti)
+# PART ONE: EDUCATIONAL SCIENCE FOUNDATIONS
 
-Zep/Graphiti ships the temporal-graph substrate (bitemporal validity, episode provenance, contradiction handling) at production scale with a peer-reviewed paper. Bitemporal validity, episode tracing, and contradiction handling are all core graph memory capabilities. [GitHub](https://github.com/hopiumlab/skymem-io)
+## 1. The Research Basis for This Architecture
 
-Data is stored as nodes (entities) and edges (relationships). Queries traverse graph structure. Rich for representing relationships between concepts, students, and knowledge.
+### 1.1 The Four-Component Architecture of Intelligent Tutoring Systems
 
-Strengths: Natural representation of concept relationships (quadratic equations → algebra → mathematics). Multi-hop reasoning ("the student who struggled with velocity also struggles with momentum"). Temporal knowledge graphs model how facts change over time naturally.
+The academic literature on Intelligent Tutoring Systems converges on a four-component architecture (Anderson et al., 1995; VanLehn, 2011): the Domain Model, the Student Model, the Tutor Model, and the User Interface. WaxPrep's architecture maps cleanly to these:
 
-Weaknesses: Requires entirely new infrastructure and expertise. Overkill for WaxPrep's current student memory requirements. Much harder to enforce WaxID isolation. Complex operational overhead. Graph query languages (Cypher) are unfamiliar.
+The Domain Model is the AI's knowledge, augmented by any knowledge retrieval tools added in later stages. WaxPrep does not maintain a separate programmatic domain model — the AI model contains the domain knowledge, which is correct for an LLM-based tutor. This is a deliberate departure from classical ITS design that is appropriate and well-supported.
 
-### 4.4 Event Sourcing
+The Student Model is what Stages 27–34 build. It is a computational representation of what the student has demonstrated, attempted, and struggled with. The academic literature is unambiguous: the student model should track knowledge state over time (Corbett & Anderson, 1994), misconceptions (Brown & VanLehn, 1980; Ross & Andreas, 2024), and engagement signals (VanLehn, 2011).
 
-Every change is stored as an immutable event. Current state is derived by replaying events. The event log IS the data store.
+The Tutor Model, in WaxPrep's case, is the AI's own reasoning capability. The system prompt, memory context, and student model evidence all inform the AI, which then reasons about how to teach. This is the correct architecture for an LLM-based system.
 
-Strengths: Perfect audit trail. Completely immutable history. Supports time travel (reconstruct what the AI knew about a student on any past date).
+The User Interface is WhatsApp.
 
-Weaknesses: State derivation from event replay is complex and slow at scale. Query patterns that are simple in relational models (give me the current facts about this student) require replaying potentially thousands of events. Adds significant engineering complexity.
+### 1.2 Knowledge Tracing — The Research Landscape
 
-### 4.5 Hybrid Memory — The Production-Grade Choice
+Knowledge Tracing is the problem of estimating what a student knows at any point in time, based on their observable interactions. The field has evolved through three generations.
 
-Most production AI agents follow one of two patterns: a split stack or a unified stack. The key insight: Most architectures use Redis for short-term, Pinecone or Weaviate for semantic, PostgreSQL for episodic and procedural. TiDB can cover all four layers in one system. [PingCAP](https://www.pingcap.com/compare/best-database-for-ai-agents/)
+**First Generation: Bayesian Knowledge Tracing (BKT)**
 
-Production-grade agents now consolidate all three memory types using PostgreSQL extensions: hypertables partition conversation history by time, pgvector indexes enable semantic search over embedded knowledge, and standard tables store user preferences with ACID guarantees. One database connection constructs complete context windows spanning episodic, semantic, and procedural memory in a single query. [TigerData](https://www.tigerdata.com/learn/building-ai-agents-with-persistent-memory-a-unified-database-approach)
+Corbett & Anderson (1994) introduced the original BKT model. The model treats each Knowledge Component (KC) as a binary latent variable — either the student knows it or does not. Four parameters define the model:
 
-**RECOMMENDATION: Relational-first using PostgreSQL with forward-compatible columns for future pgvector integration.**
+- P(L₀): probability the student already knows the KC before instruction.
+- P(T): probability of learning the KC on each practice opportunity (transition probability).
+- P(G): probability of a correct response given the student does NOT know the KC (the "guess" parameter).
+- P(S): probability of an incorrect response given the student DOES know the KC (the "slip" parameter).
 
-The reasoning is precise. WaxPrep already runs PostgreSQL on Railway (Stage 3). Every memory type WaxPrep needs in Stages 22–26 is well-served by relational tables with structured JSON columns for variable-content fields. The `pgvector` extension is available on all managed PostgreSQL providers (Railway, Supabase, Neon, DigitalOcean) and can be enabled with a single migration command when semantic retrieval is needed in a future stage. This means WaxPrep starts with zero new infrastructure, gains ACID guarantees, and retains the option to add vector search without a database migration redesign — only by adding a nullable `embedding vector(1536)` column to existing tables.
+After each observation (correct or incorrect response), Bayes' rule updates the probability that the student knows the KC. The update equations are:
 
-**What this is NOT:** This is not "start with the wrong architecture and migrate later." PostgreSQL with `pgvector` is the production-standard database for AI memory systems in 2026. pgvector handles millions of vectors well. pgvector is an open-source PostgreSQL extension that adds the ability to store, index and search vector embeddings — turning PostgreSQL into a vector database, eliminating the need for a separate vector database for most AI use cases like semantic search, RAG, and recommendations. WaxPrep starts with the right database. It starts with less of its features than it will eventually use. [Databricks](https://www.databricks.com/blog/what-is-pgvector)
+After a correct response: P(Lₙ|correct) = [P(Lₙ₋₁) × (1-P(S))] / [P(Lₙ₋₁) × (1-P(S)) + (1-P(Lₙ₋₁)) × P(G)]
 
-## 5. The Master Memory Schema
+After an incorrect response: P(Lₙ|incorrect) = [P(Lₙ₋₁) × P(S)] / [P(Lₙ₋₁) × P(S) + (1-P(Lₙ₋₁)) × (1-P(G))]
 
-The following schema is the complete database foundation for Stages 22–26. Every subsequent section references this foundation. Read it carefully.
+Mastery is typically declared at P(L) ≥ 0.95.
 
-### 5.1 The Core Memory Taxonomy Table
+BKT's fundamental assumptions are critically important to understand:
+- Knowledge is binary (learned or not) — reality is more continuous.
+- Forgetting is impossible — once learned, always learned (known to be false from Ebbinghaus onwards).
+- KCs are independent of each other — ignores concept relationships.
+- Parameters are fixed per KC — ignores individual student differences.
+- Only binary outcomes are modeled — correct or incorrect.
+
+These assumptions are significant. However, research also shows that augmented versions of BKT — incorporating forgetting, student-specific parameters, and partial credit — close most of the predictive gap with deep learning methods (Khajah et al., 2016; Sun, 2025). The interpretability of BKT is a major practical advantage.
+
+**Second Generation: Deep Knowledge Tracing and Variants**
+
+Piech et al. (2015) introduced Deep Knowledge Tracing (DKT), using an LSTM to model student knowledge sequences. DKT consistently achieves higher AUC than classical BKT on standard benchmark datasets (ASSISTments, Cognitive Tutor). This led to a proliferation of deep learning approaches: DKVMN (Zhang et al., 2017), SAKT (Pandey & Karypis, 2019), AKT (Ghosh, Heffernan & Lan, 2020), and many others.
+
+The critical research finding for WaxPrep: research in 2018 (Lin & Chi, JEDM) showed that BKT outperforms LSTM on predicting post-test scores (the most educationally valid outcome), while LSTM achieves higher accuracy on predicting the next item response. This distinction is fundamental. DKT is optimized for next-item prediction, which is not WaxPrep's goal. BKT is better calibrated for actual learning outcomes.
+
+More critically for WaxPrep: DKT requires training on large datasets of student-item interaction sequences. A single student's data in a conversational tutor is far too sparse and unstructured for DKT to produce meaningful results per student. DKT works across a population of students; it cannot meaningfully be applied to produce an individual student estimate from 30 observations.
+
+**Third Generation: LLM-Based Knowledge Tracing**
+
+Scarlatos, Baker & Lan (LAK 2025) introduced LLMKT, which directly applies LLMs to knowledge tracing in tutor-student dialogues. This is the most directly relevant research for WaxPrep. Their key findings:
+
+LLMKT significantly outperforms existing KT methods in predicting student response correctness in dialogue settings. The reason: standard KT methods assume discrete, assessable items with binary outcomes. Conversational tutoring produces neither — turns are heterogeneous (some are questions, some are explanations, some are clarifications), outcomes are continuous and ambiguous, and KCs are often implicit rather than explicit.
+
+Turn-level annotation using LLMs achieves over 93% accuracy for correctness labels and above 0.4 Krippendorff's alpha on KC relevance with human raters — making LLM-based evidence extraction a production-viable approach.
+
+Combining LMs with knowledge tracing leads to better estimates of student knowledge states than KT-only methods in dialogue settings (Scarlatos et al., 2025). This validates WaxPrep's hybrid approach: use a structured mastery model as infrastructure, use LLM reasoning to interpret and contextualize it.
+
+**What This Means for WaxPrep**
+
+WaxPrep is not a structured problem set platform. It is a conversational WhatsApp tutor. The research is clear:
+
+Classical BKT was designed for structured practice systems where students respond to discrete, well-defined items with binary outcomes. A student answering "what is F=ma?" with "force equals mass times acceleration" produces a clean data point. A student discussing force for five minutes in a WhatsApp conversation produces something much harder to classify.
+
+DKT requires population-level training data and produces predictions optimized for next-item accuracy, not for learning outcomes.
+
+LLMKT, or an LLM-assisted hybrid model, is the research-backed approach for conversational tutoring in 2026.
+
+**RECOMMENDATION: Do not implement classical four-parameter BKT.** Implement instead a Recency-Weighted Evidence Accumulator (RWEA) — a lightweight mastery model that stores structured evidence extracted by the AI, applies temporal decay, and presents a probability estimate that the AI uses as evidence input. This is described fully in Section 5.
+
+### 1.3 Performance Factor Analysis and Its Relevance
+
+Performance Factor Analysis (PFA, Pavlik, Cen & Koedinger, 2009) improves on BKT by incorporating both successes and failures as separate predictors, and by modeling the learning curve (each practice attempt reduces the probability of failure). PFA: logit(P(correct)) = β × KC + γ × successes + ρ × failures.
+
+PFA is more principled than BKT for multi-attempt sequences and easier to extend to continuous outcomes. However, it shares BKT's structured-practice assumption. For WaxPrep's conversational setting, the challenge is the same: extracting structured successes and failures from conversation.
+
+PFA concepts inform the RWEA model recommended below — specifically, tracking successes and failures separately, which carries more information than binary mastery.
+
+### 1.4 Item Response Theory and Its Role
+
+Item Response Theory (IRT; Lord, 1980) models the probability of a correct response as a function of student ability and item difficulty. The 2-parameter logistic model: P(correct|θ) = c + (1-c) × 1/(1+e^{-a(θ-b)}), where θ is student ability, a is item discrimination, b is item difficulty, and c is a guessing parameter.
+
+IRT is a cross-sectional measurement model — it describes ability at a point in time, not how it changes. BKT is a longitudinal model — it tracks change over time. These are complementary, not competing.
+
+For WaxPrep, IRT would be valuable for: calibrating question difficulty, detecting when a question is too hard (the student fails consistently regardless of mastery), and providing richer evidence for the AI. However, IRT requires items (questions) with known difficulty parameters, which requires calibration data across students. This makes IRT premature for Stage 27–34 but important to prepare for architecturally.
+
+**RECOMMENDATION: Design the evidence schema to store difficulty estimates alongside outcomes. Leave the IRT column nullable for now. Populate it in a later stage when cross-student data is available.**
+
+### 1.5 Misconception Theory
+
+Brown & VanLehn (1980) introduced Repair Theory, modeling procedural errors as applications of "buggy" procedures — systematic incorrect rules that students consistently apply. This is the theoretical basis for misconception detection.
+
+Repair Theory established that student errors are often not random but systematic. A student who consistently says "the larger object exerts more force on the smaller one" is not guessing randomly — they have a stable, incorrect mental model. Detecting this requires recognizing the pattern across multiple instances.
+
+The research challenge for conversational tutoring: misconception detection traditionally uses structured error analysis (the student produced wrong output X for well-defined input Y). In conversation, recognizing whether a student's statement reflects a genuine misconception or an off-the-cuff slip requires semantic understanding. This is exactly where LLMs excel and classical rule-based methods fail.
+
+Scarlatos et al. (2025) find that combining LMs with knowledge tracing leads to better estimates of student knowledge states including misconceptions. Crucially, Sonkar et al. (2024) find that LLMs are significantly worse at identifying incorrect reasoning containing misconceptions than at identifying correct reasoning — meaning misconception detection is a hard task even for LLMs and requires careful evidence accumulation, not a single-shot inference.
+
+**RECOMMENDATION: Misconceptions must be detected over multiple observations, never from a single instance. Infrastructure stores each observation. The AI extracts the misconception hypothesis from a single observation. Confidence grows through accumulation.**
+
+### 1.6 Help-Seeking Behavior and the Hint Dependency Signal
+
+Beck et al. (2008) and subsequent research in the ASSISTments environment established that hint-seeking behavior is a significant negative predictor of learning outcomes. A student who takes more hints scores lower on post-tests — the correlation is consistent and significant (Feng et al., 2009).
+
+However, help-seeking is not simply bad. Aleven & Koedinger (2000) distinguish productive from unproductive help-seeking. A student who requests hints strategically (when genuinely stuck, then works through the explanation) differs meaningfully from a student who uses hints to avoid thinking. The direction of the correlation with outcomes differs.
+
+Chaudhry et al. (2022) showed that a multi-task model jointly predicting hint-taking and knowledge tracing significantly outperformed models ignoring hint usage (12% improvement in prediction quality).
+
+**IMPLICATION FOR WAXPREP:** The hint dependency metric is educationally meaningful evidence. Infrastructure must track whether a student response came after no hint, one hint, or multiple hints, and how hint usage trends over time within and across sessions. An increasing hint dependency trend on a concept is a warning signal worth reporting to the AI.
+
+### 1.7 The Forgetting Problem
+
+Ebbinghaus (1885) established the forgetting curve: approximately 50–80% of newly learned information is lost within days without review. Modern memory research (Carpenter et al., 2008; Bjork, 1994) has refined this understanding: forgetting follows a power function rather than a pure exponential, is strongly influenced by spacing and retrieval practice, and can be offset by well-timed review.
+
+Classical BKT does not model forgetting. Extended BKT versions with forgetting parameters (Nagatani et al., 2019; Im et al., 2023) show that incorporating forgetting significantly improves prediction accuracy, particularly for longer time horizons.
+
+For WaxPrep, the educational implication is clear. A student who demonstrated mastery of quadratic equations two months ago but has not touched the topic since is not reliably at mastery level. The infrastructure must track recency and apply temporal decay to mastery estimates.
+
+**RECOMMENDATION: Implement a time-since-last-evidence decay factor in the RWEA model. The mastery estimate reported to the AI should reflect not just what was observed but when it was last observed. A high mastery estimate that is six weeks old should be presented differently from a high mastery estimate from yesterday.**
+
+### 1.8 The Critical Research Principle — Evidence vs. Decision
+
+The brief's core philosophical position — infrastructure produces evidence, AI interprets evidence — is deeply consistent with the research literature on Socratic tutoring, formative assessment, and collaborative learning.
+
+Black & Wiliam (1998), in the seminal formative assessment review "Inside the Black Box," established that formative assessment works by producing evidence of learning that is acted upon by teachers, students, or peers. The infrastructure that collects this evidence does not itself decide what to do with it — the intelligent agent (teacher or AI) does.
+
+VanLehn (2006) identified that the granularity of feedback matters crucially. Step-level feedback (responding to each step in a problem) is far more effective than problem-level feedback (responding only to final answers). This is relevant for WaxPrep: evidence should be collected at the interaction level, not just at the session level.
+
+Graesser et al. (2001) established that conversational dialogue in tutoring produces significantly more learning than didactic instruction, with effect sizes around 2 sigma above classroom instruction. This validates the WhatsApp conversational format — it is not a limitation but a potentially powerful learning environment.
+
+---
+
+# PART TWO: THE KNOWLEDGE TRACING MODEL COMPARISON
+
+## 2. Detailed Comparison of Knowledge Tracing Approaches for WaxPrep
+
+The following evaluates all major KT approaches against WaxPrep's specific context.
+
+### 2.1 Classical BKT (Corbett & Anderson, 1994)
+
+Strengths: Interpretable. Works with sparse data. Per-student parameter estimation. Provides probability estimates (not just binary classifications). Widely used, well-understood failure modes.
+
+Weaknesses: Assumes no forgetting. Binary outcome only. Fixed parameters per KC (no student individualization in the base model). Independent KC assumption. Requires structured discrete practice items.
+
+Cold-start behavior: Works from first observation with reasonable priors. Updates monotonically toward certainty.
+
+Data requirements: Minimum ~5–10 observations per KC per student for meaningful estimates. Functional with very sparse data.
+
+Computational cost: Trivial. Four multiplications and an addition per update.
+
+Explainability: Excellent. "Based on 6 practice attempts, 4 correct, 2 incorrect, the estimated probability of mastery is 0.71."
+
+Suitability for WhatsApp conversational tutoring: Poor without modification. Requires discrete item responses. Conversation does not naturally produce these.
+
+Suitability for sparse student data: Good. BKT is designed for sparse data.
+
+Suitability for Nigerian secondary education: Neutral. The model is domain-agnostic.
+
+**Verdict: Not suitable as-is. Suitable as conceptual inspiration for the update mechanism.**
+
+### 2.2 Deep Knowledge Tracing (Piech et al., 2015)
+
+Strengths: Better next-item prediction accuracy than BKT. Handles concept dependencies implicitly. Captures complex sequential patterns.
+
+Weaknesses: Black box — completely uninterpretable. Requires large training datasets (thousands of student-item sequences). Cannot be meaningfully applied per student at inference time — requires full retraining for each new student. Optimized for next-item prediction, not learning outcomes (BKT outperforms DKT on post-test prediction, per Lin & Chi, 2018). Computationally expensive to train.
+
+Cold-start behavior: Poor. Requires population data before producing meaningful per-student estimates.
+
+Data requirements: Minimum tens of thousands of interaction records across the student population. WaxPrep will not have this at launch.
+
+Suitability for WaxPrep: Effectively zero. Wrong architecture for conversational tutoring with sparse, individual student data.
+
+**Verdict: Do not implement. Will never be appropriate for per-student inference in WaxPrep's context.**
+
+### 2.3 Attention-Based KT (SAKT, AKT, etc.)
+
+Strengths: Better prediction than DKT on many benchmarks. Attention allows some interpretability of which past interactions influenced current prediction.
+
+Weaknesses: Requires even more data than DKT. Same cold-start problem. Even heavier computational requirements. More recent models show marginal improvements over DKT that rarely justify the complexity for a production application.
+
+**Verdict: Do not implement. Same problems as DKT, amplified.**
+
+### 2.4 Performance Factor Analysis (Pavlik et al., 2009)
+
+Strengths: More interpretable than DKT. Tracks successes and failures separately. Incorporates learning curve theory. Works with sparse data. Simpler than BKT in implementation.
+
+Weaknesses: Same structured-practice assumption as BKT. Fixed parameters require calibration data. Does not model forgetting in the base model.
+
+Suitability for WaxPrep: Better than classical BKT conceptually, but shares the same structured-practice assumption problem.
+
+**Verdict: PFA concepts should inform the RWEA model, particularly the separate tracking of successes and failures. Do not implement PFA as a formal model.**
+
+### 2.5 LLMKT (Scarlatos, Baker & Lan, 2025)
+
+Strengths: Directly designed for tutor-student dialogue. Significantly outperforms classical KT in conversational settings. LLM handles the ambiguity inherent in conversational responses. Achieves >93% accuracy for LLM-generated correctness labels.
+
+Weaknesses: Expensive (requires LLM call for KC relevance assessment per turn). Requires carefully designed prompts. The LLM is reasoning over the conversation, not over a structured data model — this produces richer but less reproducible estimates.
+
+Suitability for WaxPrep: Excellent for evidence extraction. The LLM can extract KC relevance and correctness from each conversational turn with high accuracy. However, full LLMKT (where the LLM also maintains the knowledge state) is expensive and less transparent than a hybrid approach.
+
+**Verdict: Use LLM-based evidence extraction. Maintain the knowledge state in a structured database (not in the LLM). Feed the structured evidence to the AI at context-assembly time.**
+
+### 2.6 Cognitive Diagnosis Models (DINA, DINO, G-DINA)
+
+Strengths: Explicitly models skill conjunctions (a concept requires mastery of multiple sub-skills). Provides diagnostic information about which specific sub-skills are missing.
+
+Weaknesses: Requires a Q-matrix (mapping of items to required skills) — significant expert knowledge requirement. Designed for assessment settings, not continuous conversational tutoring. Cannot handle the open-ended nature of conversation.
+
+**Verdict: Architecturally interesting for later stages. Completely premature for Stages 27–34.**
+
+### 2.7 The Recommended Approach: Recency-Weighted Evidence Accumulator (RWEA)
+
+Based on the research above, WaxPrep should implement a novel but simple hybrid model that respects the conversational, sparse-data context while maintaining interpretability.
+
+The RWEA model works as follows:
+
+For each (student, concept) pair, maintain:
+- `success_count_weighted`: Sum of weighted correctness scores from LLM evaluation (0.0–1.0 per observation), with more recent observations weighted more heavily.
+- `failure_count_weighted`: Sum of weighted failure contributions from LLM evaluation.
+- `hint_dependency_score`: Weighted average of hint dependency across observations (0 = no hints, 1 = maximum hint dependence).
+- `mastery_estimate`: A derived value computed from the above, with time-decay applied.
+- `evidence_count`: Number of underlying observations.
+- `last_evidence_at`: Timestamp of the most recent observation.
+
+The mastery estimate is computed as:
+
+```
+decay_factor = e^{-λ × days_since_last_evidence}  
+# λ is configurable (default: 0.015, giving ~half-life of 46 days)
+# This is Ebbinghaus-inspired decay, not arbitrary
+
+mastery_estimate = decay_factor × tanh(
+    (success_count_weighted - failure_count_weighted) / 
+    max(evidence_count, 1)
+) 
+# tanh maps the net success-failure signal to (−1, +1)
+# Apply a shift to get (0, 1): mastery = (tanh_value + 1) / 2
+# Clamp to [0.05, 0.95] — never true certainty in either direction
+```
+
+This model:
+- Respects the evidence-based philosophy: it is a summary of observed evidence, not a pedagogy.
+- Incorporates forgetting: mastery estimates decay over time without new evidence.
+- Works with sparse data: meaningful from the first observation.
+- Is interpretable: "mastery_estimate: 0.71 (7 observations, last 3 days ago, 2 hints used in most recent attempt)."
+- Does not require training on population data.
+- Does not make automated decisions.
+- Provides the AI with a genuine calibrated signal.
+
+This is deliberately NOT classical BKT. It does not have BKT's four parameters or its Bayesian update rule. It is a simpler, more appropriate model for the conversational context. It is also clearly more appropriate than DKT. It is inspired by PFA (separate success/failure tracking) and augmented BKT (with forgetting) but implemented as a fresh, simple model designed specifically for WaxPrep.
+
+---
+
+# PART THREE: THE CORE PHILOSOPHY — VALIDATION AND CRITIQUE
+
+## 3. Research Validation of the Evidence-Over-Decisions Principle
+
+The brief's central principle — "Infrastructure produces evidence. AI interprets evidence and decides how to teach." — is strongly supported by the research literature, with one important qualification.
+
+**Validation from formative assessment research:** Black & Wiliam (1998) established that formative assessment works precisely because it separates evidence collection (the infrastructure) from pedagogical action (the teacher). The evidence is what is measured; the action is what the teacher decides. Automating the action removes the intelligence that makes formative assessment work.
+
+**Validation from ITS research:** The best-performing ITS systems maintain interpretable student models that human teachers can override or interpret (Koedinger & Corbett, 2006). Systems that automate all pedagogical decisions are less effective than systems that provide evidence for expert judgment.
+
+**Validation from LLM tutoring research:** Scarlatos et al. (2025) find that LLM-based knowledge tracing is more effective than classical KT precisely because the LLM can interpret ambiguous evidence with contextual reasoning. Separating evidence infrastructure from AI reasoning is what makes this work.
+
+**The Important Qualification**
+
+Some behaviors should be deterministic infrastructure, not AI choices. These are not "pedagogical decisions" — they are operational safeguards:
+
+Safety filtering (if a student message involves self-harm, that requires a deterministic response, not AI pedagogical reasoning) is deterministic infrastructure. Account status enforcement (blocked students do not get tutored) is deterministic. Evidence persistence (every interaction is recorded) is deterministic. These are not covered by the "AI decides" principle.
+
+However, within the tutoring domain, the principle holds fully. Whether to explain, whether to assess, whether to scaffold, whether to give a hint — all of these are pedagogical decisions that belong to the AI.
+
+**The Modified Principle**
+
+The principle should be stated more precisely:
+
+"Deterministic infrastructure provides reliable, uncertainty-quantified, auditable evidence about what the student has experienced, demonstrated, struggled with, and potentially learned. The AI uses this evidence, its domain knowledge, and its pedagogical reasoning to decide how to teach. Infrastructure never overrides AI pedagogical judgment within the tutoring domain."
+
+---
+
+# PART FOUR: THE REVISED IMPLEMENTATION SEQUENCE
+
+## 4. Why the Order Must Change
+
+The original proposed order (27 → 28 → 29 → 30 → 31 → 32 → 33 → 34) has a structural problem: it tries to define the data schema (Stage 27) before establishing what data can actually be collected from the real WaxPrep conversational context (Stage 28). Schema designed without knowledge of the real data will be redesigned after evidence collection is built. This is backward.
+
+The correct order, with justification:
+
+**Phase F.1 — Design (no code yet):**
+34 (Student Model Context Interface — specification only): Design the AI-facing output first. Every other stage builds toward this specification. Build the interface contract before building the implementation.
+
+**Phase F.2 — Evidence Foundation:**
+28 (Evidence Collection Pipeline): Build the evidence taxonomy and evidence schema first. What evidence can WaxPrep actually collect from WhatsApp conversation?
+27 (Student Model Schema): Now that you know what evidence is available, design the knowledge state schema to summarize it correctly.
+
+**Phase F.3 — State Management:**
+29 (Mastery Estimation — RWEA): Build the update function that transforms evidence into mastery estimates.
+30 (Misconception Detection): Build the LLM-assisted misconception evidence pipeline.
+
+**Phase F.4 — Signal Enrichment:**
+31 (Learning Signals and Behavioral Analytics): Build hint dependency tracking, response pattern analysis, temporal signals.
+32 (Formative Assessment Architecture): Refine the assessment evidence extraction pipeline.
+
+**Phase F.5 — Integration:**
+33 (Student Model Versioning and Integrity): Build integrity, versioning, and audit infrastructure.
+34 (Student Model Context Interface — implementation): Complete the implementation of the AI-facing interface.
+
+**Revised implementation order: 34(spec) → 28 → 27 → 29 → 30 → 31 → 32 → 33 → 34(impl)**
+
+---
+
+# PART FIVE: THE DATABASE ARCHITECTURE
+
+## 5. Complete Revised Database Schema
+
+The proposed schema in the brief has the right intentions but several deficiencies. This section provides a complete, production-ready schema that replaces and extends the original proposal.
+
+### 5.1 The Fundamental Design Decision: Append-Only Evidence
+
+**RECOMMENDATION: The evidence tables (observations) must be append-only. The state tables (mastery estimates) must be materialized from evidence.**
+
+This is not full event sourcing (which would be over-engineering). It is a simpler pattern: immutable event log + derived materialized state.
+
+Every observable interaction is written to an append-only `learning_observations` table. Observations are never deleted except under legal deletion requests, and even then only soft-deleted with a deletion record.
+
+The `knowledge_states` table is a materialized summary of the evidence — it is recomputed whenever new evidence arrives. It is not append-only but it is always derivable from the observations.
+
+This pattern provides:
+- Complete audit trail (every state change is traceable to observations).
+- Correction ability (if an evidence record is found to be erroneous, it is soft-deleted and states are recomputed).
+- Reproducibility (given the same observations, the same state must be produced).
+- Privacy compliance (deletion of a student's data means soft-deleting observations and recomputing states).
+
+### 5.2 The Concept Registry
+
+The concept_tags in the original proposal are bare strings. This creates a significant problem: the same concept can be referred to as "quadratic_equations," "quadratic equations," "quadratic formula," or "solving quadratics" — all referring to the same KC. Without a canonical registry, the student model fragments across different string representations of the same concept.
 
 ```sql
--- Migration: 005_memory_foundation.sql
-
--- Enable pgvector for future semantic search
--- Run this ONCE before the memory tables:
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Migration: 006_learning_intelligence_foundation.sql
 
 -- ============================================================
--- STUDENT CORE FACTS (Stage 23)
--- Durable profile facts that the AI knows about the student.
--- One "active" record per (wax_id, fact_key) at any time.
--- All superseded versions remain for audit and provenance.
+-- CONCEPT REGISTRY
+-- Flexible, non-curriculum-prescriptive concept definitions.
+-- Concepts are not a fixed list. They emerge from instruction.
 -- ============================================================
-CREATE TABLE student_facts (
-  -- Primary identity
+CREATE TABLE concepts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
   
-  -- Fact taxonomy
-  fact_key TEXT NOT NULL,        -- e.g. 'exam_target', 'school_name', 'class_level'
-  fact_category TEXT NOT NULL,   -- e.g. 'profile', 'academic', 'preference', 'misconception'
-  fact_value JSONB NOT NULL,     -- Flexible: "WAEC" or {"subjects":["Math","Physics"]}
+  -- Canonical identifier (slug format, no spaces)
+  -- Examples: quadratic_equations, newton_second_law, photosynthesis
+  canonical_tag TEXT NOT NULL UNIQUE,
   
-  -- Human-readable form (for context injection)
-  display_text TEXT NOT NULL,    -- e.g. "Student is preparing for WAEC in 2027"
+  -- Human-readable name
+  display_name TEXT NOT NULL,
   
-  -- Provenance
-  provenance TEXT NOT NULL,      -- See Section 21 for full taxonomy
-  source_session_id UUID REFERENCES sessions(id),
-  source_message_id UUID REFERENCES messages(id),
-  source_ai_request_id UUID REFERENCES ai_requests(id),
+  -- Classification metadata (all optional — do not require upfront)
+  subject TEXT,              -- 'mathematics', 'physics', 'chemistry', etc.
+  granularity TEXT,          -- 'micro', 'meso', 'macro' — how atomic is this concept?
   
-  -- Confidence
-  confidence NUMERIC(4,3) NOT NULL DEFAULT 0.500,  -- 0.000 to 1.000
-  evidence_count INTEGER NOT NULL DEFAULT 1,
-  contradicted_count INTEGER NOT NULL DEFAULT 0,
+  -- Exam relevance metadata (optional array for flexibility)
+  exam_references JSONB DEFAULT '[]',
+  -- Example: [{"exam":"WAEC","year":2026},{"exam":"JAMB"}]
   
-  -- Lifecycle status
-  status TEXT NOT NULL DEFAULT 'active'
-    CHECK (status IN ('active', 'superseded', 'archived', 'flagged')),
-  superseded_by UUID REFERENCES student_facts(id),  -- Points to newer version
-  superseded_at TIMESTAMPTZ,
+  -- Curriculum context (optional — do not enforce any specific curriculum)
+  curriculum_notes TEXT,
+  -- Free-text: "This concept appears in SS2 Physics curriculum" 
+  -- NOT a structured foreign key to any curriculum database
   
-  -- Temporal validity (when this fact was/is true)
-  valid_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),   -- When this fact became true
-  valid_until TIMESTAMPTZ,                          -- NULL = still true now
+  -- Aliases (other ways this concept might be referred to)
+  aliases JSONB DEFAULT '[]',
+  -- Example: ["quadratic formula", "solving quadratics", "ax2+bx+c"]
   
-  -- Soft deletion (never hard delete)
-  deleted_at TIMESTAMPTZ,
-  deletion_reason TEXT,
+  -- Concept relationships (lightweight, optional)
+  -- Stored as text arrays of canonical_tags — no foreign key enforcement
+  -- The AI uses these as hints, not as hard rules
+  related_concepts JSONB DEFAULT '[]',
+  -- Example: {"has_prerequisites": ["linear_equations"], "related_to": ["cubic_equations"]}
   
-  -- Future semantic search (nullable until embeddings are added)
-  embedding vector(1536),        -- Populated in future embedding stage
-  
-  -- Timestamps
+  -- Audit
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_by TEXT NOT NULL DEFAULT 'system',  -- 'system', 'ai_extraction', 'admin'
+  
+  -- Soft deletion (concepts are never hard-deleted)
+  archived_at TIMESTAMPTZ,
+  archive_reason TEXT
 );
 
+-- Critical index: tag lookup must be fast (used on every evidence record)
+CREATE UNIQUE INDEX idx_concepts_tag ON concepts(canonical_tag);
+CREATE INDEX idx_concepts_subject ON concepts(subject) WHERE subject IS NOT NULL;
+```
+
+**Key architectural decision:** The concept registry is NOT a hardcoded curriculum. Concepts are created lazily — when the AI identifies a concept in conversation that is not in the registry, a new registry entry is created. The schema supports this with `created_by = 'ai_extraction'`. Operators can also add concepts manually. But nothing in the WaxPrep application depends on a fixed list of allowed concepts.
+
+The `related_concepts` JSONB field provides lightweight concept relationships without creating a rigid prerequisite dependency graph. The AI reads these relationships as hints. Infrastructure does not enforce prerequisite ordering.
+
+### 5.3 Learning Observations (The Immutable Evidence Log)
+
+```sql
 -- ============================================================
--- EPISODIC MEMORY (Stage 24)
--- Summaries of past sessions. The AI's long-term memory
--- of what happened, when, and with what educational outcome.
+-- LEARNING OBSERVATIONS — APPEND-ONLY EVIDENCE LOG
+-- Every piece of learning-relevant evidence WaxPrep collects.
+-- This is the ground truth. States are derived from this.
 -- ============================================================
-CREATE TABLE student_episodes (
+CREATE TABLE learning_observations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Ownership (mandatory, absolute isolation)
   wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
   session_id UUID NOT NULL REFERENCES sessions(id),
   
-  -- Episode content (AI-generated summary of the session)
-  summary_text TEXT NOT NULL,           -- Natural language summary for context injection
+  -- Source
+  message_id UUID REFERENCES messages(id),     -- The specific message this came from
+  ai_request_id UUID REFERENCES ai_requests(id), -- The AI call that produced this evidence
   
-  -- Structured metadata (extracted from summary, AI-generated)
-  topics JSONB NOT NULL DEFAULT '[]',   -- Array of topic strings
-  subjects JSONB NOT NULL DEFAULT '[]', -- Array of subject strings (Math, Physics, etc.)
-  breakthroughs JSONB DEFAULT '[]',     -- Array of things the student understood
-  confusions JSONB DEFAULT '[]',        -- Array of things that remained unclear
-  questions_asked INTEGER DEFAULT 0,    -- How many questions the student asked
-  student_mood TEXT,                    -- 'engaged', 'frustrated', 'confident', 'uncertain'
+  -- Concept identification
+  concept_tag TEXT NOT NULL,                   -- References concepts.canonical_tag
+  -- NOTE: NOT a foreign key — concept may not be registered yet at write time
+  -- The evidence pipeline resolves/creates the registry entry separately
   
-  -- Temporal context
-  session_start TIMESTAMPTZ NOT NULL,
-  session_end TIMESTAMPTZ NOT NULL,
-  session_duration_minutes INTEGER NOT NULL,
-  turn_count INTEGER NOT NULL,
+  -- Evidence type taxonomy (complete taxonomy defined in Section 12)
+  evidence_type TEXT NOT NULL,
+  -- 'direct_response'    — student directly answered a question
+  -- 'explanation_attempt' — student tried to explain a concept
+  -- 'correction_response' — student responded to a correction
+  -- 'hint_request'       — student asked for help
+  -- 'self_reported'      — student stated their own confidence level
+  -- 'error_commission'   — student made an identifiable error
+  -- 'concept_mention'    — student mentioned the concept (without assessment)
   
-  -- Summary generation metadata
-  summary_generated_by TEXT NOT NULL,  -- Which AI provider generated the summary
-  summary_model TEXT NOT NULL,         -- Which model
-  summary_prompt_version TEXT NOT NULL, -- Which prompt version
-  summary_generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Outcome (for assessable evidence types) 
+  -- Null for non-assessable types (concept_mention, hint_request)
+  correctness NUMERIC(4,3),            -- 0.000 = completely wrong, 1.000 = completely correct
+  -- Not a boolean. Partial credit is real.
+  correctness_confidence NUMERIC(4,3), -- How confident is the evaluator in this correctness score?
   
-  -- Quality tracking
-  summary_status TEXT NOT NULL DEFAULT 'complete'
-    CHECK (summary_status IN ('complete', 'failed', 'partial', 'skipped')),
-  summary_error TEXT,                  -- If summary_status = 'failed'
+  -- Partial correctness breakdown (optional, for richer evidence)
+  correctness_breakdown JSONB,
+  -- Example: {"conceptual_understanding": 0.8, "procedural_accuracy": 0.5}
   
-  -- Future semantic search
-  embedding vector(1536),             -- Summary embedding for semantic retrieval
+  -- Help behavior
+  hint_level INTEGER DEFAULT 0,        -- 0 = no hints, 1+ = number of hints received
+  -- IMPORTANT: A correct response with hint_level=2 is weaker evidence than
+  -- a correct response with hint_level=0
   
-  -- Lifecycle
-  archived_at TIMESTAMPTZ,            -- When moved to cold storage (future)
+  -- Response timing
+  response_time_ms INTEGER,            -- NULL if not measurable in WhatsApp context
+  -- WhatsApp does not reliably expose typing speed, but we can track
+  -- time between message receipt and response message
+  
+  -- Evidence quality metadata
+  extraction_method TEXT NOT NULL,     -- 'llm_evaluation', 'ai_inline', 'self_report'
+  extraction_confidence NUMERIC(4,3),  -- How confident is the extraction itself?
+  evaluator_model TEXT,                -- Which AI model produced this evidence
+  evaluator_prompt_version TEXT,       -- Which evaluation prompt version
+  
+  -- Student response content reference (for audit)
+  -- We do NOT store the actual content here (privacy) — only reference to message
+  -- The message record contains the content and is separately privacy-controlled
+  
+  -- Misconception flag (preliminary — detailed misconception table is separate)
+  possible_misconception BOOLEAN DEFAULT FALSE,
+  misconception_tag TEXT,              -- If a known misconception category
+  
+  -- Temporal
+  observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- Immutability enforcement
+  -- Once written, observations are never modified.
+  -- If an observation is erroneous: soft-delete it and recompute states.
+  deleted_at TIMESTAMPTZ,             -- NULL = valid evidence
+  deletion_reason TEXT,
+  deletion_authorized_by TEXT,        -- Who authorized the deletion
+  
+  CONSTRAINT check_correctness_range 
+    CHECK (correctness IS NULL OR (correctness >= 0 AND correctness <= 1)),
+  CONSTRAINT check_confidence_range
+    CHECK (extraction_confidence IS NULL OR 
+           (extraction_confidence >= 0 AND extraction_confidence <= 1))
+);
+
+-- Performance indexes (evidence is queried heavily per student per concept)
+CREATE INDEX idx_observations_wax_concept 
+  ON learning_observations(wax_id, concept_tag, observed_at DESC)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_observations_wax_session 
+  ON learning_observations(wax_id, session_id)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_observations_concept_type
+  ON learning_observations(concept_tag, evidence_type)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_observations_wax_recent
+  ON learning_observations(wax_id, observed_at DESC)
+  WHERE deleted_at IS NULL;
+
+-- Partial index for misconception screening
+CREATE INDEX idx_observations_misconceptions
+  ON learning_observations(wax_id, concept_tag, observed_at DESC)
+  WHERE possible_misconception = TRUE AND deleted_at IS NULL;
+```
+
+### 5.4 Knowledge States (Materialized Mastery Estimates)
+
+```sql
+-- ============================================================
+-- KNOWLEDGE STATES — MATERIALIZED MASTERY ESTIMATES
+-- Derived from learning_observations. Always recomputable.
+-- This is the infrastructure's answer to "what does the student know?"
+-- ============================================================
+CREATE TABLE knowledge_states (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Ownership
+  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
+  concept_tag TEXT NOT NULL,
+  
+  -- RWEA Model parameters (see Section 2.7)
+  mastery_estimate NUMERIC(4,3) NOT NULL DEFAULT 0.100,
+  -- 0.000–1.000. This is NOT P(mastery) in the BKT sense.
+  -- It is the RWEA output: a calibrated signal for the AI.
+  -- Never exactly 0 or 1 — always [0.05, 0.95]
+  
+  -- Component signals (the AI can use these individually)
+  success_signal NUMERIC(5,3) NOT NULL DEFAULT 0.000,  -- Accumulated weighted successes
+  failure_signal NUMERIC(5,3) NOT NULL DEFAULT 0.000,  -- Accumulated weighted failures
+  
+  -- Trend signals
+  recent_trend TEXT,        -- 'improving', 'stable', 'declining', 'insufficient_data'
+  -- Computed by comparing recent 3 observations vs previous 3
+  
+  -- Help dependency
+  hint_dependency NUMERIC(4,3) DEFAULT NULL, -- NULL = no data. 0-1 scale.
+  hint_dependency_trend TEXT,                -- 'increasing', 'decreasing', 'stable', NULL
+  
+  -- Evidence metadata
+  evidence_count INTEGER NOT NULL DEFAULT 0,
+  direct_response_count INTEGER NOT NULL DEFAULT 0,   -- Only the highest-quality evidence type
+  last_evidence_at TIMESTAMPTZ,
+  first_evidence_at TIMESTAMPTZ,
+  
+  -- Temporal decay
+  decay_factor_applied NUMERIC(5,4),   -- The decay factor applied at last update
+  -- Allows the AI to see how stale the estimate is
+  
+  -- State validity
+  state_version INTEGER NOT NULL DEFAULT 1,  -- Increments on every recomputation
+  last_computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- A single active state per (wax_id, concept_tag)
+  UNIQUE (wax_id, concept_tag),
+  
+  CONSTRAINT check_mastery_range 
+    CHECK (mastery_estimate >= 0 AND mastery_estimate <= 1)
+);
+
+-- Performance indexes
+CREATE INDEX idx_knowledge_states_wax 
+  ON knowledge_states(wax_id, mastery_estimate DESC);
+
+CREATE INDEX idx_knowledge_states_wax_recent
+  ON knowledge_states(wax_id, last_evidence_at DESC NULLS LAST);
+
+CREATE INDEX idx_knowledge_states_concept
+  ON knowledge_states(concept_tag, mastery_estimate DESC);
+```
+
+### 5.5 Misconception Records
+
+```sql
+-- ============================================================
+-- MISCONCEPTIONS
+-- Structured records of identified systematic errors.
+-- Each misconception record is supported by evidence observations.
+-- ============================================================
+CREATE TABLE misconceptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Ownership
+  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
+  
+  -- What and where
+  concept_tag TEXT NOT NULL,
+  
+  -- Misconception description (AI-extracted, free text)
+  description TEXT NOT NULL,
+  -- Example: "Student believes force is required to maintain constant velocity 
+  -- (Newton's First Law violation, Aristotelian physics misconception)"
+  
+  -- Evidence support
+  observation_ids UUID[] NOT NULL DEFAULT '{}',
+  -- Array of learning_observations.id values that support this misconception
+  evidence_count INTEGER NOT NULL DEFAULT 1,
+  
+  -- Confidence
+  confidence NUMERIC(4,3) NOT NULL DEFAULT 0.500,
+  -- How confident are we that this is a stable misconception vs a one-time slip?
+  
+  -- Status lifecycle
+  status TEXT NOT NULL DEFAULT 'suspected'
+    CHECK (status IN ('suspected', 'confirmed', 'resolved', 'archived')),
+  -- suspected: 1-2 observations
+  -- confirmed: 3+ observations
+  -- resolved: student has demonstrated correct understanding since
+  -- archived: no longer active
+  
+  resolved_at TIMESTAMPTZ,
+  resolution_evidence_id UUID REFERENCES learning_observations(id),
+  
+  -- Extraction metadata
+  detected_by TEXT NOT NULL,  -- 'llm_inline', 'session_summarizer', 'manual'
+  first_detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_confirmed_at TIMESTAMPTZ,
+  
+  -- Soft deletion
   deleted_at TIMESTAMPTZ,
   
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
--- MEMORY RETRIEVAL LOG (Stage 25)
--- Observability: every time memory is retrieved for a student,
--- log what was retrieved, why, and whether it was useful.
--- ============================================================
-CREATE TABLE memory_retrieval_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
-  ai_request_id UUID REFERENCES ai_requests(id),
-  session_id UUID REFERENCES sessions(id),
-  
-  -- What was retrieved
-  facts_retrieved INTEGER NOT NULL DEFAULT 0,
-  episodes_retrieved INTEGER NOT NULL DEFAULT 0,
-  total_memory_tokens_estimated INTEGER NOT NULL DEFAULT 0,
-  
-  -- Retrieval metadata
-  retrieval_strategy TEXT NOT NULL,    -- 'recency', 'hybrid', 'semantic'
-  retrieval_latency_ms INTEGER NOT NULL,
-  
-  -- Deduplication metrics
-  facts_deduplicated INTEGER DEFAULT 0,  -- Facts excluded as duplicates
-  
-  -- Future: outcome tracking (was the memory useful?)
-  marked_useful BOOLEAN,               -- Set by future evaluation stage
-  
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+CREATE INDEX idx_misconceptions_wax_active
+  ON misconceptions(wax_id, concept_tag, status)
+  WHERE status IN ('suspected', 'confirmed') AND deleted_at IS NULL;
 
--- ============================================================
--- MEMORY CONTRADICTION LOG (Stage 26)
--- When two facts conflict, record the conflict explicitly.
--- Let the AI reason about contradictions — do not resolve automatically.
--- ============================================================
-CREATE TABLE memory_contradictions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
-  
-  -- The conflicting facts
-  fact_a_id UUID NOT NULL REFERENCES student_facts(id),
-  fact_b_id UUID NOT NULL REFERENCES student_facts(id),
-  
-  -- Contradiction details
-  conflict_type TEXT NOT NULL,         -- 'value_conflict', 'temporal_conflict', 'logical_conflict'
-  conflict_description TEXT NOT NULL,  -- Human-readable description of the conflict
-  fact_key TEXT NOT NULL,              -- Which fact_key the conflict is about
-  
-  -- Resolution status
-  status TEXT NOT NULL DEFAULT 'unresolved'
-    CHECK (status IN ('unresolved', 'resolved_by_supersession', 'resolved_by_ai', 'acknowledged')),
-  resolved_at TIMESTAMPTZ,
-  resolution_notes TEXT,
-  
-  -- Detection metadata
-  detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  detected_by TEXT NOT NULL,           -- 'write_trigger', 'background_job', 'ai_flagged'
-  
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- CONFIDENCE HISTORY (Stage 26)
--- Append-only record of every confidence change for every fact.
--- Never lose the history of why confidence changed.
--- ============================================================
-CREATE TABLE memory_confidence_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  fact_id UUID NOT NULL REFERENCES student_facts(id),
-  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
-  
-  -- The change
-  previous_confidence NUMERIC(4,3) NOT NULL,
-  new_confidence NUMERIC(4,3) NOT NULL,
-  delta NUMERIC(4,3) NOT NULL,          -- new - previous (positive = increase)
-  
-  -- Reason
-  change_reason TEXT NOT NULL,          -- See Section 21: REINFORCE, CONTRADICT, SUPERSEDE, DECAY, CONFIRM
-  change_evidence TEXT,                 -- Description of what caused the change
-  
-  -- Source
-  triggered_by_session_id UUID REFERENCES sessions(id),
-  triggered_by_ai_request_id UUID REFERENCES ai_requests(id),
-  triggered_by_job TEXT,               -- Background job name if not from a request
-  
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- INDEXES (Critical for production performance)
--- Every column in a WHERE clause needs an index.
--- ============================================================
-
--- student_facts indexes
-CREATE INDEX idx_facts_wax_id_status ON student_facts(wax_id, status);
-CREATE INDEX idx_facts_wax_id_category ON student_facts(wax_id, fact_category, status);
-CREATE INDEX idx_facts_wax_id_key ON student_facts(wax_id, fact_key, status);
-CREATE INDEX idx_facts_wax_id_recency ON student_facts(wax_id, created_at DESC) WHERE status = 'active';
-CREATE INDEX idx_facts_confidence ON student_facts(wax_id, confidence DESC) WHERE status = 'active';
-CREATE INDEX idx_facts_superseded_by ON student_facts(superseded_by) WHERE superseded_by IS NOT NULL;
--- Future vector index (add when embeddings are populated):
--- CREATE INDEX idx_facts_embedding ON student_facts USING hnsw (embedding vector_cosine_ops)
---   WHERE embedding IS NOT NULL;
-
--- student_episodes indexes  
-CREATE INDEX idx_episodes_wax_id_recency ON student_episodes(wax_id, session_end DESC);
-CREATE INDEX idx_episodes_wax_id_subjects ON student_episodes USING gin(subjects);
-CREATE INDEX idx_episodes_wax_id_topics ON student_episodes USING gin(topics);
-CREATE INDEX idx_episodes_session_id ON student_episodes(session_id);
--- Future vector index:
--- CREATE INDEX idx_episodes_embedding ON student_episodes USING hnsw (embedding vector_cosine_ops)
---   WHERE embedding IS NOT NULL;
-
--- contradiction indexes
-CREATE INDEX idx_contradictions_wax_id ON memory_contradictions(wax_id, status);
-CREATE INDEX idx_contradictions_fact_a ON memory_contradictions(fact_a_id);
-CREATE INDEX idx_contradictions_fact_b ON memory_contradictions(fact_b_id);
-
--- confidence history indexes
-CREATE INDEX idx_confidence_history_fact ON memory_confidence_history(fact_id, created_at DESC);
-CREATE INDEX idx_confidence_history_wax ON memory_confidence_history(wax_id, created_at DESC);
-
--- retrieval log indexes
-CREATE INDEX idx_retrieval_log_wax ON memory_retrieval_log(wax_id, created_at DESC);
-CREATE INDEX idx_retrieval_log_request ON memory_retrieval_log(ai_request_id);
+CREATE INDEX idx_misconceptions_wax_recent
+  ON misconceptions(wax_id, first_detected_at DESC)
+  WHERE deleted_at IS NULL;
 ```
 
-## 6. The Memory Taxonomy — Complete Category Reference
-
-The memory taxonomy defines what categories of information WaxPrep stores about students. This is the most important design decision in the entire memory architecture. Get it wrong and the AI receives garbage. Get it right and the AI receives a coherent picture of who the student is.
-
-### 6.1 Profile Facts (`fact_category = 'profile'`)
-
-Durable biographical facts about the student.
-
-**Fact keys and their semantics:**
-- `exam_target`: Which examination the student is preparing for. Values: `WAEC`, `NECO`, `JAMB`, `BECE`, or combinations.
-- `exam_year`: When the student plans to sit the exam. Value: year integer.
-- `class_level`: Current school year. Values: `JSS1`, `JSS2`, `JSS3`, `SS1`, `SS2`, `SS3`.
-- `preferred_name`: What the student likes to be called. Important for dignity and rapport.
-- `school_type`: Federal Government College, State secondary, private — affects context.
-- `language_preference`: Preferred communication style (not language — always English — but formality level, slang tolerance, etc.).
-
-**Characteristics:** High stability. Low change frequency. High confidence after one direct statement. Never derived from inference in Stage 23 — always stated by the student or confirmed explicitly.
-
-### 6.2 Academic Facts (`fact_category = 'academic'`)
-
-Facts about the student's academic engagement and performance.
-
-**Fact keys:**
-- `strong_subjects`: Subjects the student demonstrates consistent strength in.
-- `weak_subjects`: Subjects where the student consistently struggles.
-- `study_schedule`: When the student typically studies (morning person, late night, weekends).
-- `exam_subjects`: Which specific subjects the student is taking in their target exam.
-- `preferred_explanation_style`: Whether the student responds better to step-by-step or conceptual explanations.
-
-**Characteristics:** Medium stability. Requires multiple observations before high confidence. Can change as the student improves or encounters new difficulties.
-
-### 6.3 Misconceptions (`fact_category = 'misconception'`)
-
-This is one of the most educationally valuable categories. A misconception is a specific incorrect understanding that the student holds about a concept.
-
-**Fact keys:**
-- `misconception`: Each individual misconception is a separate fact record.
-- `fact_value` contains: `{ concept: "Newton's Third Law", error: "Student believes larger objects exert more force on smaller ones", subject: "Physics", detected_turn: 42 }`
-
-**Characteristics:** Created when the AI observes clear incorrect reasoning in a student's response. Should have lower initial confidence (needs multiple observations to confirm it is a stable misconception and not a one-time slip). Superseded when the student demonstrates correct understanding. This category must never be created from a single ambiguous statement — it requires clear evidence of incorrect conceptual understanding.
-
-**The educational importance:** If WaxPrep knows a student has a persistent misconception about Newton's Third Law, every future physics session can factor this in. The AI can proactively address it, check for it, and celebrate when the student overcomes it. Without this category, WaxPrep treats every session as though the student has no history.
-
-### 6.4 Preferences (`fact_category = 'preference'`)
-
-How the student prefers to interact with WaxPrep specifically.
-
-**Fact keys:**
-- `explanation_depth`: Does the student prefer brief answers or detailed walkthroughs?
-- `example_type`: Real-world examples, abstract examples, past exam-style examples?
-- `feedback_style`: Direct correction or Socratic guidance?
-- `session_pace`: Does the student engage in rapid-fire questions or take time to reflect?
-- `topic_interest`: Topics the student finds particularly interesting (beyond curriculum).
-
-**Characteristics:** Derived from behavioral observation over multiple sessions. Medium stability. More reliable with more evidence. The AI uses these to calibrate its teaching approach, but never as rigid rules — always as contextual guidance.
-
-### 6.5 Learning Progress (`fact_category = 'progress'`)
-
-Evidence of conceptual mastery or ongoing difficulty.
-
-**Fact keys:**
-- `mastered_concept`: A concept the student has demonstrably understood.
-- `struggling_concept`: A concept the student has consistently had difficulty with across multiple sessions.
-- `breakthrough`: A significant learning moment — something that clicked after being stuck.
-
-**Characteristics:** Created from episodic memory consolidation (background job). High educational value. Lower initial confidence (one session's apparent mastery may not transfer to the next). Confidence increases as mastery is demonstrated consistently.
-
-### 6.6 Session Behavioral Facts (`fact_category = 'behavioral'`)
-
-Patterns in how the student behaves across sessions.
-
-**Fact keys:**
-- `typical_session_time`: When the student most often uses WaxPrep.
-- `session_length_pattern`: Typical session duration (short bursts vs long study sessions).
-- `engagement_pattern`: Engagement level trends (increasing, decreasing, stable).
-- `response_time_pattern`: How quickly the student typically replies.
-
-**Characteristics:** Derived entirely from system-observable data, not from AI inference or student statements. Low individual certainty, high aggregate certainty.
-
-### 6.7 Future-Compatible Categories (Not Implemented, Architecture Ready)
-
-The schema supports additional categories without modification:
-
-- `assessment_result`: When WaxPrep adds assessment tools — scores, performance data.
-- `parent_note`: When parent involvement features are added.
-- `teacher_note`: When teacher collaboration features are added.
-- `curriculum_alignment`: Which specific curriculum objectives the student has covered.
-- `learning_gap`: Identified gaps in prerequisite knowledge.
-- `emotional_state_pattern`: Long-term emotional engagement patterns (not transient mood).
-
-## 7. The CRUD Architecture — Complete Operations
-
-### 7.1 CREATE: Writing a New Memory
-
-When the AI or a background process identifies a new fact about a student, the write operation must:
-
-1. Check if a fact with this `(wax_id, fact_key, status='active')` already exists.
-2. If NO existing active fact: insert a new record with `status='active'`.
-3. If YES existing active fact: evaluate whether this new observation reinforces or contradicts the existing fact.
-   - If it reinforces (same value): call the REINFORCE operation (Section 27.3).
-   - If it contradicts (different value): call the SUPERSEDE or CONTRADICT operation depending on whether the new value clearly replaces the old one or creates a genuine conflict.
-
-The write must always be wrapped in a database transaction to ensure atomicity. A fact that is written but whose confidence history entry fails to write creates an inconsistent state.
-
-### 7.2 RETRIEVE: Reading Memory for Context Injection
-
-The retrieve operation is the critical path for every AI call. It must be fast (under 20ms), accurate (return only this student's facts), and bounded (respect the token budget). Full specification in Stage 25 (Section 17).
-
-### 7.3 REINFORCE: Increasing Confidence
-
-When a new observation matches an existing active fact, the existing fact's confidence is increased. The old record is updated in place for the confidence field only (this is the one exception to append-only — confidence is a living metric, not a historical record). The confidence history table records the change.
-
-**Confidence increase rules:** See Stage 26 (Section 22) for the complete confidence state machine.
-
-### 7.4 SUPERSEDE: Replacing a Fact
-
-When a new observation clearly replaces an old fact (the student changed schools, updated their exam target, corrected a previous statement), the supersession operation:
-
-1. Sets the existing active fact's `status = 'superseded'`, `superseded_at = NOW()`, `valid_until = NOW()`.
-2. Creates a NEW fact record with `status = 'active'`, `valid_from = NOW()`, `superseded_by = NULL`.
-3. Sets the old record's `superseded_by = new_record.id`.
-4. Records a confidence history entry for the old record (final confidence at time of supersession).
-
-**Critical:** The old record is NEVER deleted. It is NEVER updated beyond setting its status and superseded_by pointer. It remains permanently available for audit and for understanding the history of the AI's beliefs about this student.
-
-### 7.5 ARCHIVE: Reducing Context Load
-
-Facts that have not been relevant for a long time (configurable: default 90 days of zero retrieval) can be archived. Archiving sets `status = 'archived'`. Archived facts are not included in standard context retrieval but remain permanently available for direct query.
-
-Archiving is performed by a background consolidation job (Section 31). It is not performed inline during request processing.
-
-### 7.6 DELETE (Soft Delete Only)
-
-Hard deletion is never performed in the memory system except under regulatory deletion rights (NDPA Section 25, right to erasure). Even then, the preference is to set `status = 'deleted'` and `deleted_at = NOW()` rather than removing rows, unless the regulation explicitly requires data destruction.
-
-When soft deleting: cascade the soft delete to all related confidence history records, all related contradiction records, and update any `superseded_by` pointers that referenced the deleted fact.
-
-When hard deletion is legally required: remove the rows, remove associated indexes, and record the deletion in a separate compliance audit log (structure: `compliance_deletions` table with the wax_id, the categories deleted, the legal basis, the timestamp, and the operator who authorized it).
-
-## 8. Student Isolation Architecture
-
-This section specifies how WaxID isolation is enforced at every layer of the memory system. Isolation is not merely a query filter. It is a multi-layer guarantee.
-
-### 8.1 Database Layer — Foreign Key Constraints
-
-Every memory table has `wax_id UUID NOT NULL REFERENCES students(id)`. This means the database itself rejects any attempt to write a memory record without a valid WaxID. The reference to the `students` table means a memory record cannot be created for a WaxID that does not exist.
-
-### 8.2 Application Layer — StudentMemoryAccess Class
-
-A dedicated `StudentMemoryAccess` class (extending the pattern established by `StudentDataAccess` in Stage 12) wraps all memory operations. Every method on this class requires `waxId` at construction time and includes it in every query.
-
-No code outside of `StudentMemoryAccess` should write or read from the memory tables directly. Every query goes through this class.
-
-### 8.3 Context Injection Layer — Assertion Before Use
-
-In the context assembler (Stage 18), before memory is injected into the context, assert that every retrieved memory record has `wax_id = currentWaxId`. This is a runtime defensive check, not a substitute for the database-level guarantee.
-
-### 8.4 Audit Trail
-
-Every retrieval is logged in `memory_retrieval_log` with the `wax_id` and the `ai_request_id`. If a cross-student contamination occurred (which the architecture prevents, but defense-in-depth requires logging), it would be detectable through this log.
-
-## 9. Future Semantic Memory — Design Compatibility
-
-The schema already includes the `embedding vector(1536)` column on both `student_facts` and `student_episodes`. This is intentional and important.
-
-pgvector introduces a dedicated data type for storing dense vector data, allowing for efficient management of embeddings and other high-dimensional data directly within PostgreSQL tables. It supports various distance metrics for calculating vector similarity, including L2 (Euclidean) distance, inner product, and cosine distance. [Instaclustr](https://www.instaclustr.com/education/vector-database/pgvector-key-features-tutorial-and-pros-and-cons-2026-guide/)
-
-When the future semantic retrieval stage is implemented:
-1. Enable `pgvector` extension via a one-line migration (the `CREATE EXTENSION IF NOT EXISTS vector` is already in the Stage 22 migration above — it is a no-op if called again).
-2. Generate embeddings for existing `student_facts` and `student_episodes` rows using an embedding model.
-3. Populate the `embedding` column.
-4. Create an HNSW index on the column.
-5. Update the retrieval layer to support semantic similarity search.
-
-This is a purely additive change. No existing columns change. No existing queries break. The `embedding` column is nullable — all queries that do not use embeddings ignore it completely.
-
----
-
-# PART THREE: STAGE 23 — CORE MEMORY (PROFILE FACTS)
-
-## 10. What Core Memory Is and Is Not
-
-Core memory is the AI's knowledge of WHO the student is — stable, durable facts that do not need to be re-derived every session. A student should not need to tell WaxPrep they are preparing for WAEC every single time they open WhatsApp. WaxPrep should remember. The student should feel known.
-
-Core memory is NOT a form. It is NOT an intake questionnaire. It is NOT fields the student fills in before using the tutor. Core memory emerges from conversation. The student mentions they are "doing my SS2" in passing — that is a core memory fact (`class_level: SS2`). The student asks about WAEC Biology — that implies `exam_target: WAEC` and possibly `exam_subjects: [Biology]`. The AI extracts these facts from natural conversation and stores them without the student feeling like they are being interrogated.
-
-This extraction is performed by the AI itself, as a background tool call or a post-processing analysis. The infrastructure stores what the AI extracts. The AI decides what is worth extracting. Infrastructure does not decide.
-
-## 11. Structured Fact Storage — Architecture Decision
-
-The `fact_value` column uses `JSONB` (structured JSON within PostgreSQL). This is the correct choice among the available options.
-
-**Key-value pairs** (simple `TEXT key, TEXT value`): Too rigid for complex values like `exam_subjects: ["Math", "Physics", "Chemistry"]`. Inadequate for structured evidence.
-
-**Entity-Attribute-Value (EAV) tables** (three-column design, common in medical systems): Flexible but produces N-column data in an N×3 table shape, making complex queries painful. ORM frameworks hate EAV tables. Not recommended.
-
-**Typed schemas** (separate columns for every possible fact): Requires a migration every time a new fact type is added. Pre-defines the set of things WaxPrep can know about a student. Inflexible.
-
-**Pure JSON documents**: Loses the ability to query individual fact categories efficiently. Loses column-level validation. Harder to enforce the WaxID isolation invariant.
-
-**JSONB hybrid (recommended):** The `fact_key` and `fact_category` are typed TEXT columns with query-optimized indexes. The `fact_value` is JSONB for flexibility. The `display_text` is a pre-computed human-readable string for context injection (avoiding expensive JSONB serialization at retrieval time). This gives WaxPrep typed, indexed, queryable categories with flexible value structures.
-
-## 12. The First-Impression Problem
-
-The most important architectural decision in Stage 23 is how to handle the very first time WaxPrep learns something about a student from a single statement.
-
-A student says: "I'm preparing for WAEC next year." This is extremely clear. WaxPrep should write `exam_target: WAEC` with high confidence.
-
-A student says: "I've been struggling with physics lately." This is much less specific. WaxPrep might infer `weak_subjects: [Physics]` but with lower confidence and only after verifying the topic continues across the session.
-
-A student says: "Can you explain force?" This tells WaxPrep almost nothing durable. A student might ask about force because they are curious, not because physics is their weak subject.
-
-**RECOMMENDATION: Confidence-gated writes.** The AI should only write a core memory fact when it has sufficient evidence within the session or the statement is sufficiently explicit. The confidence at write time reflects the strength of the initial evidence.
-
-**Confidence at write time guidelines:**
-- Explicit direct statement by student ("I'm in SS2", "I'm doing WAEC"): write at `confidence = 0.85`
-- Strong contextual implication across multiple turns in the session: write at `confidence = 0.60`
-- Single weak implication: do NOT write. Wait for corroboration in a future session.
-
-This prevents the memory system from filling up with low-quality, barely-supported facts that the AI will then rely on in ways that create a confused or incorrect picture of the student.
-
-## 13. Confidence Calibration — The Complete Model
-
-Confidence is a numeric value from 0.000 to 1.000. It is NOT a probability in the strict statistical sense. It is a signal to the AI about how much weight to give this piece of information when reasoning.
-
-**Scale interpretation:**
-- `0.000 – 0.299`: Weak evidence. Barely supported. The AI should treat this with considerable skepticism and look for corroboration before acting on it.
-- `0.300 – 0.499`: Moderate evidence. Some support. The AI should acknowledge uncertainty: "Based on what you've shared, it seems you might be preparing for WAEC — is that right?"
-- `0.500 – 0.699`: Reasonable confidence. Supported by multiple consistent observations. The AI can use this without explicit hedging in most cases.
-- `0.700 – 0.849`: High confidence. Well-supported by multiple direct statements or consistent behavioral evidence.
-- `0.850 – 1.000`: Very high confidence. Explicitly confirmed by the student, or confirmed across many sessions. The AI can use this as established fact.
-
-**Why NOT a 1-10 integer scale?** Integer scales create perverse incentives for rounding. A decimal between 0 and 1 maps naturally to the linguistic qualifiers AI systems use ("likely," "probably," "almost certainly"). It also makes gradual confidence changes natural — adding 0.05 to a confidence value feels meaningfully different from adding 0.5 to a 1-10 scale.
-
-**Why NOT binary (known/unknown)?** Binary removes all nuance. The AI cannot distinguish between "the student mentioned this once in passing" and "the student has confirmed this five times across five different sessions." Both are "known" in a binary system. The difference is enormous for reasoning quality.
-
-## 14. The Contradiction Problem — Belief Revision
-
-When the AI writes a new fact that conflicts with an existing active fact, it must decide whether to supersede the old fact or flag a contradiction. This is not a trivial decision and it must never be made automatically without evidence.
-
-**Case 1: Clear temporal update.** Student said "I'm in SS1" in March. Now in September, student says "I'm in SS2." This is not a contradiction — it is temporal progression. Create a supersession: mark the SS1 record as superseded, write SS2 as the new active record, set `valid_until = NOW()` on the old record.
-
-**Case 2: Clear correction.** Student said "I'm at Government College Lagos." Now student says "Wait, sorry, I meant Government College Ibadan." This is a correction. Supersession applies. Note the `provenance` on the old record was `student_stated_initial` and the new one is `student_corrected`.
-
-**Case 3: Genuine contradiction.** Student said "I hate mathematics" in session 3. In session 17, student says "I actually enjoy math, it's just the JAMB style questions I find hard." These are not contradictory — they are nuanced positions that coexist. But a simple system would see both and be confused. Here, the original fact should be superseded with a more refined version, and the contradiction log should note the evolution of the student's expressed relationship with mathematics.
-
-**Case 4: Hard logical conflict.** Student's `exam_target` is recorded as `WAEC` with confidence 0.80. Student now says "I'm sitting NECO." These are two different exams. Did the student switch exams? Are they sitting both? This is a genuine ambiguity. Write a contradiction record. Do NOT automatically supersede. Allow the AI to naturally clarify in the next interaction. The AI's system context will include the contradiction: "Note: there is a conflict in my memory about this student's exam target — I should ask to clarify."
-
-**The rule:** Infrastructure detects and records contradictions. The AI resolves them through conversation. Infrastructure never resolves contradictions silently.
-
-Old fact closed: if the new observation clearly replaces the old fact, that is not a confidence problem anymore; it is a supersession. The old fact gets marked as no longer current, does not get deleted, and is not left to compete with the new one on equal footing. [Mem0](https://mem0.ai/blog/ai-memory-confidence-score-what-it-is-and-how-it-works)
-
-## 15. Context Injection — How Many Facts Enter the Context
-
-Not all stored facts belong in every context. Injecting all facts for every request is wasteful (token cost), potentially confusing (irrelevant information distracts the AI), and puts the AI in the position of having to reason about facts that have no bearing on the current question.
-
-**Token budget for core memory facts:** 400 tokens maximum by default (configurable: `MEMORY_FACTS_TOKEN_BUDGET`). This accommodates approximately 6-8 well-stated facts.
-
-**Fact selection priority:**
-1. Include ALL facts in `fact_category = 'profile'` with `confidence >= 0.70` and `status = 'active'`. These are the most durable and universally relevant.
-2. Include facts in `fact_category = 'misconception'` and `fact_category = 'progress'` with `confidence >= 0.60` and `status = 'active'`, ordered by `created_at DESC` (most recent first).
-3. Include facts in `fact_category = 'preference'` with `confidence >= 0.65` and `status = 'active'`.
-4. Stop when token budget is reached. Do not exceed the budget by including a "nearly full budget" fact.
-
-**Deduplication:** If a retrieved fact is already visible in the current session's conversation history (the student just mentioned it this session), skip it. Do not repeat information the AI already has in working memory.
-
-**Format for injection:** Use the `display_text` column, not the raw `fact_value` JSON. The `display_text` is pre-formatted for natural language context injection.
-
-Example context injection block:
-```
-[Student Profile Memory — use this to personalize responses]
-• Preparing for WAEC in 2027 (high confidence)
-• Currently in SS2 at a Lagos state secondary school (high confidence)
-• Studying Physics, Mathematics, Chemistry, English for WAEC (high confidence)
-• Has shown recurring confusion about Newton's Third Law (moderate confidence — check for this)
-• Responds well to step-by-step numerical examples rather than conceptual explanations (moderate confidence)
-```
-
-This block is approximately 85 tokens. It gives the AI everything it needs to understand who it is talking to without overwhelming the context window.
-
-## 16. Hidden Architectural Concerns
-
-### 16.1 Identity Stability — The Name Problem
-
-Students may give different names across sessions. "Tunde" in one session, "Babatunde" in another, "TB" in another. All are the same person. The AI should use whatever name the student prefers in the current session. The memory system should store the name as stated, with the most-recently-stated name as the `active` record and older versions superseded.
-
-WaxPrep should NEVER ask "What is your real name?" Memory of name should emerge from how the student introduces themselves or refers to themselves in conversation.
-
-### 16.2 Exam Target Changes
-
-Students change exam targets. A student might have been preparing for WAEC, then decide to focus on JAMB for university entry as SS3 approaches. The memory system handles this through supersession. But there is a subtle issue: subjects overlap between exams. If the student was studying `[Math, Physics, Chemistry]` for WAEC and switches to JAMB (which typically uses the same subjects), the `exam_subjects` fact may not need supersession — only the `exam_target` does. The AI should recognize this nuance naturally if the memory is structured correctly.
-
-### 16.3 School Changes
-
-Students in Nigeria sometimes change schools — particularly after JSS3 (when many move from junior to senior secondary, sometimes at a new school). The school name fact should be superseded when the student reports a change. But WaxPrep should never ask "Are you still at the same school?" — this is obtrusively surveillance-like. Let the student mention it naturally.
-
-### 16.4 The Multiple Exam Problem
-
-Some Nigerian students sit for both WAEC and NECO (they have the same timing window). The `exam_target` fact value should be an array: `["WAEC", "NECO"]` rather than a single string. The schema (using JSONB) accommodates this naturally.
-
----
-
-# PART FOUR: STAGE 24 — EPISODIC MEMORY
-
-## 17. What Episodic Memory Is — Cognitive Architecture Basis
-
-Episodic memory is the autobiographical record of the student's journey with WaxPrep. It answers the question "what happened?" rather than "what is true?" A core fact says "this student struggles with Newton's Third Law." An episodic memory says "on the 14th of August, the student and WaxPrep worked through Newton's Third Law for 25 minutes. The student initially confused action-reaction pairs but had a breakthrough when the doorbell example was used. The session ended with the student correctly solving two problems independently."
-
-The five properties that episodic memory must have, per the 2025 position paper "Episodic Memory is the Missing Piece for Long-Term LLM Agents," are: long-term storage (persistence beyond the session), explicit reasoning (the ability to reflect on memory content), single-shot learning (capturing information from single exposures without gradient updates), instance-specific memories (details unique to this occurrence), and contextual memories (who, when, where, why, bound to the content). [Atlan](https://atlan.com/know/episodic-memory-ai-agents/)
-
-For WaxPrep specifically, episodic memory serves three educational functions:
-
-First, continuity. When a student returns after a week away, the AI can see what was covered, what was achieved, and what was left unresolved. It greets the student with genuine context: "Last week you were working on Newton's Third Law — should we continue or try something different today?"
-
-Second, pattern detection. Multiple episodes about physics struggles create a pattern. Multiple episodes about productive mathematics sessions create a different pattern. The AI reasons about these patterns without needing WaxPrep to compute them explicitly.
-
-Third, learning trajectory. The sequence of episodes over months creates the student's learning trajectory. The AI can see growth: early episodes full of confusion in algebra, middle episodes showing mastery, later episodes moving to more advanced topics. This trajectory informs how the AI calibrates its expectations and encouragement.
-
-## 18. Summary Strategies — The Critical Trade-off
-
-There are three approaches to summarizing episodic content. The choice determines the quality of the AI's long-term memory.
-
-### 18.1 End-of-Session Summaries
-
-One summary is generated when a session closes (triggered by inactivity timeout or explicit goodbye). The summary covers the entire session.
-
-Strengths: Clean boundary — one summary per session. Easy to implement. Predictable timing. The summary is generated once and stored permanently.
-
-Weaknesses: If a session is very long (multiple topics covered), one summary may not capture all relevant detail within the token budget.
-
-### 18.2 Rolling Summaries
-
-A summary is updated incrementally as the session progresses — every N turns, a new "rolling" summary is generated that incorporates the previous summary plus the new turns.
-
-Strengths: Captures long session content without losing early session detail. Always up-to-date even if the session never formally closes.
-
-Weaknesses: Multiple AI calls per session for summary updates (cost). Summary quality depends on the quality of incremental updates, which can drift over many updates. More complex implementation.
-
-### 18.3 Hierarchical Summaries
-
-Multiple levels of summaries: turn-level notes, session-level summaries, week-level meta-summaries, month-level trajectories.
-
-Strengths: Rich, multi-scale representation of learning history. Excellent for long-term pattern detection.
-
-Weaknesses: High complexity. Multiple AI calls at multiple levels. Requires sophisticated retrieval to decide which level to use when. Over-engineering for Stage 24.
-
-**RECOMMENDATION: End-of-Session Summaries for Stage 24.**
-
-Write-on-summary waits for session end or a token threshold, then consolidates once. Everything downstream depends on the write path, and the write path is a policy, not a dump. [Substack](https://bhavishyapandit9.substack.com/p/ai-agent-memory)
-
-The end-of-session approach is the correct starting point. It is clean, predictable, well-defined, and adequate for WaxPrep's session volumes at launch. Rolling summaries can be added later if multi-topic sessions create information loss. Hierarchical summaries can be added when the volume of episodic records makes individual session recall insufficient.
-
-The summary generation must happen asynchronously in a background worker — never in the main request processing path.
-
-## 19. Session Closure Detection — When Summaries Are Generated
-
-Session closure is already handled by Stage 13's inactivity timeout (`SESSION_INACTIVITY_TIMEOUT_MS`). The challenge is triggering summary generation at the right moment.
-
-**The Options:**
-
-**Option A: Trigger on inactivity timeout detection.** When a new request arrives for a student and the session resolver detects that the PREVIOUS session has timed out (inactive for 30+ minutes), queue a summary generation job for the previous session before creating the new session.
-
-**Option B: Dedicated background scheduler.** A cron-based BullMQ repeatable job runs every 15 minutes, queries for sessions where `last_activity_at < NOW() - INTERVAL '35 minutes'` and `status = 'active'` and no episode exists for the session yet, and queues summary generation for each found session.
-
-**Option C: On explicit goodbye detection.** When the AI detects the student is saying goodbye (future tool call capability), trigger summary generation immediately.
-
-**RECOMMENDATION: Option B — Background Scheduler as Primary, Option A as Supplement.**
-
-The most common production pattern is consolidation in background daemons increasingly preferred over on-request consolidation to avoid latency spikes. [Atlan](https://atlan.com/know/episodic-memory-ai-agents/)
-
-Option B has these advantages: it operates independently of student activity, handles sessions that end without any new student contact, processes sessions at a predictable time after they close (approximately 35–50 minutes after inactivity), and can be monitored as an independent operational system.
-
-Option A as supplement: if a student starts a new session, the previous session's summary job should be queued immediately (before the new session processes) to ensure continuity. The background scheduler serves as the safety net.
-
-**The BullMQ job configuration for session summarization:**
-- Queue name: `memory-consolidation`
-- Job name: `summarize-session`
-- Priority: LOWER than AI tutor jobs (student interactions always take priority)
-- Retry: 3 attempts with exponential backoff
-- Timeout: 60 seconds (AI summarization can be slow)
-- Deduplication: jobId = `summarize-session:${sessionId}` (prevents duplicate summaries for the same session)
-
-## 20. The Summarization Prompt — What the AI Extracts
-
-The summary is generated by calling the AI provider with the full session conversation and a specific summarization task. This is a separate AI call from the tutoring call — it has a different purpose and a different prompt.
-
-**The summarization prompt instructs the AI to produce a structured JSON response containing:**
-- `summary_text`: A natural language paragraph (3-5 sentences) describing what happened in the session, what was covered, and what the outcome was. This is the text injected into future contexts.
-- `topics`: Array of specific topics discussed (e.g., `["Newton's Third Law", "Force diagrams", "action-reaction pairs"]`).
-- `subjects`: Array of subjects (e.g., `["Physics"]`).
-- `breakthroughs`: Array of things the student clearly understood by session end.
-- `confusions`: Array of things that remained unclear or unresolved.
-- `questions_asked`: Integer count.
-- `student_mood`: The AI's assessment of the student's engagement and emotional state during the session.
-- `new_facts_extracted`: Array of `{ fact_key, fact_category, fact_value, display_text, confidence, provenance }` objects — core facts that should be written to `student_facts`.
-
-The `new_facts_extracted` field makes the summarization job dual-purpose: it generates the episode AND extracts any new core facts discovered during the session. This means the session's AI calls do not need to pause to write core memories mid-conversation — they are extracted in the background after the session ends.
-
-**CRITICAL:** The summarization prompt must instruct the AI: "Extract only information that was clearly stated or clearly demonstrated. Do not infer or speculate. Do not record temporary emotional states as permanent personality traits. If the student mentioned something in passing once and it was not reinforced, do not record it as a high-confidence fact."
-
-## 21. Episode Retrieval — How Episodic Memory Enters Context
-
-Episodic memories are not injected wholesale into every context. They are selectively retrieved based on relevance and recency. The retrieval strategy for Stage 24 is recency-first (the most recent sessions are most likely to be relevant) with subject-based filtering (if the student is currently asking about Physics, retrieve recent Physics episodes).
-
-**Token budget for episodic memory:** 600 tokens maximum by default (configurable: `MEMORY_EPISODES_TOKEN_BUDGET`). This accommodates summaries of 2-3 recent sessions at typical summary length.
-
-**Selection algorithm (Stage 24, recency-first):**
-1. Retrieve the 5 most recent episodes for this student (`ORDER BY session_end DESC LIMIT 5`).
-2. Filter: remove any episode for the current session (already in working memory).
-3. If the current student message mentions a specific subject, prioritize episodes where `subjects @> '["Physics"]'` (PostgreSQL JSONB containment operator).
-4. Truncate to fit the token budget.
-
-**Format for injection:**
-```
-[Recent Learning History — use to understand the student's journey]
-Session (3 days ago, 42 minutes): Worked on Newton's Laws. Student initially confused 
-about the Third Law but achieved breakthrough understanding using the doorbell analogy. 
-Covered Newton's 1st and 2nd Laws successfully. Topics: force, inertia, action-reaction.
-
-Session (1 week ago, 28 minutes): Introduced to Physics for the first time in WaxPrep.
-Student was uncertain about what to study, eventually chose to focus on Mechanics.
-Student shows high engagement when real-world examples are used.
-```
-
-This is approximately 120 tokens and gives the AI remarkable context for personalized tutoring.
-
----
-
-# PART FIVE: STAGE 25 — MEMORY RETRIEVAL
-
-## 22. The Retrieval Pipeline — Complete Architecture
-
-Memory retrieval is the bridge between what is stored and what the AI receives. It must be fast, accurate, bounded, and deterministic. Every step in the pipeline must be explicit and auditable.
-
-The complete retrieval pipeline executes in the `ContextAssembler` (Stage 18), extended to include memory retrieval, in this order:
-
-```
-Step 1: IDENTITY VERIFICATION
-  Assert: waxId is valid and active
-  Assert: student status = 'active' (not suspended/blocked)
-
-Step 2: PARALLEL RETRIEVAL (run database queries concurrently)
-  Query A: Retrieve active core facts (student_facts WHERE status='active' AND wax_id=$1)
-  Query B: Retrieve recent episodes (student_episodes WHERE wax_id=$1 ORDER BY session_end DESC LIMIT 5)
-  Both queries run concurrently using Promise.all()
-  
-Step 3: FILTERING
-  Remove: facts with confidence < MEMORY_MINIMUM_CONFIDENCE (configurable, default 0.40)
-  Remove: facts with status != 'active'
-  Remove: episodes for the current session (already in working memory)
-  Remove: soft-deleted records
-
-Step 4: DEDUPLICATION
-  Remove: facts whose display_text is substantially represented in the current session history
-  Remove: facts that directly repeat information in the most recent episode retrieved
-  Log: deduplication_count for observability
-
-Step 5: RANKING AND SELECTION
-  For core facts: sort by (fact_category priority) then by (confidence DESC) then by (created_at DESC)
-  For episodes: sort by session_end DESC (most recent first, with subject-match prioritization)
-  Select top facts until MEMORY_FACTS_TOKEN_BUDGET reached
-  Select top episodes until MEMORY_EPISODES_TOKEN_BUDGET reached
-
-Step 6: FORMAT
-  Format core facts using display_text (not raw JSON)
-  Format episodes using summary_text
-  Assemble into the memory slot of the context (positioned after system prompt, before conversation history)
-
-Step 7: LOG
-  Write to memory_retrieval_log: waxId, aiRequestId, factsRetrieved, episodesRetrieved,
-  tokenEstimate, retrievalStrategy, retrievalLatencyMs
-```
-
-Total expected latency: under 15ms for all steps (two parallel database queries plus lightweight in-memory operations).
-
-## 23. Retrieval Ranking — The Strategy Decision
-
-A system that scores well on accuracy but requires 26,000 tokens per query is not production viable. A system with low latency but poor recall is not useful. [Mem0](https://mem0.ai/blog/state-of-ai-agent-memory-2026)
-
-There are three pure retrieval strategies and several hybrid approaches:
-
-**Recency Ranking:** Most recently created or confirmed facts first. Most recent episodes first. Simple, fast, predictable.
-
-Strengths: Low complexity. Always gives the AI the student's current state. Recent facts reflect who the student is NOW.
-Weaknesses: A highly relevant fact from 6 months ago (a persistent misconception about Newton's Third Law) may rank behind a trivial recent fact (the student mentioned they had lunch).
-
-**Importance Ranking:** Facts ranked by a computed importance score that considers confidence, evidence count, category priority, and a domain-specific relevance signal.
-
-Strengths: Surfaces the most consequential memories regardless of age.
-Weaknesses: "Importance" must be defined, which requires infrastructure to make educational judgments. Who decides that a misconception is more important than a preference? The AI should decide that — infrastructure should not.
-
-**Semantic Ranking:** Facts ranked by embedding similarity to the current student message. What the student is asking about NOW determines what memories are most relevant.
-
-Strengths: Contextually precise. The AI gets the memories most likely to be useful for the current query.
-Weaknesses: Requires embeddings (not yet available in Stage 25). Vector search adds latency. Not available until a future embedding stage.
-
-**Hybrid Ranking (Recency + Confidence):** Score = `(recency_weight × recency_score) + (confidence_weight × confidence)`. Configurable weights.
-
-**RECOMMENDATION: Begin with Recency-First for Stage 25, with confidence as a secondary sort. Design for hybrid scoring in the future.**
-
-The reasoning: at Stage 25, WaxPrep does not have enough historical data or behavioral evidence to calibrate importance weights. Recency is a reliable proxy for relevance in educational contexts — the most recent session's confusions are almost certainly relevant to the current session. Confidence is a reliable secondary signal — higher confidence facts are more trustworthy. The query is simple, fast, and correct for the current data volume. As WaxPrep accumulates months of student data, the retrieval layer can be updated to incorporate importance scoring and, eventually, semantic similarity — without changing the schema or the interface.
-
-## 24. The Slot-Based Token Budget — Complete Specification
-
-Token budgeting for memory extends Stage 18's slot model. The complete Stage 25 token budget:
-
-```
-TOTAL_CONTEXT_BUDGET = MODEL_CONTEXT_LIMIT - SAFETY_MARGIN(500)
-
-SLOT ALLOCATIONS:
-  SYSTEM_PROMPT_SLOT         = 1,200 tokens  (system prompt)
-  RESPONSE_RESERVATION       = 1,024 tokens  (max output)
-  
-  MEMORY_FACTS_SLOT          = 400 tokens    (Stage 23 core facts — NEW)
-  MEMORY_EPISODES_SLOT       = 600 tokens    (Stage 24 episodes — NEW)
-  MEMORY_FUTURE_SLOT         = 400 tokens    (reserved for future memory types)
-  
-  FUTURE_TOOLS_SLOT          = 400 tokens    (tool definitions — future)
-  FUTURE_RETRIEVAL_SLOT      = 1,200 tokens  (RAG retrieved knowledge — future)
-  
-  CURRENT_MESSAGE_SLOT       = 400 tokens    (current debounce window messages)
-  SAFETY_MARGIN              = 500 tokens    (never touch this)
-  
-  HISTORY_BUDGET             = TOTAL - all above slots
-
-For Claude Sonnet 4.6 (1M tokens):
-  HISTORY_BUDGET ≈ 994,276 tokens (more than adequate)
-```
-
-**Token estimation for memory:** Use the same 3.5 chars/token heuristic from Stage 18. Apply to the formatted `display_text` of facts and the `summary_text` of episodes.
-
-**Budget overflow handling:**
-- If retrieved facts would exceed `MEMORY_FACTS_SLOT`: truncate to the highest-priority facts that fit, log the overflow.
-- If retrieved episodes would exceed `MEMORY_EPISODES_SLOT`: use only the most recent episode that fits, log the overflow.
-- Never exceed a slot's budget by even one token. The slot boundary is hard.
-
-## 25. Deduplication — Preventing Redundant Context
-
-Without deduplication, the AI receives:
-- In the system prompt: general tutor identity (no student-specific info).
-- In memory facts: "Student is preparing for WAEC."
-- In the current session history (turn 3, student said): "I need help with my WAEC Chemistry."
-- In the episode from yesterday: "Student confirmed they are preparing for WAEC Chemistry."
-
-The AI now reads "WAEC" four times. This is mild cognitive noise. In worse cases, a persistent misconception about Newton's Third Law appears in both the memory facts AND in the most recent episode summary AND the student mentions it again in the current session — three instances of the same information, consuming tokens and potentially confusing the AI about which representation to rely on.
-
-**Deduplication rules:**
-1. If a fact's `display_text` is substantially contained within the current session's message history (using a simple string-contains check for key phrases), skip that fact.
-2. If a fact's `fact_key` appears in the most recent episode's extracted facts metadata (logged at write time), mark it as "already in recent episode" and deprioritize (include only if token budget allows after episode is included).
-3. The deduplication is lightweight and approximate. Exact semantic deduplication (embedding similarity) is a future enhancement. A simple heuristic (if the same fact_key is represented in multiple sources, inject only once from the highest-authority source) is sufficient for Stage 25.
-
-## 26. Future Semantic Retrieval — Interface Compatibility
-
-The retrieval pipeline is designed with an interface that admits semantic retrieval without changing the calling convention. Specifically:
-
-The `StudentMemoryAccess.retrieveFactsForContext(waxId, sessionId, currentMessageText)` method already accepts `currentMessageText`. In Stage 25, this parameter is used only for lightweight subject-topic matching (does the message mention "physics"?). In a future semantic stage, this same parameter is passed to an embedding model to generate a query vector, and the retrieval switches from `ORDER BY created_at DESC` to `ORDER BY embedding <=> queryVector` (cosine similarity via pgvector).
-
-The caller (the context assembler) does not change. The method signature does not change. The database schema does not change (the `embedding` column is already there). Only the query inside `StudentMemoryAccess` changes. This is the correct interface design for forward compatibility.
-
----
-
-# PART SIX: STAGE 26 — CONFIDENCE, PROVENANCE & SUPERSESSION
-
-## 27. The Epistemic Memory System — What It Means
-
-Epistemic memory is about the AI knowing what it knows — and knowing how certain it should be about what it knows. This is qualitatively different from just storing facts. It is teaching the memory system to represent the reliability of its own contents.
-
-The AGM belief revision framework provides mathematical guarantees for knowledge lifecycle. The Relevance postulate ensures minimal change during revision; Core-Retainment prevents unjustified deletion. Recent systems demonstrate the operational feasibility of these guarantees for agent memory, implementing AGM-compliant belief revision over graph-native memory architectures. [arxiv](https://arxiv.org/pdf/2606.17591)
-
-For WaxPrep, epistemic memory serves one purpose: giving the AI the right level of confidence when it uses a stored fact in reasoning. If the AI is 90% confident that a student misunderstands Newton's Third Law, it should check for this proactively in every physics session. If it is 40% confident, it should notice whether the student's current behavior confirms or disconfirms the hypothesis before acting on it.
-
-## 28. The Complete Provenance Taxonomy
-
-Provenance records the origin of a memory — where it came from and through what process. Every fact must have a provenance value. No fact is ever written without provenance.
-
-**The complete provenance taxonomy for WaxPrep:**
-
-`student_stated_direct`: The student explicitly stated this fact in conversation. Example: "I'm preparing for WAEC." Highest trust — the student is reporting facts about themselves.
-
-`student_stated_correction`: The student explicitly corrected a previous statement. Example: "Actually, I meant SS2, not SS1." High trust — explicit and intentional.
-
-`student_stated_indirect`: The student implied the fact through a statement without saying it explicitly. Example: Student asks "what topics come up in JAMB Physics?" implies they are taking Physics in JAMB. Moderate trust — inference, not assertion.
-
-`ai_inferred_from_behavior`: The AI observed behavioral patterns across the session that imply a fact. Example: Student consistently uses step-by-step examples effectively, implying they prefer this style. Lower trust — inference from behavior, not statement.
-
-`ai_inferred_from_error`: The AI identified a likely misconception from a student's incorrect response. Example: Student said "the heavier object pushes harder" when discussing Newton's Third Law. Moderate trust for the existence of the misconception; requires confirmation to be high confidence.
-
-`ai_inferred_cross_session`: The AI identified a pattern across multiple sessions. Example: The student consistently struggles more in the first 10 minutes of each session, suggesting a warm-up effect. Lower initial trust; increases with more sessions confirming the pattern.
-
-`system_computed`: The fact was computed by the system from observable data. Example: `typical_session_time` computed from session timestamps. Trust depends on sample size.
-
-`episode_extracted`: The fact was extracted by the AI during session summarization (background job). Moderate trust — extracted after the fact rather than in real-time.
-
-`confirmed_by_repetition`: A previously stored fact was re-stated or re-demonstrated, increasing its confidence without changing its provenance category. This is not a primary provenance — it modifies the `evidence_count` field rather than creating a new record.
-
-**Future provenance categories (not implemented, schema ready):**
-- `parent_stated`: Information provided by a parent or guardian through a future parent portal.
-- `teacher_stated`: Information provided by a registered teacher.
-- `assessment_result`: Fact derived from a formal in-app assessment.
-- `imported_from_report`: Data from external educational records (future feature).
-
-## 29. The Confidence State Machine
-
-There is not a formula that spits out a universal memory-confidence number the way a softmax spits out a class probability. But you can set up a small state machine that you run every time a new observation touches an existing memory. [Mem0](https://mem0.ai/blog/ai-memory-confidence-score-what-it-is-and-how-it-works)
-
-WaxPrep's confidence state machine has six transitions:
-
-**INITIALIZE:** When a fact is first written. Starting confidence is determined by provenance:
-- `student_stated_direct`: Start at 0.80
-- `student_stated_correction`: Start at 0.85
-- `student_stated_indirect`: Start at 0.55
-- `ai_inferred_from_behavior`: Start at 0.45
-- `ai_inferred_from_error`: Start at 0.55
-- `ai_inferred_cross_session`: Start at 0.35
-- `system_computed`: Start at 0.65 (large sample) or 0.40 (small sample — fewer than 5 sessions)
-- `episode_extracted`: Start at 0.60
-
-**REINFORCE:** Confidence increases when a new observation matches the existing fact.
-
-Increase amounts by provenance of the new observation:
-- `student_stated_direct`: +0.10 (hard maximum: 0.95)
-- `student_stated_indirect`: +0.05
-- `ai_inferred_from_behavior`: +0.03
-- `ai_inferred_from_error`: +0.05
-- `episode_extracted` corroborating same fact across different session: +0.07
-- `confirmed_by_repetition` (same session, same statement): +0.02
-
-Maximum confidence ceiling: 0.95. A fact can never reach 1.0 — there is always some epistemic humility. A student who has stated the same thing 20 times is still not infallible.
-
-**CONTRADICT:** Confidence decreases when a new observation conflicts with the existing fact.
-
-Decrease amounts:
-- `student_stated_direct` contradiction of existing fact: -0.30 (this is significant — the student is explicitly contradicting their own previous statement)
-- `ai_inferred_from_error` showing the student does NOT have the misconception: -0.20
-- `ai_inferred_from_behavior` inconsistent with the existing fact: -0.10
-
-If confidence falls below 0.20, flag the fact for potential archiving. Write a contradiction record.
-
-**SUPERSEDE:** The fact is replaced by a new version. The old fact's confidence at time of supersession is preserved in its record. The new fact starts at the provenance-appropriate initial confidence.
-
-**DECAY:** Confidence decreases over time for certain fact categories when there is no new evidence. See Section 30 for decay policy.
-
-**CONFIRM (External):** A future stage adds parent confirmation, teacher confirmation, or assessment result. These are strong positive evidence.
-
-Every confidence transition produces a `memory_confidence_history` record. The history is append-only and permanent.
-
-## 30. Confidence Decay — When and Why
-
-Confidence scoring with time-decay, supersession, Ebbinghaus forgetting — the four-tier consolidation framework references this as a key design element. [arxiv](https://arxiv.org/pdf/2604.11364)
-
-The central question: should the memory system automatically decrease confidence in stored facts over time, even without contradictory evidence? The answer is nuanced and depends on fact category.
-
-**Category-based decay policy:**
-
-`profile` facts (exam_target, class_level, school): NO DECAY. A student's WAEC exam target is as true tomorrow as it was the day it was stated, unless the student says otherwise. Decaying this fact would create the absurd situation where WaxPrep forgets which exam the student is preparing for simply because time has passed.
-
-`academic` facts (strong_subjects, weak_subjects): MILD DECAY — 0.02 per 30 days of no corroborating evidence. A strength or weakness demonstrated 6 months ago may no longer hold if the student has been working hard. The AI should verify rather than assume, especially for subjects that have not come up recently.
-
-`misconception` facts: DECAY — 0.05 per 30 days of no appearance of the misconception. If the student has not demonstrated the misconception in 60 days across multiple relevant sessions, it is reasonable to lower confidence that the misconception persists. This prevents WaxPrep from forever treating a corrected misconception as current.
-
-`preference` facts: MILD DECAY — 0.02 per 60 days. Student preferences evolve. What worked 3 months ago may not be the best approach now.
-
-`progress` facts (mastered_concept, struggling_concept): MODERATE DECAY — 0.03 per 30 days. Knowledge can be forgotten. A concept "mastered" 3 months ago may need review. Mild decay prompts the AI to gently check rather than assume the mastery still holds.
-
-**Decay implementation:** A background job (separate from the summarization job, run weekly) queries all facts with `status = 'active'`, computes whether any decay should be applied based on the fact's category and the time since last evidence (`MAX(created_at, last_reinforced_at)`), applies the decay if applicable, and records the change in `memory_confidence_history` with `change_reason = 'DECAY'`.
-
-Decay should NEVER reduce a fact's confidence below 0.20. Below 0.20, archive the fact instead (flag it for human or AI review if the archiving would delete something potentially important).
-
-## 31. Supersession — The Complete Protocol
-
-Supersession is the correct mechanism for handling facts that change over time. It is not the same as correction (which implies the original fact was wrong from the start). Supersession means "this was true then, but this is true now."
-
-Example: A student was in SS1 when they first used WaxPrep. They are now in SS2. The original `class_level: SS1` fact was true. It is now superseded by `class_level: SS2`. Both facts are preserved permanently.
-
-**Why permanent preservation matters:**
-- The learning trajectory depends on knowing when the student was at each class level.
-- Future evaluation systems can correlate which episode summaries correspond to which class level.
-- Privacy compliance requires knowing what was held about a student and when — you cannot provide this audit trail if old facts are deleted.
-- The AI can reason about transitions: "You mentioned you were in SS1 last year when we first talked about this topic. How does it feel revisiting it now that you're in SS2?"
-
-**The supersession protocol in detail:**
-
-When a write operation determines that a new value for `fact_key` should supersede the existing active value:
-
-1. Begin a database transaction.
-2. SELECT the current active fact with a row-level lock (`SELECT FOR UPDATE`).
-3. UPDATE the current active fact: set `status = 'superseded'`, `superseded_at = NOW()`, `valid_until = NOW()`.
-4. INSERT a new fact with: the new `fact_value`, `status = 'active'`, `valid_from = NOW()`, `superseded_by = NULL`, appropriate initial `confidence`.
-5. UPDATE the old fact: set `superseded_by = new_fact.id`.
-6. INSERT a `memory_confidence_history` record for the old fact at the moment of supersession.
-7. Commit the transaction.
-
-If any step fails, roll back the entire transaction. The old fact remains active. The failed supersession is logged at ERROR level.
-
-## 32. Contradiction Detection — The Complete System
-
-Contradiction detection is triggered every time a new fact is written that has the same `fact_key` as an existing active fact but a different `fact_value`.
-
-**Detection algorithm:**
-
-```
-On write of new fact (wax_id, fact_key, fact_value):
-  1. Query existing active facts with same (wax_id, fact_key)
-  2. If NONE: write normally (no conflict)
-  3. If FOUND with SAME fact_value: REINFORCE (update confidence, increment evidence_count)
-  4. If FOUND with DIFFERENT fact_value:
-       a. Compute conflict_type:
-            - value_conflict: values are different but same type (SS1 vs SS2, WAEC vs NECO)
-            - temporal_conflict: new value represents a future state (SS2 coming next year vs SS1 now)
-            - logical_conflict: values are logically incompatible (strong subject listed as weak subject)
-       b. Determine appropriate action:
-            - If temporal progression is clear → SUPERSEDE (SS1 → SS2, old school → new school)
-            - If correction is explicit (student said "wait, I made a mistake") → SUPERSEDE
-            - If value is genuinely ambiguous (student seems to sit both WAEC and NECO) → 
-                UPDATE existing fact to array value + REINFORCE
-            - If genuine conflict → LOG contradiction, keep both as 'active', flag both for AI review
-       c. Write to memory_contradictions table with:
-            fact_a_id, fact_b_id, conflict_type, conflict_description, status='unresolved'
-```
-
-**How contradictions surface to the AI:**
-
-Unresolved contradictions for a student are retrieved alongside core facts during context injection. They are presented in a special section of the context:
-
-```
-[Memory Conflicts — clarify naturally in conversation if appropriate]
-• Conflict: exam target is recorded as both WAEC and NECO. May be sitting both.
-  Clarify by asking naturally if relevant to the current topic.
-```
-
-The AI can then ask the student naturally: "I want to make sure I understand your exam situation — are you sitting both WAEC and NECO this year?" This is the AI resolving infrastructure-detected conflicts through conversation, not infrastructure making decisions.
-
----
-
-# PART SEVEN: CROSS-CUTTING CONCERNS
-
-## 33. Memory Consolidation — The Background Intelligence Layer
-
-On timing: the most common production pattern is consolidation every N episodes, with background daemons increasingly preferred over on-request consolidation to avoid latency spikes. [Atlan](https://atlan.com/know/episodic-memory-ai-agents/)
-
-Memory consolidation is inspired by biological sleep-based memory consolidation: the brain's process of moving information from short-term to long-term memory during sleep, strengthening important memories and allowing less important ones to fade. For WaxPrep, consolidation is a set of background processes that improve the quality of the memory system over time.
-
-### 33.1 Episode-to-Fact Promotion
-
-After a session is summarized (Stage 24), a consolidation job examines the extracted `new_facts_extracted` from the summary and writes them to `student_facts`. This is already part of the summarization job design.
-
-### 33.2 Cross-Session Pattern Detection
-
-A weekly background job analyzes patterns across multiple episodes for each student:
-- If the same confusion appears in 3 or more episodes: create or reinforce a `struggling_concept` fact.
-- If the same topic appears successfully in 3 or more episodes: create or reinforce a `mastered_concept` fact.
-- If the same breakthrough type appears: reinforce the associated learning method preference.
-
-This job runs at low priority and operates over the entire student history, not just recent sessions. It requires one AI call per student per week (cheap: a brief analysis of episode metadata). The AI reads the episode metadata (not the full session conversations — those can be very long) and produces consolidation judgments.
-
-### 33.3 Confidence Decay Processing
-
-The weekly decay job described in Section 30. Runs at the lowest priority of all background jobs. Can be run over multiple hours if student count is large.
-
-### 33.4 Archiving Old Records
-
-Superseded facts older than 12 months (configurable: `MEMORY_ARCHIVE_AGE_MONTHS`) are updated to `status = 'archived'`. Archived facts are excluded from standard retrieval queries but remain permanently in the database. This keeps the active working set small and queries fast without destroying historical information.
-
-### 33.5 Contradiction Review
-
-The weekly consolidation job also reviews `unresolved` contradictions older than 14 days. For each old unresolved contradiction, it provides context to the AI asking it to assess whether the contradiction is now resolvable given the episode history since the contradiction was first detected. If resolvable, the AI recommends a resolution (which the consolidation job applies). If not resolvable, the contradiction remains flagged.
-
-## 34. Memory Indexing Strategy
-
-The full indexing strategy for production performance across all memory tables:
-
-**student_facts:**
-- `(wax_id, status)` — Primary lookup for active facts by student.
-- `(wax_id, fact_category, status)` — Category-filtered queries.
-- `(wax_id, fact_key, status)` — Key-specific lookup (write-time conflict detection).
-- `(wax_id, created_at DESC)` WHERE `status = 'active'` — Recency-first retrieval.
-- `(wax_id, confidence DESC)` WHERE `status = 'active'` — Confidence-ranked retrieval.
-
-**student_episodes:**
-- `(wax_id, session_end DESC)` — Recency-first episode retrieval.
-- `subjects` USING GIN — Subject-filtered episode retrieval.
-- `topics` USING GIN — Topic-filtered episode retrieval.
-
-**memory_contradictions:**
-- `(wax_id, status)` — Unresolved contradictions for context injection.
-
-**memory_confidence_history:**
-- `(fact_id, created_at DESC)` — Full confidence history for a fact.
-
-**Partitioning (for future scale):** When `student_episodes` exceeds 10 million rows, partition by `DATE_TRUNC('month', session_end)`. Monthly partitions keep retrieval queries against recent episodes fast without full table scans. At WaxPrep's initial scale, partitioning is unnecessary and adds complexity. Plan for it when the table exceeds 1 million rows.
-
-## 35. Memory Observability — Metrics and Dashboards
-
-Every memory operation should produce observable metrics. Without observability, you cannot answer: is the memory system working? Is it being used? Is it improving the AI's responses?
-
-**Core metrics to track:**
-
-**Write metrics:**
-- `memory.fact.written` — Counter by `fact_category` and `provenance`.
-- `memory.fact.reinforced` — Counter: how often existing facts are reinforced vs created new.
-- `memory.fact.superseded` — Counter: how often facts are replaced.
-- `memory.fact.contradiction_detected` — Counter: how often conflicts arise.
-- `memory.episode.generated` — Counter: sessions that produced summaries.
-- `memory.episode.failed` — Counter: sessions where summarization failed.
-
-**Retrieval metrics:**
-- `memory.retrieval.latency_ms` — Histogram of retrieval pipeline latency.
-- `memory.retrieval.facts_count` — Histogram of facts retrieved per request.
-- `memory.retrieval.episodes_count` — Histogram of episodes retrieved per request.
-- `memory.retrieval.tokens_consumed` — Histogram of token budget consumed by memory.
-- `memory.retrieval.deduplication_rate` — What fraction of retrieved memories are filtered out as duplicates.
-
-**Quality metrics (future, requires evaluation stage):**
-- `memory.fact.utilization_rate` — What fraction of injected facts lead to visible AI behavior change.
-- `memory.episode.recall_accuracy` — When the AI references a past episode, was the reference accurate.
-
-**Implementation:** These metrics are emitted as Pino structured log entries at INFO level. Railway's log streaming captures them. The logs can be queried to compute metrics. Full Prometheus/Grafana integration is a future operational enhancement — not needed at Stage 26.
-
-**Dashboard (manual, via database queries):**
-
-The following SQL queries provide the operational dashboard for the memory system:
+### 5.6 Learning Signals (Behavioral Aggregates)
 
 ```sql
--- Memory health by student (top 10 most memory-rich students)
-SELECT wax_id, COUNT(*) facts, AVG(confidence) avg_confidence
-FROM student_facts WHERE status = 'active'
-GROUP BY wax_id ORDER BY facts DESC LIMIT 10;
+-- ============================================================
+-- LEARNING SIGNALS
+-- Session-level and cross-session behavioral aggregates.
+-- These are NOT mastery estimates. They are behavioral signals
+-- that give the AI information about HOW the student is learning.
+-- ============================================================
+CREATE TABLE learning_signals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wax_id UUID NOT NULL REFERENCES students(id) ON DELETE RESTRICT,
+  session_id UUID REFERENCES sessions(id),  -- NULL = cross-session signal
+  concept_tag TEXT,                          -- NULL = session-wide signal
+  
+  -- Signal type
+  signal_type TEXT NOT NULL,
+  -- 'session_engagement': overall session engagement level
+  -- 'hint_dependency_session': hint dependency for this session
+  -- 'response_latency_trend': is the student taking longer to respond?
+  -- 'concept_revisit': student asked about same concept in multiple sessions
+  -- 'self_efficacy': student expressed confidence or lack thereof
+  -- 'frustration_signal': behavioral indicators of frustration
+  
+  -- Signal value
+  signal_value NUMERIC(6,3),    -- Numeric value where applicable
+  signal_text TEXT,              -- Text signal where more meaningful
+  signal_metadata JSONB,         -- Additional structured context
+  
+  -- Confidence in this signal
+  signal_confidence NUMERIC(4,3) DEFAULT 0.700,
+  
+  -- Extraction
+  extracted_by TEXT NOT NULL,   -- 'llm_session_analyzer', 'rule_engine', 'system'
+  
+  observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- Contradiction backlog
-SELECT COUNT(*) FROM memory_contradictions WHERE status = 'unresolved';
+CREATE INDEX idx_signals_wax_type
+  ON learning_signals(wax_id, signal_type, observed_at DESC);
 
--- Episode generation success rate (last 7 days)
-SELECT summary_status, COUNT(*) FROM student_episodes
-WHERE created_at > NOW() - INTERVAL '7 days'
-GROUP BY summary_status;
-
--- Average facts per student
-SELECT AVG(fact_count) FROM (
-  SELECT wax_id, COUNT(*) fact_count FROM student_facts WHERE status = 'active' GROUP BY wax_id
-) sub;
+CREATE INDEX idx_signals_wax_session
+  ON learning_signals(wax_id, session_id)
+  WHERE session_id IS NOT NULL;
 ```
 
-## 36. Privacy Architecture — NDPA and Minor Data
+### 5.7 Student Model Snapshots (Context Injection Cache)
 
-WaxPrep's memory system processes deeply personal data about Nigerian minors — their academic struggles, their exam preparation, their misconceptions, their emotional states during study sessions. This requires careful privacy architecture.
+```sql
+-- ============================================================
+-- STUDENT MODEL SNAPSHOTS
+-- Pre-assembled student model context for efficient AI injection.
+-- Generated at the end of each session (background job) or
+-- lazily at context assembly time if stale.
+-- ============================================================
+CREATE TABLE student_model_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wax_id UUID NOT NULL REFERENCES students(id),
+  
+  -- Snapshot content
+  snapshot_text TEXT NOT NULL,    -- Pre-formatted text for AI context injection
+  snapshot_json JSONB NOT NULL,   -- Structured data for programmatic access
+  
+  -- Freshness tracking
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  covers_through TIMESTAMPTZ NOT NULL,  -- What timestamp range does this cover
+  
+  -- Validity
+  is_stale BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Mark stale when new observations arrive that post-date covers_through
+  
+  -- Metadata
+  knowledge_state_count INTEGER NOT NULL DEFAULT 0,
+  active_misconception_count INTEGER NOT NULL DEFAULT 0,
+  concept_count INTEGER NOT NULL DEFAULT 0,
+  
+  -- Token estimation (for context budget management)
+  estimated_tokens INTEGER NOT NULL DEFAULT 0
+);
 
-### 36.1 NDPA Compliance Requirements
-
-The Nigeria Data Protection Act 2023 establishes requirements that directly affect the memory architecture:
-
-**Data minimization:** Store only what is necessary for the tutoring purpose. The memory system should not accumulate facts that do not serve educational quality. The `fact_category` taxonomy and the minimum confidence threshold for writing are the primary minimization mechanisms.
-
-**Purpose limitation:** Memory collected for tutoring purposes must not be used for other purposes. The memory tables have no external read access beyond the tutor context assembler. Future features that would use memory data for different purposes (marketing, analytics sold to schools) would require separate NDPA legal basis and architecture.
-
-**Data subject rights:** The student (and parent/guardian if student is a minor) can request:
-- **Access:** All stored facts and episode summaries for the student. The system must be able to export a complete, human-readable report of all stored memory for any given WaxID.
-- **Rectification:** Correction of inaccurate facts. Handled via the supersession mechanism — the incorrect fact is superseded, not erased.
-- **Erasure:** Deletion of all stored data. The system must support a full memory wipe for any WaxID, executed by a privileged operation, which soft-deletes (or hard-deletes where the regulation specifically requires) all records associated with that WaxID.
-
-### 36.2 Retention Periods
-
-Memory records should not be retained indefinitely without purpose. Proposed retention policy:
-- Active core facts: Retain while student is active and for 24 months after last session.
-- Superseded core facts: Retain for 12 months after supersession, then archive (keep metadata, consider anonymizing content).
-- Episode summaries: Retain for 24 months.
-- Confidence history: Retain for 12 months, then purge (operational data).
-- Contradiction records: Retain for 12 months after resolution.
-
-These retention periods should be configurable as environment variables and enforced by weekly background jobs.
-
-### 36.3 Memory Data Export
-
-The system must implement a `StudentMemoryExport` function that, given a WaxID and appropriate authorization, produces a complete JSON export of all stored memory data. This export is the response to a data subject access request. The export includes:
-- All active and superseded facts (with provenance and confidence history).
-- All episode summaries.
-- The complete confidence history for each fact.
-- All detected contradictions and their resolution status.
-- The retrieval log (aggregate: how often was memory retrieved, never the full conversation content).
-
-### 36.4 The Memory Poisoning Threat
-
-Memory poisoning and injection attacks show that persistent memory can steer later responses and actions across sessions. Temporal validity is therefore central: a memory item should record when it was created or updated, what evidence supported it, whether that evidence remains valid, and whether later observations superseded it. [arxiv](https://arxiv.org/pdf/2606.06240)
-
-A malicious actor could attempt to poison WaxPrep's memory by sending carefully crafted messages designed to write false facts about a student. For example: repeatedly sending messages that imply false weaknesses to make the AI patronize the student, or sending messages that claim the student has already mastered topics they have not, to make the AI skip foundational content.
-
-**Mitigations:**
-- Minimum confidence threshold for writes: low-confidence inferences from single messages do not write to memory.
-- The AI, not the student, decides what to write to memory. The student cannot directly write to the memory tables — only the AI's post-processing and summarization jobs can.
-- Confidence growth is gradual: a single session cannot produce a highly confident memory entry about a sensitive topic (misconception, weakness).
-- The contradiction detection system surfaces conflicts for AI review rather than silently overwriting.
-
-## 37. Token Economics — How Memory Affects Cost
-
-Memory adds tokens to every AI request. These tokens cost money. The token budget established in Stage 25 (Section 24) controls cost growth.
-
-**Cost impact analysis at scale:**
-
-Assuming Claude Sonnet 4.6 pricing (approximately $3.00 per million input tokens):
-
-With NO memory (Stage 18 baseline):
-- System prompt: ~600 tokens
-- Session history (20 turns): ~4,000 tokens
-- Current message: ~100 tokens
-- Total input per request: ~4,700 tokens = ~$0.0141 per request
-
-With Stage 25 memory (complete):
-- System prompt: ~600 tokens
-- Memory facts: ~300 tokens (within 400-token budget)
-- Memory episodes: ~400 tokens (within 600-token budget)
-- Session history: ~4,000 tokens
-- Current message: ~100 tokens
-- Total input per request: ~5,400 tokens = ~$0.0162 per request
-
-The memory overhead is approximately **15% additional cost per request** ($0.0021 per request). At 10,000 messages per day, this is $21/day or approximately $630/month in additional memory-related token cost. This is the direct, quantifiable cost of memory. The benefit — students feeling known, the AI tutoring with context, improved educational outcomes — justifies this cost.
-
-With prompt caching (Stage 15's Anthropic caching): the system prompt and stable memory facts can be cached, reducing effective cost. Memory facts that do not change between sessions (most profile facts) will be served from cache, effectively reducing the memory token cost to approximately 10% of its base rate.
-
-**Cost control mechanisms:**
-- `MEMORY_FACTS_TOKEN_BUDGET`: Caps total tokens consumed by core facts.
-- `MEMORY_EPISODES_TOKEN_BUDGET`: Caps total tokens consumed by episode summaries.
-- `MEMORY_MINIMUM_CONFIDENCE`: Prevents low-quality facts from being retrieved (quality control doubles as cost control).
-- The deduplication step removes redundant facts that would waste tokens.
-
-## 38. Failure Modes and Mitigations
-
-Every system fails. The memory system's failure modes are particularly dangerous because they affect the AI's knowledge about students. A corrupted memory can cause the AI to give wrong advice, misidentify a student's needs, or reference facts that are incorrect.
-
-### 38.1 Wrong Memory Retrieved
-
-**Scenario:** A retrieval bug causes Student B's facts to appear in Student A's context.
-
-**Mitigations:**
-- Foreign key constraint on `wax_id` in all memory tables (database-level prevention).
-- `StudentMemoryAccess` class with WaxID embedded at construction (application-level prevention).
-- Runtime assertion in context assembler: every retrieved memory record must have `wax_id = currentWaxId`.
-- `memory_retrieval_log` captures every retrieval for audit.
-
-**If detected at runtime:** The context assembler assertion fails, an ERROR is logged, the memory slot in the context is left empty (the AI proceeds without memory rather than with wrong memory), and an alert is triggered.
-
-### 38.2 Duplicate Memory
-
-**Scenario:** The same fact is written twice (write operation ran twice due to a retry after a network blip).
-
-**Mitigations:**
-- Write operations check for existing active fact before inserting.
-- The check-and-write is wrapped in a transaction with appropriate isolation.
-- If a race condition somehow produces two active facts with the same `(wax_id, fact_key)`, the retrieval deduplication step removes duplicates before they reach the context.
-
-**Detection:** A monitoring query that finds `(wax_id, fact_key, status='active')` combinations with count > 1. This should be zero — any non-zero result triggers an alert and manual investigation.
-
-### 38.3 Corrupted Memory (Incorrect AI Extraction)
-
-**Scenario:** The AI extracts a fact incorrectly from a conversation. Student said "My friend loves chemistry, but I'm not sure about it" and the AI writes `strong_subjects: [Chemistry]` for this student.
-
-**Mitigations:**
-- The summarization prompt explicitly instructs the AI to extract only clearly stated, clearly attributed facts about the student.
-- Minimum confidence threshold for writes.
-- The AI reasoning over the memory always reads the `provenance` field, which provides context for how certain to be.
-- Low-confidence facts are marked as such in context injection, which guides the AI to verify rather than assume.
-
-**Recovery:** When a student's behavior contradicts a stored fact, the confidence drops (CONTRADICT transition). Eventually the fact either gets superseded or drops below the retrieval threshold and is effectively invisible.
-
-### 38.4 Context Overflow from Memory
-
-**Scenario:** A long-established student has hundreds of active facts, consuming the entire memory token budget and leaving no room for recent episode summaries.
-
-**Mitigations:**
-- The slot-based token budget cap prevents any memory category from exceeding its allocation.
-- Archiving of old, low-confidence facts keeps the active set small.
-- The priority selection algorithm ensures profile facts (most universally relevant) are always included, with lower-priority categories filling the remaining budget.
-
-### 38.5 Summarization Failure
-
-**Scenario:** The background AI call for session summarization fails (provider error, timeout, model safety refusal).
-
-**Mitigations:**
-- BullMQ retries the summarization job 3 times with exponential backoff.
-- If all retries fail, the session's `summary_status` is set to `'failed'` and the failure is logged.
-- The session remains in the database with all its messages intact — a future retry can regenerate the summary.
-- A daily background job identifies sessions with `summary_status = 'failed'` older than 24 hours and re-queues them.
-- The student's tutoring is not interrupted — summarization failure affects future session memory, not the current session.
-
-### 38.6 Memory Leak Across Students
-
-**Scenario (catastrophic):** A bug in the context assembler injects memories from Student A into Student B's context. Student B's AI responses reference Student A's academic situation.
-
-**Mitigations:**
-- This is the most dangerous failure mode and has multiple layers of defense (all described in Section 8).
-- If it occurs: IMMEDIATELY remove the affected student sessions from active processing, audit the memory retrieval log for both students to determine scope, notify affected students per the NDPA breach notification requirements.
+CREATE INDEX idx_snapshots_wax_fresh
+  ON student_model_snapshots(wax_id, generated_at DESC)
+  WHERE is_stale = FALSE;
+```
 
 ---
 
-# PART EIGHT: WHAT NOT TO BUILD
+# PART SIX: STAGE-BY-STAGE SPECIFICATIONS
 
-## 39. What Should Wait (Future Stages)
+## STAGE 27 — STUDENT MODEL SCHEMA
 
-**Semantic retrieval (vector embeddings):** The schema is ready (the `embedding` column exists). The `pgvector` extension is enabled in the migration. But generating embeddings requires an embedding model API call for every memory write — additional latency and cost. The improvement in retrieval quality from semantic matching will be meaningful only when WaxPrep has enough students and memory entries that recency-first retrieval starts missing important but non-recent context. This is not an immediate concern. Implement semantic retrieval when retrieval quality analysis (from the observability metrics) shows that recency-first is missing relevant memories.
+### 1. Purpose
 
-**Cross-session analysis dashboards:** Building a UI for visualizing a student's learning trajectory, misconception trends, and progress over time. This requires a frontend and is product development, not infrastructure. Build it when the data exists and stakeholders need to see it.
+Define the complete data structures that represent a student's learning state across concepts. This schema is the foundation upon which all learning intelligence is built. It must be flexible enough to represent concepts that were never anticipated when it was designed, precise enough to be computationally useful, and privacy-conscious enough to contain only educational behavioral data rather than personal profiles.
 
-**Parent portal memory access:** Allowing parents to view their child's memory profile. Requires authentication, authorization, and UI. Requires NDPA consent design. Future feature.
+### 2. Educational Rationale
 
-**Teacher integration:** Allowing teachers to add notes about students to the memory system. Requires a new provenance category, a teacher authentication system, and UI. Future feature.
+The student model is the mechanism through which WaxPrep's AI gains awareness of who the student is as a learner — separate from who they are as a person (which is Stage 23's core memory). The learning model asks: what has this student demonstrated? What do they struggle with? What signals suggest their current knowledge state? Corbett & Anderson (1994) established that a functioning student model dramatically improves tutoring effectiveness by allowing instruction to be calibrated to the student's current level.
 
-**Assessment integration:** Connecting formal assessment results (WAEC mock exam scores) to the memory system. Requires an assessment module. Future feature.
+### 3. Research Evidence
 
-**Memory-based adaptive pacing:** Automatically adjusting the depth and speed of tutoring based on memory-derived progress signals. The AI already reasons about this from memory content — do not build infrastructure that replaces this reasoning with rules.
+The literature consistently shows that student models tracking KC-level mastery outperform session-level or subject-level models (Koedinger & Corbett, 2006). Fine-grained KC tracking enables targeted remediation. However, the research also shows that over-granular KCs (too many small skills) lead to model fragmentation and degraded performance — a balance must be struck.
 
-## 40. What Should Never Be Built
+### 4. Technical Architecture
 
-**Automated fact correction without provenance.** Never build a system that silently modifies or corrects memory facts without recording why, when, by what process. Every change to memory must produce an audit trail.
+As specified in Section 5: `concepts`, `knowledge_states`, `learning_observations`, `misconceptions`, `learning_signals`, `student_model_snapshots`. The schema is append-only for evidence (observations), materialized for state (knowledge_states), and generated for context (snapshots).
 
-**Memory-based scoring or grading.** Using the memory system to produce official scores, grades, or assessments for students that are shared with schools or exam bodies. The memory system is a tutoring aid — it is not an assessment authority. Any scores in WaxPrep's memory are private, informal, and should be explicitly marked as AI observations, not official results.
+### 5. Data Model
 
-**Shared memory across students.** Memory belongs to one student. Never build a feature where one student's memory informs another student's experience — not for "popular misconceptions" aggregation, not for "what topics are most commonly confused" analytics. Student data is private.
+Complete schema as specified in Section 5.
 
-**Deterministic teaching rules derived from memory.** A rule like "if progress.mastered_concept contains 'Newton's First Law' then skip that topic" is hardcoded educational logic. Never build it. The AI reads the memory and decides whether to revisit or skip. Infrastructure never decides.
+### 6. API/Interface Design
 
-**Automatic memory editing by the AI mid-conversation.** The AI should not pause a tutoring conversation to issue memory update commands. Memory updates happen asynchronously (background jobs after session) or as deliberate tool calls in future stages. Real-time memory mutation in the middle of a tutoring exchange adds latency, complexity, and the risk of partial writes if the session crashes.
+```
+// Conceptual API — integrate with existing data access patterns
+StudentLearningAccess(waxId) {
+  getKnowledgeStates(options?) → KnowledgeState[]
+  getKnowledgeState(conceptTag) → KnowledgeState | null
+  getActiveMisconceptions() → Misconception[]
+  getMisconception(id) → Misconception | null
+  getLearningSignals(sessionId?) → LearningSignal[]
+  getStudentModelSnapshot() → StudentModelSnapshot | null
+  
+  // Evidence writes (called by evidence pipeline, not directly by tutoring)
+  writeObservation(observation) → LearningObservation
+  updateKnowledgeState(conceptTag) → KnowledgeState
+  writeMisconception(misconception) → Misconception
+  writeSignal(signal) → LearningSignal
+}
+```
 
-**A memory system that penalizes slow students.** Any design that uses memory to route "slow" students to lower-quality responses, simpler AI models, or reduced features. All students receive the same quality of tutoring. Memory improves personalization, not resource allocation.
+### 7. Input/Output Examples
 
-## 41. Common Traps and Anti-Patterns
+```
+Input: Evidence observation for concept "quadratic_equations"
+{
+  waxId: "uuid-abc",
+  sessionId: "sess-xyz",
+  conceptTag: "quadratic_equations",
+  evidenceType: "direct_response",
+  correctness: 0.80,   // Mostly correct, minor error
+  extractionConfidence: 0.90,
+  hintLevel: 0,
+  responseTimeMs: 45000
+}
 
-**The profile questionnaire trap:** Building a structured intake form that asks students to fill in their exam target, class, subjects, etc. before using WaxPrep. This feels efficient but is wrong. It makes the first interaction transactional instead of educational. It gets outdated immediately (students update facts naturally through conversation, but rarely think to update a form). The AI should learn about the student through tutoring, not through a form.
+Output: Updated KnowledgeState
+{
+  waxId: "uuid-abc",
+  conceptTag: "quadratic_equations",
+  masteryEstimate: 0.64,
+  successSignal: 3.2,
+  failureSignal: 1.1,
+  recentTrend: "improving",
+  hintDependency: 0.10,
+  evidenceCount: 5,
+  lastEvidenceAt: "2026-09-05T14:30:00Z",
+  decayFactorApplied: 0.982  // Very recent — minimal decay
+}
+```
 
-**The infinite memory accumulation trap:** Writing everything the AI thinks it knows to memory, producing thousands of low-confidence facts that overwhelm the context budget and dilute useful information. The minimum confidence threshold and the taxonomy discipline prevent this. Write only high-quality, educationally relevant facts.
+### 8. Dependencies
 
-**The stale confidence trap:** Writing facts with high initial confidence based on a single explicit statement, then never updating them. A student who said "I'm preparing for WAEC" in session 1 might change to NECO by session 20. If the confidence never changes, the AI will keep asserting WAEC with high confidence long after it is wrong. The supersession mechanism and the contradiction detection system prevent this — but only if the write path correctly identifies when a new statement conflicts with an existing one.
+Depends on: Stage 22 schema (memory foundation), Stage 3 (database), Stage 12 (WaxID). Must be built before Stage 29 (mastery estimation) can compute values into it.
 
-**The context-overflow trap:** Including all retrieved memories in the context regardless of token budget. This is prevented by the slot-based budget. But a common implementation error is checking the token budget AFTER assembling the memory string rather than BEFORE. Always check the budget before adding each item.
+### 9. Failure Modes
 
-**The attribution confusion trap:** Retrieving an episode summary and presenting it to the AI in a way that makes it unclear whether the information is from the AI's own past reasoning or from the student's direct statements. The `provenance` field prevents this — the context injection format should always show the provenance: "Student stated" vs "AI observed."
+Schema migration fails (incomplete migration applied). Concept tag not found in registry at evidence write time (create a new registry entry — do not block evidence persistence). Foreign key constraint violation if WaxID is invalid (student isolation maintained).
 
----
+### 10. Edge Cases
 
-# PART NINE: IMPLEMENTATION SPECIFICATIONS
+A single conversation turn may involve multiple concepts. The evidence record must support multiple concept tags per turn — implement this by creating one observation record per concept per turn (not one record with an array of concepts). This keeps queries simple and prevents ambiguous evidence attribution.
 
-## 42. Final Stage 22 Specification
+A concept mentioned but not assessed (student asks about it without being asked to demonstrate knowledge) should produce an observation with `evidence_type = 'concept_mention'` and `correctness = null`. This is valid evidence (it tells the AI the student is engaging with the concept) even without an assessable outcome.
 
-**Purpose:** Establish the foundational database schema, migration infrastructure, and core data access classes for WaxPrep's persistent memory system.
+A student provides a partially correct answer. Correctness is a decimal, not a boolean. `correctness: 0.60` is the correct representation, not a binary mapping. Do not round to 0 or 1 unless the answer is completely correct or completely wrong.
 
-**Dependencies:**
-- Stage 3 (database infrastructure — migrations, connection pool).
-- Stage 12 (WaxID and students table — memory tables reference it).
-- Stage 13 (sessions table — episode summaries reference it).
+### 11. Privacy Implications
 
-**Architecture:**
-Single PostgreSQL database (existing Railway/Supabase database). New tables: `student_facts`, `student_episodes`, `memory_retrieval_log`, `memory_contradictions`, `memory_confidence_history`. New database access class: `StudentMemoryAccess`. New migration: `005_memory_foundation.sql`.
+The learning observations log contains behavioral data about academic performance — which concepts the student struggles with, patterns of help-seeking, error patterns. This is sensitive educational data under the NDPA.
 
-**Required Files:**
-- `infra/migrations/005_memory_foundation.sql` — complete schema as specified in Section 5.
-- `src/memory/StudentMemoryAccess.js` — database access class with all CRUD methods.
-- `src/memory/MemoryTaxonomy.js` — constants for fact categories, fact keys, provenance values, confidence thresholds.
-- `src/memory/MemoryErrors.js` — memory-specific error classes.
+Critical privacy design: observations are linked to WaxID (pseudonymous), not to raw phone numbers. Observation records do not contain the text of student responses — only structured metadata derived from evaluation. The actual response text is in the messages table, governed by existing privacy rules.
 
-**Database Changes:** As specified in Section 5 (full schema). Migration must include the `CREATE EXTENSION IF NOT EXISTS vector` command. Migration must be idempotent (IF NOT EXISTS for all CREATE statements).
+Retention: observations must be deletable under NDPA right to erasure. Soft deletion of observations triggers recomputation of knowledge states. The mechanism is: mark observations deleted → recompute all affected knowledge states → the student's learning model reflects only non-deleted evidence.
 
-**Testing Expectations:**
-- Unit test: `StudentMemoryAccess.writeFact()` with a valid fact produces a new `student_facts` record with correct defaults.
-- Unit test: `StudentMemoryAccess.writeFact()` with an existing active fact for the same `(wax_id, fact_key)` triggers the REINFORCE path.
-- Unit test: Attempting to read a different student's facts from a `StudentMemoryAccess` instance returns zero results (WaxID isolation enforced by class constructor).
-- Integration test: Full transaction: write fact → read fact → verify all fields.
-- Integration test: Soft delete → verify deleted record is excluded from retrieval queries.
+Separation: learning data (this schema) and personal profile data (Stage 23 memory) must be stored in separate tables with separate access controls. Never JOIN them in a single query unless explicitly authorized.
 
-**Completion Criteria:**
-- Migration `005` applies cleanly to a fresh database.
-- `StudentMemoryAccess` wraps all memory operations — no direct memory table queries anywhere else in the codebase.
-- All indexes created and verified via `EXPLAIN ANALYZE` on the primary query patterns.
-- The `embedding vector(1536)` column exists and is nullable on both `student_facts` and `student_episodes`.
-- `pgvector` extension is enabled.
-- All tests pass.
+### 12. Data Quality Concerns
 
-## 43. Final Stage 23 Specification
+The MUST HAVE check: every knowledge state must be derivable from its observations. Run a periodic reconciliation job that recomputes knowledge states from observations and alerts if the materialized state deviates from the derived state.
 
-**Purpose:** Implement the core fact write, retrieve, update, supersede, and context injection system that gives WaxPrep durable knowledge about who each student is.
+The extraction confidence field is critical: low-confidence evidence (confidence < 0.50) should be weighted less in mastery computation. Infrastructure stores the confidence; the RWEA model applies it.
 
-**Dependencies:**
-- Stage 22 (memory schema).
-- Stage 17 (system prompt builder — context injection slot must be added).
-- Stage 18 (context assembler — must be extended to include memory facts).
+### 13. What Can Be Automated
 
-**Architecture:**
-The `ContextAssembler` (Stage 18) is extended with a `memoryFacts` slot. A new `MemoryWriter` module receives AI-extracted facts and writes them using `StudentMemoryAccess`. The summarization job (Stage 24) is the primary caller of `MemoryWriter`. For Stage 23, a simple manual write path is also built for testing: the AI can emit a structured JSON block at the end of the session (an early version of the tool-calling pattern) that the worker parses and writes to memory.
+MUST HAVE: Concept registry creation when AI identifies a new concept. Knowledge state update after every new observation. Stale snapshot detection when new observations arrive.
 
-**Required Files:**
-- `src/memory/MemoryWriter.js` — writes facts using the full write protocol (conflict detection, supersession, confidence management).
-- `src/memory/MemoryRetriever.js` — retrieves and formats facts for context injection.
-- `src/memory/ConfidenceEngine.js` — state machine for confidence transitions (REINFORCE, CONTRADICT, SUPERSEDE, INITIALIZE).
-- `src/memory/ProvenanceRegistry.js` — constants and helpers for provenance taxonomy.
-- Updated `src/ai/context/ContextAssembler.js` — extended with memory facts retrieval and injection.
+SHOULD HAVE SOON: Periodic knowledge state recomputation from observations (reconciliation).
 
-**Database Changes:**
-None beyond Stage 22 schema. Stage 23 operates within the existing tables.
+FUTURE: Automatic concept merging when aliases are detected. Concept hierarchy inference from relationship data.
 
-**Testing Expectations:**
-- Unit test: `ConfidenceEngine.reinforce(currentConfidence, newEvidenceProvenance)` returns correct updated confidence.
-- Unit test: `ConfidenceEngine.contradict(currentConfidence, newEvidenceProvenance)` decreases confidence correctly.
-- Unit test: `MemoryWriter.writeFact()` with a conflicting fact_key triggers the SUPERSEDE path correctly (old fact gets `status = 'superseded'`, new fact gets `status = 'active'`).
-- Unit test: Context injection respects the `MEMORY_FACTS_TOKEN_BUDGET` cap.
-- Integration test: Write fact → retrieve for context → verify display_text appears in context output.
-- Integration test: Write high-confidence fact + write contradicting fact → verify contradiction log entry created.
+### 14. What Should Remain AI-Controlled
 
-**Completion Criteria:**
-- Core facts can be written (manually, via test script) and retrieved in the AI context.
-- Confidence state machine all six transitions implemented and tested.
-- Context injection includes a clearly formatted memory facts block.
-- Token budget respected — no context overflow from memory facts.
-- All superseded facts remain permanently in the database with correct `superseded_by` pointers.
+Which concept is relevant to a given conversation turn. What the quality of a student's response means pedagogically. Whether a partial answer reflects genuine partial understanding or procedural confusion.
 
-## 44. Final Stage 24 Specification
+### 15. What Should Remain Deterministic
 
-**Purpose:** Implement end-of-session summarization using a background BullMQ job, producing structured episodic memories that capture the student's learning journey.
+Which observations belong to which student (WaxID isolation — never AI-determined). Whether an observation is valid (format validation — not content judgment). The RWEA computation (given inputs, output is deterministic). Timestamp recording. Evidence count increment.
 
-**Dependencies:**
-- Stage 22 (memory schema — `student_episodes` table).
-- Stage 23 (memory writer — summarization job writes extracted facts).
-- Stage 15/16 (AI provider — summarization uses the AI provider abstraction).
-- Stage 6 (BullMQ — background job infrastructure).
+### 16. What Should NOT Be Implemented
 
-**Architecture:**
-A new BullMQ queue (`memory-consolidation`) with a dedicated worker. A `SessionSummarizer` class that builds the summarization prompt, calls the AI provider, parses the structured response, writes the episode, and writes extracted facts. The session closure detection mechanism (Option B: background scheduler + Option A: on-new-session trigger) runs as a BullMQ repeatable job.
+A prerequisite enforcement graph that blocks the AI from teaching certain concepts. A "mastery threshold triggers action" rule (mastery > 0.9 → mark complete). A concept difficulty database that prescribes what a concept should score. Any hardcoded mapping from mastery estimate to pedagogical action.
 
-**Required Files:**
-- `src/memory/SessionSummarizer.js` — orchestrates the full summarization process.
-- `src/workers/consolidationWorker.js` — BullMQ worker processing memory-consolidation jobs.
-- `src/ai/prompt/templates/session_summarization.v1.txt` — the summarization prompt template.
-- `src/memory/EpisodeWriter.js` — writes `student_episodes` records.
-- Updated `src/ai/context/ContextAssembler.js` — extended with episodic memory retrieval.
-- New BullMQ repeatable job in the worker startup: `summarize-closed-sessions` every 15 minutes.
+### 17. Testing Strategy
 
-**Database Changes:**
-None beyond Stage 22 schema.
+Unit test: RWEA computation given known inputs produces correct output. Unit test: Time decay reduces mastery estimate correctly. Property test: mastery_estimate always in [0.05, 0.95]. Property test: evidence from one student never affects another student's knowledge state. Integration test: write observation → knowledge state updated. Data quality test: knowledge state matches recomputed value from observations.
 
-**Testing Expectations:**
-- Unit test: `SessionSummarizer` correctly parses the structured JSON from the AI summarization response.
-- Unit test: Summary job is correctly deduplicated by jobId (same session does not produce two summary jobs).
-- Integration test: Session closes (inactivity timeout) → background job fires → episode written → episode retrievable for context.
-- Integration test: Summarization AI call failure → `summary_status = 'failed'` recorded → retry job queued.
-- Manual test: Verify a generated summary correctly describes a test conversation.
+### 18. Completion Criteria
 
-**Completion Criteria:**
-- Sessions produce summaries within 50 minutes of closing (background job + processing time).
-- Summary includes all required fields (`summary_text`, `topics`, `subjects`, `breakthroughs`, `confusions`).
-- Extracted facts are correctly written to `student_facts` by the summarization job.
-- Failed summaries are retried and logged.
-- Episode summaries appear in the AI context for subsequent sessions.
+Complete SQL migrations applied. StudentLearningAccess class implemented with all specified methods. All indexes created. RWEA computation function tested with known values. Cross-student isolation verified via test.
 
-## 45. Final Stage 25 Specification
+### 19. Recommended Improvements
 
-**Purpose:** Implement the complete memory retrieval pipeline, including parallel retrieval, filtering, ranking, deduplication, and token-budget-aware context injection for both core facts and episodic summaries.
+The original schema was missing: correctness as a decimal (not binary), extraction confidence, hint level, response time, temporal decay, misconception records, learning signals, and model snapshots. All added in the revised schema.
 
-**Dependencies:**
-- Stage 23 (core facts available in database).
-- Stage 24 (episodes available in database).
-- Stage 18 (context assembler — Stage 25 extends it significantly).
+### 20. Stage Order
 
-**Architecture:**
-The `ContextAssembler` is substantially refactored to support the full slot-based token budget model. A new `MemoryRetrievalPipeline` class encapsulates all retrieval logic: parallel database queries, filtering, ranking, deduplication, token estimation, and formatting. The `memory_retrieval_log` table is populated after every retrieval.
+This stage should be implemented after Stage 28 (evidence pipeline), as the schema must be designed around the evidence that can actually be collected.
 
-**Required Files:**
-- `src/memory/MemoryRetrievalPipeline.js` — complete retrieval pipeline.
-- `src/memory/MemoryFormatter.js` — formats retrieved memory into context injection text.
-- `src/memory/MemoryDeduplicator.js` — deduplication logic.
-- Updated `src/ai/context/ContextAssembler.js` — integrates MemoryRetrievalPipeline.
-- New environment variables: `MEMORY_FACTS_TOKEN_BUDGET`, `MEMORY_EPISODES_TOKEN_BUDGET`, `MEMORY_MINIMUM_CONFIDENCE`, `MEMORY_RETRIEVAL_LATENCY_WARN_MS`.
+### 21. Split/Combine Recommendation
 
-**Database Changes:**
-New index: verify all indexes from Stage 22 are created. Add `memory_retrieval_log` records for observability.
+Split: The concept registry belongs in a separate stage or at minimum a separate migration. It has different operational characteristics (rare writes, frequent reads) from the evidence tables (very frequent writes).
 
-**Testing Expectations:**
-- Unit test: Retrieval respects `MEMORY_FACTS_TOKEN_BUDGET` — never returns facts that would exceed the budget.
-- Unit test: Deduplication correctly removes facts that appear in the current session history.
-- Unit test: Parallel retrieval (Promise.all) completes faster than sequential.
-- Integration test: Full retrieval pipeline executes under 15ms on a database with 100 facts for a student.
-- Integration test: Retrieval log entry is written after every pipeline execution.
-- Integration test: A student with no facts and no episodes produces empty memory slots (no errors).
-
-**Completion Criteria:**
-- Complete retrieval pipeline operational.
-- Memory facts and episodes appear correctly formatted in AI context.
-- Total retrieval latency under 15ms (measured via retrieval log).
-- Token budget respected for both facts and episodes slots.
-- Retrieval log capturing all retrieval events.
-- The `currentMessageText` parameter accepted (for future semantic retrieval compatibility) even though not yet used for semantic matching.
-
-## 46. Final Stage 26 Specification
-
-**Purpose:** Implement the complete epistemic memory system: provenance tracking, the full confidence state machine, supersession protocol, contradiction detection and logging, confidence decay processing, and the contradiction surface mechanism for AI context.
-
-**Dependencies:**
-- Stage 22 (schema — `memory_contradictions`, `memory_confidence_history` tables).
-- Stage 23 (MemoryWriter and ConfidenceEngine partially implemented — Stage 26 completes them).
-- Stage 24 (summarization creates opportunities for contradiction detection).
-
-**Architecture:**
-The `ConfidenceEngine` is fully implemented with all six transitions. The `ContradictionDetector` is built as a separate module called by `MemoryWriter` on every write. The confidence decay background job is added to the `consolidationWorker`. The contradiction context injection is added to `MemoryRetrievalPipeline`.
-
-**Required Files:**
-- `src/memory/ConfidenceEngine.js` — complete state machine with all six transitions and full test coverage.
-- `src/memory/ContradictionDetector.js` — detects conflicts on every write, writes to `memory_contradictions`.
-- `src/memory/SupersessionProtocol.js` — complete supersession transaction implementation.
-- `src/memory/ConfidenceDecayJob.js` — weekly decay processing logic.
-- Updated `src/workers/consolidationWorker.js` — adds decay job to weekly schedule.
-- Updated `src/memory/MemoryRetrievalPipeline.js` — adds contradiction context injection.
-- New environment variables: `MEMORY_DECAY_INTERVAL_DAYS`, `MEMORY_ARCHIVE_AGE_MONTHS`, decay rates per category.
-
-**Database Changes:**
-None beyond Stage 22 schema.
-
-**Testing Expectations:**
-- Unit test: Every confidence state machine transition produces correct output and a `memory_confidence_history` record.
-- Unit test: Decay applied correctly to each category — no decay for `profile`, correct rate for others.
-- Unit test: Decay never reduces confidence below 0.20.
-- Unit test: Supersession transaction correctly updates old record and creates new record atomically.
-- Unit test: Contradiction detector correctly identifies each conflict_type.
-- Integration test: Write a fact, write a contradicting fact → verify contradiction record created, both original facts still queryable.
-- Integration test: Contradiction appears in context injection when `status = 'unresolved'`.
-- Integration test: Confidence history is append-only — no history record is ever updated.
-
-**Completion Criteria:**
-- Full confidence state machine implemented with all six transitions.
-- Every confidence change produces a `memory_confidence_history` record.
-- Supersession protocol fully implemented and transactional.
-- Contradiction detection runs on every write and correctly classifies conflicts.
-- Contradictions surface in AI context with appropriate framing.
-- Confidence decay background job operational.
-- Complete provenance taxonomy implemented in `ProvenanceRegistry`.
-- No fact is ever hard-deleted (soft delete only, with appropriate audit trail).
+**Classification: MUST HAVE NOW for schema. The concept registry can start minimal (just canonical_tag and display_name) and grow.**
 
 ---
 
-# PART TEN: ARCHITECTURAL DECISIONS — FINAL EXPLICIT ANSWERS
+## STAGE 28 — EVIDENCE COLLECTION PIPELINE
 
-## 47. Every Major Decision, One Per Answer
+### 1. Purpose
 
-**Decision 1: Append-only vs in-place updates**
-Options: (a) update records in place, (b) append new records and mark old ones superseded. Recommendation: append-only for all substantive changes. Reasoning: preserves provenance, enables audit, prevents data decoherence, required for contradiction detection, required for temporal reasoning.
+Build the pipeline that transforms raw conversational interactions into structured, typed, confidence-annotated learning evidence. This is the input layer to the entire student model system. Without reliable evidence collection, everything that depends on it is garbage.
 
-**Decision 2: JSON vs relational for fact values**
-Options: (a) typed columns per fact type, (b) pure JSONB, (c) hybrid (typed key/category columns, JSONB value). Recommendation: hybrid. Reasoning: typed indexes on `fact_key` and `fact_category` enable efficient queries. JSONB `fact_value` handles variable content structure without migrations. Pre-computed `display_text` avoids JSONB serialization at retrieval time.
+### 2. Educational Rationale
 
-**Decision 3: Confidence scale**
-Options: (a) binary known/unknown, (b) 1–10 integer, (c) 0–100 integer, (d) 0.000–1.000 decimal. Recommendation: 0.000–1.000 decimal (3 decimal places). Reasoning: maps naturally to linguistic qualifiers, supports gradual changes, universally understood by AI systems, compatible with probability-theoretic frameworks.
+Formative assessment evidence should be collected continuously, not only during formal test moments (Black & Wiliam, 1998). Every tutoring exchange contains evidence: a correct explanation is evidence of understanding; a hesitant response is evidence of uncertainty; a direct question is evidence of active engagement; a mistake is evidence of a gap. The pipeline extracts this evidence systematically.
 
-**Decision 4: Provenance model**
-Options: (a) simple source tag (student/ai), (b) full taxonomy with 8+ provenance categories. Recommendation: full taxonomy with the 9 categories defined in Section 28. Reasoning: different provenance categories carry different trust implications. Collapsing them loses information the AI needs for calibrated reasoning.
+The research baseline: turn-level annotation using LLMs achieves >93% accuracy for correctness labels and >0.4 Krippendorff's alpha on KC relevance with human raters (Scarlatos et al., LAK 2025). This makes LLM-based evidence extraction production-viable.
 
-**Decision 5: Retrieval ranking for Stage 25**
-Options: (a) recency-first, (b) confidence-first, (c) importance-scored, (d) semantic similarity. Recommendation: recency-first with confidence as secondary sort. Reasoning: at this stage, WaxPrep does not have enough data to calibrate importance weights. Recency is the best proxy for relevance in educational contexts. Semantic similarity requires embeddings not yet implemented.
+### 3. Research Evidence
 
-**Decision 6: Consolidation timing**
-Options: (a) on-request (during AI call), (b) end-of-session (background job), (c) rolling (continuous). Recommendation: end-of-session background job as primary, supplemented by new-session trigger. Reasoning: background processing avoids latency in the critical path. End-of-session provides a clean boundary. Rolling summaries add complexity without sufficient benefit at this scale.
+Evidence taxonomy in the literature includes (VanLehn, 2006; Chi, Siler & Jeong, 2004):
+- Assessment responses (highest quality evidence)
+- Explanation attempts (high quality — metacognition)
+- Self-explanation (metacognitive evidence)
+- Error commission (diagnostic evidence)
+- Help-seeking (behavioral evidence — correlates negatively with performance)
+- Self-reported confidence (metacognitive, but unreliable without calibration)
+- Concept engagement (participation evidence)
 
-**Decision 7: Supersession strategy**
-Options: (a) update in place, (b) soft-delete and replace, (c) append with status transition. Recommendation: append with status transition (status: 'superseded', superseded_by pointer). Reasoning: old fact permanently preserved for audit and AI reasoning about the student's history. Pointer enables following the chain of fact evolution.
+The research also establishes that hint-penalized responses (correct answers given after hints) should be treated differently from unprompted correct responses. Feng et al. (2009) found significant negative correlation between hint use and test scores.
 
-**Decision 8: Indexing strategy**
-Options: (a) index all columns, (b) index only primary lookup columns, (c) profile-based. Recommendation: composite indexes on all established query patterns as specified in Section 5. Reasoning: memory retrieval runs on every AI request — index misses become accumulated latency. Over-indexing slows writes but memory writes are infrequent compared to reads. The tradeoff favors read optimization.
+### 4. Technical Architecture
 
-**Decision 9: Token budgeting**
-Options: (a) dynamic per-request budget, (b) static percentage of context, (c) fixed slot sizes. Recommendation: fixed named slots with configurable sizes from environment variables. Reasoning: predictable, testable, easy to tune. Named slots make the budget legible — you always know exactly why the memory budget is what it is.
+The evidence pipeline has three layers:
 
-**Decision 10: Privacy model**
-Options: (a) store everything, handle deletion on request, (b) minimal storage with defined retention. Recommendation: minimal storage with defined retention periods and full NDPA deletion support. Reasoning: WaxPrep serves minors. The less stored, the less that can be misused, breached, or subject to complex regulatory treatment. Store only what serves educational quality.
+**Layer 1 — Inline extraction (during tutoring):** After each AI tutoring turn, the AI's response includes an optional structured evidence block. When the AI evaluates the student's response as part of tutoring, it can emit a machine-readable evidence record alongside the tutoring response. This is optional — the AI should tutor naturally and include the evidence block only when a clean evaluation is appropriate.
 
-**Decision 11: Single database vs split stack**
-Options: (a) PostgreSQL only, (b) PostgreSQL + Redis for memory cache, (c) PostgreSQL + vector database. Recommendation: PostgreSQL only for Stages 22–26. Reasoning: no new infrastructure. ACID guarantees. pgvector is available when semantic retrieval is needed. Operational simplicity is critical for a solo founder.
+**Layer 2 — Session-end extraction (background job):** After session closure, the consolidation worker (Stage 24's background job) analyzes the full session transcript. It extracts evidence for all concepts discussed, with higher-quality evaluation possible because the full session context is available.
 
-**Decision 12: Memory write timing (when facts are extracted)**
-Options: (a) real-time during tutoring session (AI flags facts mid-conversation), (b) post-session background extraction. Recommendation: post-session background extraction as primary. Reasoning: real-time extraction requires AI tool calls mid-conversation, adding latency and complexity. Post-session extraction produces better quality (the full session is available for analysis). The cost: facts from the current session are not available as memory within that same session — they are available in the next session. This is acceptable.
+**Layer 3 — Dedicated evaluation calls:** For ambiguous or high-value interactions, a separate AI call is made specifically to evaluate the student's understanding. This is more expensive but produces higher-quality evidence. Use sparingly — not on every turn.
+
+### 5. Data Model
+
+The `learning_observations` table (Section 5.3) is the output of this pipeline. No additional tables needed for the pipeline itself.
+
+### 6. API/Interface Design
+
+```
+// Evidence pipeline components
+
+EvidenceExtractor {
+  extractFromTurn(turn: ConversationTurn) → LearningObservation[]
+  // Called inline after each tutoring turn when the AI produced an inline evidence block
+  
+  extractFromSession(sessionId: string) → LearningObservation[]
+  // Called by background job at session end
+  
+  validateObservation(obs: LearningObservation) → ValidationResult
+  // Validates format, range, cross-student isolation
+}
+
+EvidenceWriter {
+  write(observation: LearningObservation) → { id, conceptCreated: boolean }
+  // Writes observation, creates concept registry entry if needed,
+  // marks knowledge state as stale
+  
+  batchWrite(observations: LearningObservation[]) → BatchResult
+  // For session-end extraction (may be multiple observations per session)
+}
+```
+
+### 7. Complete Evidence Type Taxonomy
+
+**direct_response:** Student directly responded to a question or prompt. Highest quality. The AI evaluated the response for correctness and concept relevance.
+- correctness: 0.0–1.0
+- hintLevel: how many hints preceded the response
+
+**explanation_attempt:** Student tried to explain a concept in their own words. High quality for assessing conceptual understanding (not just procedural recall).
+- correctness: 0.0–1.0 (quality of explanation)
+- correctnessBreakdown: { conceptual_accuracy, completeness, clarity }
+
+**correction_response:** Student responded to being told they were wrong. Did they demonstrate understanding of the correction?
+- correctness: 0.0–1.0
+
+**hint_request:** Student asked for a hint or additional help. Not assessable, but important behavioral evidence.
+- correctness: null
+- signalValue: hint_level requested
+
+**self_reported_confidence:** Student stated how confident they feel. Metacognitive evidence — correlates with actual performance but is often miscalibrated (Dunning-Kruger effects are real in secondary education).
+- correctness: null
+- signalValue: 0.0–1.0 (student's stated confidence, mapped from natural language)
+
+**error_commission:** Student made an identifiable error that was captured even without being formally assessed. Includes spontaneous mistakes, wrong assumptions, incorrect formulas used.
+- correctness: 0.0 (by definition this evidence type indicates incorrect understanding)
+- misconceptionTag: if a known error pattern is identified
+
+**concept_mention:** Student mentioned a concept in a non-assessable way. Engagement evidence.
+- correctness: null
+- signalValue: engagement depth (1 = passing mention, 2 = active engagement, 3 = demonstrates familiarity)
+
+**self_explanation:** Student spontaneously explained a concept or their reasoning without being asked. High-quality metacognitive evidence.
+- correctness: 0.0–1.0
+
+### 8. The AI Evidence Emission Pattern
+
+The AI tutor is instructed (via system prompt or structured output tooling) to optionally emit a structured evidence block at the end of certain responses. This block is parsed by the evidence pipeline.
+
+The key constraint: the AI should never interrupt its tutoring to "fill in an evidence form." Evidence emission must be natural and optional. If the AI cannot confidently extract structured evidence without disrupting the tutoring, it emits nothing and the session-end extraction handles it.
+
+Example evidence block (embedded in AI response, stripped before delivery to student):
+
+```json
+// Appended to AI response, never sent to student
+{
+  "_waxprep_evidence": {
+    "observations": [
+      {
+        "conceptTag": "newton_second_law",
+        "evidenceType": "direct_response",
+        "correctness": 0.85,
+        "confidence": 0.90,
+        "hintLevel": 0,
+        "notes": "Student correctly stated F=ma and applied it to find acceleration. 
+                  Minor error: forgot to specify units."
+      }
+    ]
+  }
+}
+```
+
+This block is parsed in the AI response processing pipeline and stripped before the response is sent to the student. If the block is absent, no evidence is extracted from that turn.
+
+### 9. Dependencies
+
+Depends on: Stage 27 (schema — writing observations), Stage 15/16 (AI provider — evaluation calls).
+
+### 10. Failure Modes
+
+AI evaluation call fails: Log the failure, skip evidence extraction for this turn, do not interrupt tutoring. Evidence extraction failure must never break the tutoring experience.
+
+Concept tag not found in registry: Create a new registry entry with `created_by = 'ai_extraction'`. Proceed with evidence write. A human review queue should surface new AI-created concepts for curation.
+
+Malformed evidence block from AI: Validate before parsing. If validation fails, log warning, skip evidence for this turn.
+
+Duplicate evidence: An idempotency check on `(wax_id, message_id, concept_tag, evidence_type)` prevents duplicate observations from retried jobs.
+
+### 11. Edge Cases
+
+Multiple concepts in one turn: Emit one observation per concept. A student who correctly discusses both force and acceleration in one turn should produce two observations — one for each concept.
+
+Ambiguous correctness: If the AI cannot confidently score correctness, it should emit `correctness: null` with `evidenceType: "concept_mention"` rather than guess. No evidence is better than bad evidence.
+
+WhatsApp response timing: The `response_time_ms` field is computed from the timestamp difference between the WaxPrep AI response delivery time and the student's reply message timestamp. WhatsApp message timestamps (set by the student's device) are used, not delivery timestamps, to avoid network latency artifacts.
+
+### 12. Privacy Implications
+
+The observation records contain metadata about student performance (correctness scores, hint usage) but NOT the actual content of student responses. Privacy is maintained by linking to message IDs rather than copying content. This design is consistent with data minimization principles.
+
+### 13. What Can Be Automated
+
+MUST HAVE: Inline evidence parsing and writing. Concept registry creation for new tags.
+
+SHOULD HAVE SOON: Session-end batch extraction. Evidence deduplication.
+
+FUTURE: Confidence calibration (comparing AI-estimated correctness against later performance). Extraction accuracy monitoring (sampling-based human review of AI evaluations).
+
+### 14. What Should Remain AI-Controlled
+
+Which concept is relevant. What the correctness score should be. Whether a response reflects genuine understanding or procedural recall. Whether a misconception is implied.
+
+### 15. What Should Remain Deterministic
+
+Observation persistence. Timestamp recording. WaxID isolation. Evidence format validation.
+
+### 16. What Should NOT Be Implemented
+
+A rule-based parser that attempts to classify student responses as correct/incorrect using regex or keyword matching. This will produce garbage. All content evaluation must go through AI evaluation.
+
+An "evidence score threshold" that triggers automatic pedagogical actions. Evidence is for the AI to use, not for infrastructure to act on.
+
+### 17. Testing Strategy
+
+Unit test: Evidence block parser correctly extracts and structures each evidence type. Unit test: Invalid evidence blocks are detected and rejected. Integration test: End-to-end flow from AI response with evidence block → parsed observation → knowledge state updated. Property test: Evidence from session A never contaminates knowledge states of a different student. Accuracy test (manual): Sample 50 AI-generated correctness evaluations and verify against human ratings.
+
+### 18. Completion Criteria
+
+Evidence block format defined and documented. Parser implemented and tested. Evidence writer with concept registry auto-creation operational. Integration with AI worker: evidence blocks are emitted and parsed. Session-end extraction job operational. All tests passing.
+
+**Classification: MUST HAVE NOW. The entire student model depends on evidence collection.**
 
 ---
 
-*This document constitutes the complete architectural blueprint for WaxPrep's persistent memory system, Stages 22 through 26. A senior AI engineer can implement all five stages using this document without additional research. Future stages (semantic search, assessment integration, parent portal, evaluation systems) extend this architecture without requiring redesign of any component specified above. The memory system this document describes is not the intelligence of WaxPrep — it is the infrastructure that gives the AI's intelligence continuity, context, and the evidence it needs to reason about students as individuals.*
+## STAGE 29 — MASTERY ESTIMATION (RWEA IMPLEMENTATION)
+
+### 1. Purpose
+
+Implement the Recency-Weighted Evidence Accumulator (RWEA) that transforms raw learning observations into calibrated mastery estimates for each (student, concept) pair. This is the computational heart of the student model.
+
+### 2. Educational Rationale
+
+A mastery estimate provides the AI with a calibrated signal about what a student has demonstrated across time. Without temporal integration, each interaction appears in isolation. The RWEA integrates evidence over time while applying forgetting decay — matching what cognitive science tells us about how knowledge consolidates and fades.
+
+### 3. Research Evidence
+
+The RWEA is inspired by and extends several research traditions:
+- BKT's Bayesian update mechanism (Corbett & Anderson, 1994) — the principle that each observation updates a belief about mastery.
+- PFA's separate success/failure tracking (Pavlik et al., 2009) — successes and failures carry different information.
+- Ebbinghaus-inspired forgetting decay (Murre & Dros, 2015) — knowledge fades without review.
+- Hint-penalized interpretation (Beck et al., 2008; Feng et al., 2009) — help-assisted responses are weaker evidence than unaided ones.
+
+### 4. Technical Architecture
+
+The RWEA computation function runs in two situations: immediately after a new observation is written (if real-time update is required), and in a background job that periodically recomputes states applying time decay even when no new observations have arrived.
+
+**The RWEA Computation Algorithm:**
+
+```
+function computeMastery(observations: LearningObservation[], conceptTag: string, now: Date):
+  
+  // Step 1: Filter to valid observations
+  validObs = observations.filter(
+    o => o.conceptTag == conceptTag 
+    && o.correctness != null  // Skip non-assessable types
+    && o.deletedAt == null
+  )
+  
+  if (validObs.length == 0):
+    return DEFAULT_STATE  // No assessable evidence yet
+  
+  // Step 2: Compute observation weights
+  // Weight = recency_weight × hint_penalty × extraction_confidence_weight
+  for each obs in validObs:
+    ageDays = (now - obs.observedAt) / (1000 * 86400)
+    
+    // Recency weight: more recent observations matter more
+    // Half-life configurable: MASTERY_RECENCY_HALFLIFE_DAYS (default: 30)
+    recencyWeight = exp(-0.693 / RECENCY_HALFLIFE * ageDays)
+    
+    // Hint penalty: responses after hints are weaker evidence
+    hintPenalty = 1.0 / (1.0 + (obs.hintLevel * HINT_PENALTY_COEFFICIENT))
+    // HINT_PENALTY_COEFFICIENT default: 0.3
+    // hintLevel=0: penalty=1.0 (no penalty)
+    // hintLevel=1: penalty=0.77 (slight reduction)
+    // hintLevel=2: penalty=0.63
+    // hintLevel=3: penalty=0.53
+    
+    // Extraction confidence: lower confidence evidence matters less
+    confidenceWeight = obs.extractionConfidence ?? 0.70  // Default if not recorded
+    
+    obs.weight = recencyWeight × hintPenalty × confidenceWeight
+  
+  // Step 3: Compute success and failure signals
+  successSignal = sum(obs.weight × obs.correctness for obs in validObs)
+  failureSignal = sum(obs.weight × (1 - obs.correctness) for obs in validObs)
+  
+  // Step 4: Compute net mastery via tanh transform
+  netSignal = (successSignal - failureSignal) / max(validObs.length, 1)
+  rawMastery = (tanh(netSignal × SENSITIVITY) + 1) / 2
+  // SENSITIVITY default: 2.0 — controls how sharply mastery responds to evidence
+  
+  // Step 5: Apply time-since-last-evidence decay to overall estimate
+  mostRecentObs = max(validObs, by: observedAt)
+  daysSinceLastEvidence = (now - mostRecentObs.observedAt) / (1000 * 86400)
+  temporalDecayFactor = exp(-DECAY_LAMBDA × daysSinceLastEvidence)
+  // DECAY_LAMBDA default: 0.015 → half-life ≈ 46 days
+  // This is the Ebbinghaus-inspired forgetting component
+  
+  // Apply decay toward the baseline (not toward zero)
+  MASTERY_BASELINE = 0.10  // Everyone starts with some base exposure to concepts
+  decayedMastery = MASTERY_BASELINE + (rawMastery - MASTERY_BASELINE) × temporalDecayFactor
+  
+  // Step 6: Clamp to [0.05, 0.95]
+  masteryEstimate = max(0.05, min(0.95, decayedMastery))
+  
+  // Step 7: Compute trend (compare recent 3 vs previous 3 assessable observations)
+  recent3 = validObs[-3:]
+  previous3 = validObs[-6:-3]
+  if (recent3.length >= 2 and previous3.length >= 2):
+    recentAvg = avg(o.correctness for o in recent3)
+    previousAvg = avg(o.correctness for o in previous3)
+    trend = if (recentAvg - previousAvg > 0.10): "improving"
+            elif (recentAvg - previousAvg < -0.10): "declining"
+            else: "stable"
+  else:
+    trend = "insufficient_data"
+  
+  // Step 8: Compute hint dependency
+  assessableWithHints = validObs.filter(o => o.hintLevel > 0)
+  hintDependency = assessableWithHints.length / max(validObs.length, 1)
+  
+  return {
+    masteryEstimate,
+    successSignal,
+    failureSignal,
+    recentTrend: trend,
+    hintDependency,
+    evidenceCount: validObs.length,
+    decayFactorApplied: temporalDecayFactor,
+    lastEvidenceAt: mostRecentObs.observedAt
+  }
+```
 
+All parameters (RECENCY_HALFLIFE, HINT_PENALTY_COEFFICIENT, SENSITIVITY, DECAY_LAMBDA, MASTERY_BASELINE) are environment configuration values, not hardcoded constants. They should be validated in the Stage 2 configuration schema and default to well-researched values.
 
+### 5. Data Model
 
+Reads from `learning_observations`. Writes to `knowledge_states`. No new tables.
 
-Open in app
-Sign up
+### 6. API/Interface Design
 
-Sign in
+```
+MasteryEngine {
+  computeState(waxId, conceptTag) → KnowledgeState
+  // Reads all valid observations, runs RWEA, returns computed state
+  
+  updateState(waxId, conceptTag) → KnowledgeState
+  // computeState + writes result to knowledge_states table
+  
+  scheduleDecayRecomputation(waxId) → void
+  // Queues a background job to recompute all states for this student
+  // with current time-decay (even without new observations)
+}
+```
 
-Search
+### 7. Background Decay Job
 
-Unknown user
-Press enter or click to view image in full size
+A weekly background job (added to the consolidation worker) recomputes mastery estimates for all students with evidence older than 3 days. This propagates time decay even when students are inactive. Without this job, a student who studied intensely a month ago would retain their pre-decay mastery estimate indefinitely. With it, the AI sees the natural forgetting that occurs over time.
 
-Brian Curry
+### 8. Dependencies
 
-Agentic Ai
+Depends on Stage 28 (evidence is available to compute from) and Stage 27 (schema for storing results).
 
-Artificial Intelligence
+### 9. Failure Modes
 
-The Memory Problem: Building Persistent, Queryable Memory for Production AI Agents
-Brian James Curry
-Brian James Curry
+Computation failure: Log the failure. The previous knowledge state remains unchanged. A failed computation does not corrupt existing data because we never delete states before successfully computing new ones.
 
-Follow
-19 min read
-·
-Jun 27, 2026
-
-Listen
-
-
-Share
-
-By Brian Curry | Vector1 Research
-
-“An agent without memory is not an agent. It is a very expensive stateless function.”
-
-Abstract
-The dominant approach to AI agent memory in 2026 is wrong — not wrong in intent, but wrong in architecture. Most production systems treat memory as a retrieval problem: embed interactions, store them in a vector database, retrieve semantically similar chunks at query time. This works well enough for simple factual recall but fails systematically on the problems that matter most in production: temporal reasoning across long horizons, multi-hop relationship traversal, memory consolidation and forgetting, cross-agent memory synchronization, and the management of contradictory or outdated information.
-
-This article presents a complete production architecture for agentic memory that goes beyond retrieval. Drawing on cognitive science’s taxonomy of memory types — episodic, semantic, procedural, and working — and building on the Memory-Node Encapsulation (MNE) data structure introduced in prior Vector1 Research work, we design a four-tier memory system that handles persistence, temporal indexing, consolidation, multi-scope access, and decay. We implement it with a concrete technology stack — Redis, Neo4j, Qdrant, and PostgreSQL — and provide full production code for the components that matter most. The result is a memory architecture that transforms agents from sophisticated stateless functions into systems capable of genuine long-horizon reasoning, relationship awareness, and accumulated expertise.
-
-Keywords: Agentic AI, Memory Architecture, Episodic Memory, Semantic Memory, Memory-Node Encapsulation, MNE, Knowledge Graphs, Vector Retrieval, Multi-Agent Systems, Production AI, LangChain, LangGraph
-
-I. Why Memory Is Still Broken
-The state of agentic memory in mid-2026 is best understood by what the benchmarks reveal. The LoCoMo benchmark — 1,540 questions covering single-hop, multi-hop, open-domain, and temporal recall — shows that current systems perform well on single-hop factual recall and poorly on almost everything else. The LongMemEval benchmark, which covers multi-session recall, knowledge updates, and temporal reasoning, reveals a consistent pattern: as conversation history grows, performance degrades faster than context grows. Most systems that score well on accuracy require 26,000+ tokens per query — not production-viable.
-
-Perhaps most damning: a December 2025 benchmark study found that a plain filesystem storing memories as markdown files scored 74% on standard memory tasks — beating dedicated vector-store memory libraries. When a folder of text files outperforms purpose-built memory infrastructure, the infrastructure has a design problem.
-
-The root cause is a category error. Most memory systems are built by ML engineers who think about memory as a retrieval problem. The relevant discipline is actually cognitive architecture — how biological systems store, consolidate, retrieve, and forget information over time. The engineering failure is treating all memory as semantically equivalent and retrieval as the only operation that matters.
-
-Human memory is not a vector database. It has structure that vector similarity cannot capture:
-
-Episodic memory is time-indexed and contextual — not just what happened but when, where, and what else was happening. “The client called angry about the Q3 report three weeks before the contract renewal” is an episodic memory. Its retrieval should be triggered by context (client, contract, report), not just semantic similarity to a query.
-
-Semantic memory is structured, relational, and atemporal — facts and relationships that persist independently of when they were learned. “Client A is in the healthcare vertical, headquartered in Boston, and reports to an IT steering committee” is semantic memory. It lives in a knowledge graph, not a vector index.
-
-Procedural memory is task-knowledge — how to accomplish specific types of work. “When a client escalates a billing issue, always involve the VP of Finance in the first response” is procedural memory. It is triggered by situation type, not content similarity.
-
-Working memory is the active context window — what the agent is currently reasoning about. It is fast, bounded, and temporary.
-
-These memory types require different storage backends, different retrieval strategies, different update mechanisms, and different forgetting curves. Building a production memory system means engineering all four — and the connections between them.
-
-II. The MNE Foundation
-Before the full architecture, the core data structure. Memory-Node Encapsulation (MNE), introduced in prior Vector1 Research work, provides the atomic unit on which the entire production memory system is built.
-
-An MNE node encapsulates a memory as a self-contained unit with four components:
-
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Optional
-from enum import Enum
-import uuid
-import numpy as np
-class MemoryType(Enum):
-    EPISODIC   = "episodic"    # time-indexed events and interactions
-    SEMANTIC   = "semantic"    # facts, relationships, domain knowledge
-    PROCEDURAL = "procedural"  # task patterns and behavioral rules
-    WORKING    = "working"     # active context, short-lived
-class MemoryStatus(Enum):
-    ACTIVE      = "active"
-    CONSOLIDATED = "consolidated"  # moved from episodic → semantic
-    DEPRECATED  = "deprecated"    # superseded by newer information
-    ARCHIVED    = "archived"      # retained but low retrieval priority
-@dataclass
-class MNENode:
-    """
-    Memory-Node Encapsulation: the atomic unit of agentic memory.
-    Each node represents a single memory — an event, a fact, a procedure,
-    or a working context item — with full provenance, temporal indexing,
-    relationship pointers, and a decay model.
-    The four components:
-    1. Content: the memory itself (text + structured metadata)
-    2. Temporal: when it was created, last accessed, and how it decays
-    3. Relational: connections to other nodes in the memory graph
-    4. Epistemic: confidence, source quality, and contradiction flags
-    """
-    # Identity
-    node_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    memory_type: MemoryType = MemoryType.EPISODIC
-    status: MemoryStatus = MemoryStatus.ACTIVE
-    # Content
-    content: str = ""                          # natural language representation
-    structured: dict[str, Any] = field(default_factory=dict)
-    embedding: Optional[np.ndarray] = None     # dense vector for similarity search
-    # Temporal
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_accessed: datetime = field(default_factory=datetime.utcnow)
-    access_count: int = 0
-    decay_rate: float = 0.01    # per day — episodic decays faster than semantic
-    # Scope
-    agent_id: Optional[str] = None    # which agent owns this memory
-    session_id: Optional[str] = None  # which session created it
-    user_id: Optional[str] = None     # which user it's associated with
-    org_id: Optional[str] = None      # organizational scope
-    # Relational
-    parent_nodes: list[str] = field(default_factory=list)   # generalized from
-    child_nodes: list[str] = field(default_factory=list)    # more specific than
-    related_nodes: list[str] = field(default_factory=list)  # associated with
-    # Epistemic
-    confidence: float = 1.0          # 0-1 confidence in this memory
-    source: str = ""                  # where this memory came from
-    contradicts: list[str] = field(default_factory=list)  # conflicting node IDs
-    def salience(self, current_time: datetime) -> float:
-        """
-        Computes current salience: how likely this memory is to be retrieved.
-        Combines recency, access frequency, and confidence.
-        Based on the Ebbinghaus forgetting curve, modified for digital systems:
-        S(t) = confidence * access_boost * exp(-decay_rate * days_since_access)
-        """
-        days_since_access = (
-            current_time - self.last_accessed
-        ).total_seconds() / 86400
-        # Access frequency boost (log scale — 10x accesses = 2x boost)
-        access_boost = 1.0 + 0.5 * np.log1p(self.access_count)
-        # Ebbinghaus-inspired decay
-        recency_factor = np.exp(-self.decay_rate * days_since_access)
-        return float(self.confidence * access_boost * recency_factor)
-    def access(self) -> None:
-        """Record an access — updates recency and count."""
-        self.last_accessed = datetime.utcnow()
-        self.access_count += 1
-The salience() method is the core of the MNE design. Rather than treating all memories as equally retrievable, salience implements a computational forgetting curve — recent, frequently accessed, high-confidence memories are retrieved first. Old, rarely accessed memories fade unless periodically reinforced. This mirrors the neurological basis of human long-term memory retention and solves a real production problem: memory bloat. Without a forgetting mechanism, agent memory grows indefinitely and retrieval quality degrades.
-
-The scope fields (agent_id, session_id, user_id, org_id) enable the multi-scope memory architecture that production systems require — the same memory infrastructure serving multiple agents, users, and organizational contexts simultaneously, with appropriate isolation.
-
-III. The Four-Tier Production Architecture
-The complete production architecture runs four storage tiers, each optimized for a specific memory type and access pattern:
-
-┌─────────────────────────────────────────────────────────────────────┐
-│  TIER 4: WORKING MEMORY                                             │
-│  Redis (in-memory key-value)                                        │
-│  Current session context · Active reasoning state · Tool results    │
-│  TTL: session lifetime (minutes to hours)                           │
-├─────────────────────────────────────────────────────────────────────┤
-│  TIER 3: EPISODIC MEMORY                                            │
-│  Qdrant (vector database) + PostgreSQL (temporal index)             │
-│  Interaction history · Events · Observations                        │
-│  TTL: weeks to months (salience-gated archival)                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  TIER 2: SEMANTIC MEMORY                                            │
-│  Neo4j (property graph)                                             │
-│  Entities · Relationships · Facts · Domain Knowledge                │
-│  TTL: indefinite (version-controlled updates)                       │
-├─────────────────────────────────────────────────────────────────────┤
-│  TIER 1: PROCEDURAL MEMORY                                          │
-│  PostgreSQL (structured rules) + Qdrant (semantic matching)         │
-│  Task patterns · Behavioral rules · Learned preferences            │
-│  TTL: indefinite (reinforcement-updated)                            │
-└─────────────────────────────────────────────────────────────────────┘
-3.1 Technology Choices and Rationale
-Redis for working memory — sub-millisecond access, TTL-native, supports complex data structures. The agent’s current reasoning state must be available in under 1ms; no other tier can meet this requirement.
-
-Qdrant for episodic and procedural semantic search — the best production vector database for filtered similarity search. The must and should filter clauses allow scope-constrained retrieval (only memories from this user, only from the last 30 days) while maintaining vector similarity ranking.
-
-PostgreSQL for temporal indexing and procedural rules — relational database with native timestamp indexing. Episodic memory is fundamentally a time-series problem; PostgreSQL’s partial indexes and timestamp range queries outperform vector databases for temporal access patterns.
-
-Neo4j for semantic memory — property graphs are the correct data model for entity-relationship knowledge. The question “what do I know about Client A and everyone they’re connected to” is a graph traversal, not a vector similarity search. Neo4j’s Cypher query language handles multi-hop relationship traversal that would require multiple round-trips in a vector database.
-
-3.2 The Memory Manager
-The MemoryManager is the single interface through which agents interact with all four tiers:
-
-import redis
-import asyncpg
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-from neo4j import AsyncGraphDatabase
-from sentence_transformers import SentenceTransformer
-from datetime import datetime, timedelta
-from typing import Optional
-import json
-import numpy as np
-class MemoryManager:
-    """
-    Single interface for all four memory tiers.
-    Handles:
-    - Write routing: which tier(s) receive a new memory
-    - Read orchestration: querying multiple tiers and merging results
-    - Consolidation: promoting episodic → semantic as patterns emerge
-    - Decay: archiving low-salience memories on a background schedule
-    - Scope enforcement: isolating memories by agent, user, session, org
-    Example:
-        manager = MemoryManager(config)
-        await manager.remember(node)                    # write
-        results = await manager.recall("client issue")  # read
-        await manager.consolidate()                     # background job
-    """
-    EMBEDDING_DIM = 768
-    def __init__(self, config: dict):
-        # Working memory: Redis
-        self.redis = redis.Redis(
-            host=config['redis']['host'],
-            port=config['redis']['port'],
-            decode_responses=False
-        )
-        # Episodic memory: Qdrant + PostgreSQL
-        self.qdrant = QdrantClient(
-            host=config['qdrant']['host'],
-            port=config['qdrant']['port']
-        )
-        self._ensure_collections()
-        # Semantic memory: Neo4j
-        self.neo4j = AsyncGraphDatabase.driver(
-            config['neo4j']['uri'],
-            auth=(config['neo4j']['user'], config['neo4j']['password'])
-        )
-        # Embedding model
-        self.embedder = SentenceTransformer('all-mpnet-base-v2')
-    # ── Write ──────────────────────────────────────────────────────────
-    async def remember(self, node: MNENode) -> str:
-        """
-        Write a memory node to the appropriate tier(s).
-        Routing logic:
-        - WORKING  → Redis only (TTL = session)
-        - EPISODIC → Qdrant (vector) + PostgreSQL (temporal)
-        - SEMANTIC → Neo4j (graph)
-        - PROCEDURAL → PostgreSQL (rules) + Qdrant (semantic match)
-        """
-        # Generate embedding if not already set
-        if node.embedding is None:
-            node.embedding = self.embedder.encode(node.content)
-        if node.memory_type == MemoryType.WORKING:
-            await self._write_working(node)
-        elif node.memory_type == MemoryType.EPISODIC:
-            await self._write_episodic(node)
-        elif node.memory_type == MemoryType.SEMANTIC:
-            await self._write_semantic(node)
-        elif node.memory_type == MemoryType.PROCEDURAL:
-            await self._write_procedural(node)
-        return node.node_id
-    async def _write_episodic(self, node: MNENode) -> None:
-        """Write episodic node to Qdrant + PostgreSQL."""
-        # Qdrant: vector search index
-        self.qdrant.upsert(
-            collection_name="episodic",
-            points=[PointStruct(
-                id=node.node_id,
-                vector=node.embedding.tolist(),
-                payload={
-                    "content": node.content,
-                    "agent_id": node.agent_id,
-                    "user_id": node.user_id,
-                    "session_id": node.session_id,
-                    "created_at": node.created_at.isoformat(),
-                    "confidence": node.confidence,
-                    "memory_type": node.memory_type.value,
-                    "structured": json.dumps(node.structured)
-                }
-            )]
-        )
-        # PostgreSQL: temporal index for time-range queries
-        async with self.pg_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO episodic_memories
-                    (node_id, agent_id, user_id, session_id, content,
-                     created_at, last_accessed, access_count, confidence,
-                     decay_rate, structured, status)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                ON CONFLICT (node_id) DO UPDATE SET
-                    last_accessed = EXCLUDED.last_accessed,
-                    access_count = episodic_memories.access_count + 1
-            """,
-                node.node_id, node.agent_id, node.user_id,
-                node.session_id, node.content, node.created_at,
-                node.last_accessed, node.access_count, node.confidence,
-                node.decay_rate, json.dumps(node.structured),
-                node.status.value
-            )
-    async def _write_semantic(self, node: MNENode) -> None:
-        """Write semantic node to Neo4j knowledge graph."""
-        entity_type = node.structured.get("entity_type", "Concept")
-        properties = {
-            "node_id": node.node_id,
-            "content": node.content,
-            "confidence": node.confidence,
-            "source": node.source,
-            "created_at": node.created_at.isoformat(),
-            **{k: v for k, v in node.structured.items()
-               if isinstance(v, (str, int, float, bool))}
-        }
-        async with self.neo4j.session() as session:
-            # Merge entity node
-            await session.run(f"""
-                MERGE (n:{entity_type} {{node_id: $node_id}})
-                SET n += $properties
-            """, node_id=node.node_id, properties=properties)
-            # Create relationships to related nodes
-            for related_id in node.related_nodes:
-                rel_type = node.structured.get("relationship_type", "RELATED_TO")
-                await session.run(f"""
-                    MATCH (a {{node_id: $source_id}})
-                    MATCH (b {{node_id: $target_id}})
-                    MERGE (a)-[r:{rel_type}]->(b)
-                    SET r.confidence = $confidence
-                        r.created_at = $created_at
-                """,
-                    source_id=node.node_id,
-                    target_id=related_id,
-                    confidence=node.confidence,
-                    created_at=node.created_at.isoformat()
-                )
-    # ── Read ───────────────────────────────────────────────────────────
-    async def recall(
-        self,
-        query: str,
-        memory_types: list[MemoryType] | None = None,
-        agent_id: str | None = None,
-        user_id: str | None = None,
-        session_id: str | None = None,
-        time_range_days: int | None = None,
-        top_k: int = 10,
-        min_salience: float = 0.1
-    ) -> list[MNENode]:
-        """
-        Retrieve memories relevant to a query, across all applicable tiers.
-        The recall pipeline:
-        1. Embed the query
-        2. Query each relevant tier with scope filters
-        3. Merge and deduplicate results
-        4. Re-rank by composite score: salience × semantic_similarity
-        5. Return top_k results, update access counts
-        """
-        query_embedding = self.embedder.encode(query)
-        memory_types = memory_types or [
-            MemoryType.EPISODIC,
-            MemoryType.SEMANTIC,
-            MemoryType.PROCEDURAL
-        ]
-        results = []
-        if MemoryType.EPISODIC in memory_types:
-            episodic = await self._recall_episodic(
-                query_embedding, agent_id, user_id, session_id,
-                time_range_days, top_k * 2
-            )
-            results.extend(episodic)
-        if MemoryType.SEMANTIC in memory_types:
-            semantic = await self._recall_semantic(
-                query, agent_id, top_k
-            )
-            results.extend(semantic)
-        if MemoryType.PROCEDURAL in memory_types:
-            procedural = await self._recall_procedural(
-                query_embedding, agent_id, top_k
-            )
-            results.extend(procedural)
-        # Deduplicate and rank
-        seen = set()
-        unique_results = []
-        for node in results:
-            if node.node_id not in seen:
-                seen.add(node.node_id)
-                unique_results.append(node)
-        # Composite ranking: salience × cosine similarity
-        now = datetime.utcnow()
-        scored = []
-        for node in unique_results:
-            if node.embedding is not None:
-                sim = float(np.dot(query_embedding, node.embedding) /
-                           (np.linalg.norm(query_embedding) *
-                            np.linalg.norm(node.embedding) + 1e-8))
-            else:
-                sim = 0.5
-            sal = node.salience(now)
-            if sal >= min_salience:
-                scored.append((node, sal * sim))
-        scored.sort(key=lambda x: x[1], reverse=True)
-        top_results = [node for node, _ in scored[:top_k]]
-        # Update access counts
-        for node in top_results:
-            node.access()
-            await self._update_access(node)
-        return top_results
-    async def _recall_episodic(
-        self,
-        query_embedding: np.ndarray,
-        agent_id: str | None,
-        user_id: str | None,
-        session_id: str | None,
-        time_range_days: int | None,
-        limit: int
-    ) -> list[MNENode]:
-        """Retrieve episodic memories from Qdrant with scope + time filters."""
-        must_conditions = []
-        if agent_id:
-            must_conditions.append(
-                FieldCondition(key="agent_id", match=MatchValue(value=agent_id))
-            )
-        if user_id:
-            must_conditions.append(
-                FieldCondition(key="user_id", match=MatchValue(value=user_id))
-            )
-        # Time range filter (last N days)
-        if time_range_days:
-            cutoff = (datetime.utcnow() - timedelta(days=time_range_days)).isoformat()
-            must_conditions.append(
-                FieldCondition(key="created_at", range={"gte": cutoff})
-            )
-        search_filter = Filter(must=must_conditions) if must_conditions else None
-        hits = self.qdrant.search(
-            collection_name="episodic",
-            query_vector=query_embedding.tolist(),
-            query_filter=search_filter,
-            limit=limit,
-            with_payload=True
-        )
-        nodes = []
-        for hit in hits:
-            payload = hit.payload
-            node = MNENode(
-                node_id=str(hit.id),
-                memory_type=MemoryType.EPISODIC,
-                content=payload.get("content", ""),
-                agent_id=payload.get("agent_id"),
-                user_id=payload.get("user_id"),
-                session_id=payload.get("session_id"),
-                confidence=payload.get("confidence", 1.0),
-                created_at=datetime.fromisoformat(
-                    payload.get("created_at", datetime.utcnow().isoformat())
-                ),
-                structured=json.loads(payload.get("structured", "{}")),
-            )
-            node.embedding = query_embedding  # approximate — recompute if needed
-            nodes.append(node)
-        return nodes
-    async def _recall_semantic(
-        self,
-        query: str,
-        agent_id: str | None,
-        limit: int
-    ) -> list[MNENode]:
-        """Retrieve semantic memories from Neo4j using full-text + relationship traversal."""
-        async with self.neo4j.session() as session:
-            result = await session.run("""
-                CALL db.index.fulltext.queryNodes('memory_content', $query)
-                YIELD node, score
-                WHERE ($agent_id IS NULL OR node.agent_id = $agent_id)
-                  AND node.confidence >= 0.5
-                RETURN node, score
-                ORDER BY score DESC
-                LIMIT $limit
-            """, query=query, agent_id=agent_id, limit=limit)
-            nodes = []
-            async for record in result:
-                props = dict(record["node"])
-                node = MNENode(
-                    node_id=props.get("node_id", ""),
-                    memory_type=MemoryType.SEMANTIC,
-                    content=props.get("content", ""),
-                    confidence=props.get("confidence", 1.0),
-                    source=props.get("source", ""),
-                    structured={k: v for k, v in props.items()
-                                if k not in ["node_id", "content",
-                                             "confidence", "source"]}
-                )
-                nodes.append(node)
-        return nodes
-IV. Memory Consolidation: Episodic → Semantic
-The most important — and most neglected — operation in production memory systems is consolidation: the process by which episodic memories (raw interaction history) are promoted into semantic memories (structured knowledge). Without consolidation, episodic memory grows without bound and semantic memory never reflects what the agent has actually learned.
-
-Get Brian James Curry’s stories in your inbox
-Join Medium for free to get updates from this writer.
-
-Enter your email
-Subscribe
-
-Remember me for faster sign in
-
-Biological consolidation happens during sleep. In production agents, it runs as a background job on a configurable schedule.
-
-class MemoryConsolidator:
-    """
-    Promotes episodic memories into semantic knowledge through pattern detection.
-    The consolidation pipeline:
-    1. Cluster recent episodic memories by semantic similarity
-    2. For each cluster above the density threshold, extract the common pattern
-    3. Check if the pattern contradicts existing semantic memories
-    4. If novel and consistent: create a new semantic MNE node
-    5. If contradictory: flag both nodes for human review or update semantic
-    6. Archive the consolidated episodic nodes (reduce salience, don't delete)
-    Runs as a scheduled background task — typically nightly or hourly
-    for high-volume agents.
-    """
-    def __init__(
-        self,
-        memory_manager: MemoryManager,
-        llm_client,
-        min_cluster_size: int = 3,
-        similarity_threshold: float = 0.75
-    ):
-        self.mm = memory_manager
-        self.llm = llm_client
-        self.min_cluster_size = min_cluster_size
-        self.sim_threshold = similarity_threshold
-    async def consolidate(
-        self,
-        agent_id: str,
-        lookback_days: int = 7
-    ) -> dict:
-        """
-        Run the consolidation pipeline for a specific agent.
-        Returns statistics on consolidation results.
-        """
-        # 1. Fetch recent episodic memories
-        recent_episodic = await self._fetch_recent_episodic(
-            agent_id, lookback_days
-        )
-        if len(recent_episodic) < self.min_cluster_size:
-            return {"status": "skipped", "reason": "insufficient episodic memories"}
-        # 2. Cluster by semantic similarity
-        clusters = self._cluster_episodic(recent_episodic)
-        consolidated_count = 0
-        contradiction_count = 0
-        for cluster in clusters:
-            if len(cluster) < self.min_cluster_size:
-                continue
-            # 3. Extract semantic pattern from cluster
-            pattern = await self._extract_pattern(cluster)
-            if not pattern:
-                continue
-            # 4. Check for contradictions with existing semantic memory
-            existing = await self.mm.recall(
-                query=pattern['content'],
-                memory_types=[MemoryType.SEMANTIC],
-                agent_id=agent_id,
-                top_k=3
-            )
-            contradiction = self._detect_contradiction(pattern, existing)
-            if contradiction:
-                # Flag for review rather than auto-updating
-                await self._flag_contradiction(pattern, contradiction)
-                contradiction_count += 1
-            else:
-                # Create new semantic memory node
-                semantic_node = MNENode(
-                    memory_type=MemoryType.SEMANTIC,
-                    content=pattern['content'],
-                    structured=pattern.get('structured', {}),
-                    confidence=pattern.get('confidence', 0.8),
-                    agent_id=agent_id,
-                    source="consolidation",
-                    parent_nodes=[n.node_id for n in cluster],
-                    decay_rate=0.001  # semantic memory decays very slowly
-                )
-                await self.mm.remember(semantic_node)
-                consolidated_count += 1
-                # Archive source episodic nodes
-                for episodic_node in cluster:
-                    episodic_node.status = MemoryStatus.CONSOLIDATED
-                    episodic_node.decay_rate *= 3.0  # accelerate decay post-consolidation
-                    await self.mm._update_status(episodic_node)
-        return {
-            "status": "completed",
-            "episodic_processed": len(recent_episodic),
-            "clusters_found": len(clusters),
-            "consolidated": consolidated_count,
-            "contradictions_flagged": contradiction_count
-        }
-    async def _extract_pattern(self, cluster: list[MNENode]) -> dict | None:
-        """
-        Use LLM to extract the common semantic pattern from a cluster
-        of episodic memories.
-        """
-        cluster_text = "\n\n".join([
-            f"[{i+1}] {node.content}" for i, node in enumerate(cluster[:10])
-        ])
-        response = await self.llm.complete(f"""
-        These are {len(cluster)} related interaction memories from an AI agent.
-        Extract the core semantic pattern or fact they collectively establish.
-        Memories:
-        {cluster_text}
-        Return JSON with:
-        - "content": a single clear statement of the pattern/fact
-        - "entity_type": the type of entity this is about (Person, Organization, Process, etc.)
-        - "confidence": 0-1 confidence that this is a reliable pattern
-        - "structured": key-value pairs of structured properties
-        Return null if no clear pattern emerges.
-        """)
-        try:
-            return json.loads(response.text)
-        except (json.JSONDecodeError, AttributeError):
-            return None
-    def _cluster_episodic(
-        self,
-        nodes: list[MNENode]
-    ) -> list[list[MNENode]]:
-        """Cluster episodic nodes by embedding similarity."""
-        if not nodes:
-            return []
-        embeddings = np.array([
-            node.embedding for node in nodes
-            if node.embedding is not None
-        ])
-        if len(embeddings) < 2:
-            return [nodes]
-        from sklearn.cluster import DBSCAN
-        clustering = DBSCAN(
-            eps=1 - self.sim_threshold,  # cosine distance threshold
-            min_samples=self.min_cluster_size,
-            metric='cosine'
-        ).fit(embeddings)
-        clusters = {}
-        for i, label in enumerate(clustering.labels_):
-            if label == -1:  # noise point
-                continue
-            clusters.setdefault(label, []).append(nodes[i])
-        return list(clusters.values())
-V. Multi-Agent Memory Synchronization
-Production deployments rarely involve a single agent. A typical enterprise deployment has a coordinator agent, several specialist agents, and potentially user-facing agents — all needing access to a shared memory space with appropriate isolation.
-
-The challenge is memory topology: which agents can read from which memory scopes, how writes propagate, and how conflicts between agents’ memories are resolved.
-
-class MultiAgentMemoryBus:
-    """
-    Coordinates memory access across a multi-agent system.
-    Memory visibility rules:
-    - org_id scope:     visible to all agents in the organization
-    - user_id scope:    visible to all agents serving this user
-    - agent_id scope:   visible only to the specific agent
-    - session_id scope: visible only within the current session
-    Write propagation:
-    - Agent writes to its own scope
-    - Consolidation promotes to user or org scope based on generality
-    - Coordinator agent can explicitly promote memories to wider scope
-    """
-    def __init__(self, memory_manager: MemoryManager):
-        self.mm = memory_manager
-        self._subscriptions: dict[str, list[callable]] = {}
-    async def broadcast_memory(
-        self,
-        node: MNENode,
-        target_scope: str,  # 'agent' | 'user' | 'org'
-        source_agent_id: str
-    ) -> None:
-        """
-        Broadcast a memory to a wider scope.
-        Used when a specialist agent learns something that all agents should know.
-        """
-        broadcast_node = MNENode(
-            memory_type=node.memory_type,
-            content=node.content,
-            structured=node.structured,
-            confidence=node.confidence * 0.9,  # slight confidence reduction on broadcast
-            source=f"broadcast_from:{source_agent_id}",
-            parent_nodes=[node.node_id],
-            decay_rate=node.decay_rate
-        )
-        if target_scope == 'org':
-            broadcast_node.org_id = node.org_id
-            broadcast_node.agent_id = None  # org-wide
-        elif target_scope == 'user':
-            broadcast_node.user_id = node.user_id
-            broadcast_node.agent_id = None  # user-wide
-        await self.mm.remember(broadcast_node)
-        # Notify subscribed agents
-        for callback in self._subscriptions.get(target_scope, []):
-            await callback(broadcast_node)
-    def subscribe(self, scope: str, callback: callable) -> None:
-        """Subscribe an agent to memory broadcasts at a given scope."""
-        self._subscriptions.setdefault(scope, []).append(callback)
-    async def resolve_conflict(
-        self,
-        node_a: MNENode,
-        node_b: MNENode,
-        resolution_strategy: str = "confidence_weighted"
-    ) -> MNENode:
-        """
-        Resolve conflicting memories from different agents.
-        Strategies:
-        - confidence_weighted: weight content by confidence scores
-        - recency: prefer the more recent memory
-        - authority: prefer the memory from the designated authoritative agent
-        """
-        if resolution_strategy == "confidence_weighted":
-            if node_a.confidence >= node_b.confidence:
-                winner = node_a
-                loser = node_b
-            else:
-                winner = node_b
-                loser = node_a
-            # Mark loser as deprecated but don't delete
-            loser.status = MemoryStatus.DEPRECATED
-            loser.contradicts.append(winner.node_id)
-            await self.mm._update_status(loser)
-            return winner
-        elif resolution_strategy == "recency":
-            return node_a if node_a.created_at > node_b.created_at else node_b
-        return node_a  # fallback
-VI. The Production Memory Interface: Connecting to LangChain / LangGraph
-The architecture above is framework-agnostic. Here is how to connect it to LangChain as a drop-in memory replacement:
-
-from langchain.memory import BaseMemory
-from langchain.schema import BaseMessage, HumanMessage, AIMessage
-from typing import Dict, List, Any
-class MNEMemory(BaseMemory):
-    """
-    LangChain-compatible memory class backed by the full MNE architecture.
-    Replaces LangChain's built-in memory types with the four-tier
-    MNE system. Drop-in replacement — existing LangChain chains and
-    agents work without modification.
-    Usage:
-        memory = MNEMemory(
-            memory_manager=manager,
-            agent_id="sales_agent_001",
-            user_id="user_abc",
-            session_id="session_xyz"
-        )
-        chain = LLMChain(llm=llm, prompt=prompt, memory=memory)
-    """
-    memory_manager: Any  # MemoryManager instance
-    agent_id: str
-    user_id: str
-    session_id: str
-    memory_key: str = "chat_history"
-    return_messages: bool = True
-    class Config:
-        arbitrary_types_allowed = True
-    @property
-    def memory_variables(self) -> List[str]:
-        return [self.memory_key]
-    def load_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Load relevant memories for the current input.
-        Called by LangChain before each LLM invocation.
-        """
-        import asyncio
-        query = inputs.get("input", inputs.get("question", ""))
-        # Run async recall in sync context
-        loop = asyncio.get_event_loop()
-        memories = loop.run_until_complete(
-            self.memory_manager.recall(
-                query=query,
-                agent_id=self.agent_id,
-                user_id=self.user_id,
-                session_id=self.session_id,
-                top_k=8
-            )
-        )
-        # Format as LangChain messages
-        messages = []
-        for mem in memories:
-            if mem.structured.get("role") == "human":
-                messages.append(HumanMessage(content=mem.content))
-            else:
-                messages.append(AIMessage(content=mem.content))
-        return {self.memory_key: messages}
-    def save_context(
-        self,
-        inputs: Dict[str, Any],
-        outputs: Dict[str, str]
-    ) -> None:
-        """
-        Save the current interaction to episodic memory.
-        Called by LangChain after each LLM invocation.
-        """
-        import asyncio
-        human_input = inputs.get("input", inputs.get("question", ""))
-        ai_output = outputs.get("output", outputs.get("response", ""))
-        loop = asyncio.get_event_loop()
-        # Save human turn
-        human_node = MNENode(
-            memory_type=MemoryType.EPISODIC,
-            content=human_input,
-            agent_id=self.agent_id,
-            user_id=self.user_id,
-            session_id=self.session_id,
-            structured={"role": "human"},
-            decay_rate=0.02
-        )
-        loop.run_until_complete(self.memory_manager.remember(human_node))
-        # Save AI turn
-        ai_node = MNENode(
-            memory_type=MemoryType.EPISODIC,
-            content=ai_output,
-            agent_id=self.agent_id,
-            user_id=self.user_id,
-            session_id=self.session_id,
-            structured={"role": "ai"},
-            decay_rate=0.02,
-            parent_nodes=[human_node.node_id]
-        )
-        loop.run_until_complete(self.memory_manager.remember(ai_node))
-    def clear(self) -> None:
-        """Clear working memory for the current session."""
-        self.memory_manager.redis.delete(f"working:{self.session_id}")
-VII. Production Considerations
-7.1 Memory Drift and Contradiction Management
-The most insidious production failure mode is memory drift: the agent’s semantic memory accumulates contradictory or outdated facts without a mechanism to detect or resolve them. An agent that knew a client’s budget was $50K last quarter but has never updated that fact will confidently provide wrong information.
-
-The solution is temporal versioning on all semantic memory nodes. Every update creates a new node version; the previous version is deprecated but retained for audit purposes. Contradiction detection runs as part of the write pipeline, not as a background job:
-
-async def write_with_contradiction_check(
-    self,
-    new_node: MNENode,
-    contradiction_threshold: float = 0.85
-) -> tuple[str, list[str]]:
-    """
-    Write a memory node, checking for contradictions first.
-    Returns the node_id and a list of contradicting node_ids if found.
-    """
-    # Find semantically similar existing memories
-    similar = await self.recall(
-        query=new_node.content,
-        memory_types=[new_node.memory_type],
-        agent_id=new_node.agent_id,
-        top_k=5,
-        min_salience=0.0  # check all, even low-salience
-    )
-    contradictions = []
-    for existing in similar:
-        if existing.embedding is not None and new_node.embedding is not None:
-            sim = float(np.dot(new_node.embedding, existing.embedding) /
-                       (np.linalg.norm(new_node.embedding) *
-                        np.linalg.norm(existing.embedding) + 1e-8))
-            # High similarity but different structured content = likely contradiction
-            if sim > contradiction_threshold:
-                if self._content_contradicts(new_node, existing):
-                    contradictions.append(existing.node_id)
-                    existing.contradicts.append(new_node.node_id)
-                    await self._update_status(existing)
-    new_node.contradicts = contradictions
-    node_id = await self.remember(new_node)
-    return node_id, contradictions
-7.2 Benchmarking Your Memory System
-Before shipping a production memory system, validate against the three standard benchmarks:
-
-LoCoMo (1,540 questions, single-hop, multi-hop, temporal): target >85% accuracy
-LongMemEval (500 questions, knowledge updates, multi-session): target >75% on knowledge update category specifically
-BEAM (1M and 10M token scale): measure latency and token consumption alongside accuracy
-The production viability test: if your system requires >5,000 tokens per query at P95, it is not production-viable regardless of accuracy. Optimize for the accuracy/token tradeoff explicitly.
-
-7.3 Deployment Architecture
-# docker-compose.yml for local development
-services:
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports: ["6333:6333", "6334:6334"]
-    volumes: ["./qdrant_storage:/qdrant/storage"]
-  neo4j:
-    image: neo4j:5-community
-    ports: ["7474:7474", "7687:7687"]
-    environment:
-      NEO4J_AUTH: neo4j/canary_memory
-      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
-    volumes: ["./neo4j_data:/data"]
-  postgres:
-    image: postgres:16-alpine
-    ports: ["5432:5432"]
-    environment:
-      POSTGRES_DB: agent_memory
-      POSTGRES_USER: agent
-      POSTGRES_PASSWORD: memory_pass
-    volumes: ["./pg_data:/var/lib/postgresql/data"]
-For production on Kubernetes, use managed services: Redis Cloud or Upstash for working memory, Qdrant Cloud for vector search, Neo4j AuraDB for the knowledge graph, and RDS PostgreSQL for temporal indexing.
-
-VIII. Where MNE Goes Next
-The architecture in this article represents the production layer of MNE. Several research directions extend it further:
-
-Multimodal memory — extending MNENode to hold image, audio, and structured data embeddings alongside text. MemVerse (December 2025) demonstrated viable multimodal episodic memory; the MNE structure supports this extension natively through the structured dict.
-
-Reinforcement-updated procedural memory — using agent outcome data to update the confidence weights of procedural memory nodes. Procedures that consistently produce good outcomes gain confidence; those associated with failures decay faster.
-
-Cross-agent memory transfer — formalizing the protocol for agents to share memory graphs. The multi-agent bus described in Section V is a starting point; a full transfer protocol would include memory provenance attestation, conflict resolution across organizational boundaries, and privacy-preserving memory sharing.
-
-Memory as fine-tuning signal — using high-salience, high-confidence MNE nodes as training signal for model fine-tuning. The memories an agent returns to most frequently represent the most important learned context; distilling that into model weights is a natural extension.
-
-Getting Started
-The MNE data structure and the MemoryManager described in this article are available as part of ongoing Vector1 Research open-source work:
-
-# Coming soon
-pip install mne-memory
-The full architecture is currently in active development. Design discussions, issue tracking, and contribution opportunities are available at github.com/Bodhi8/mne.
-
-For the original MNE specification and cognitive architecture foundations, see the Memory-Node Encapsulation paper on Medium.
-
-References
-Tulving, E. (1972). Episodic and semantic memory. In E. Tulving & W. Donaldson (Eds.), Organization of Memory. Academic Press. [Foundational memory taxonomy]
-Chhikara, P. et al. (2025). Mem0: Building production-ready AI agents with scalable long-term memory. ECAI 2025. arXiv:2504.19413.
-Xu, X. et al. (2025). A-Mem: Agentic memory for LLM agents. arXiv preprint.
-Hu, Y. et al. (2025). A survey on the memory mechanism of large language model based agents. ACM TOIS.
-Kinniment, M. et al. (2024). Evaluating language-model agents on realistic autonomous tasks. NeurIPS 2024.
-Lewis, P. et al. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. NeurIPS 2020. [RAG foundations]
-Jiang, D. et al. (2026). MAGMA: A multi-graph based agentic memory architecture. arXiv:2601.03236.
-Huo, Y. et al. (2026). AtomMem: Learnable dynamic agentic memory with atomic memory operation. arXiv:2601.08323.
-Vectorize.io. (2026, March). Best AI agent memory systems in 2026: 8 frameworks compared.
-Mem0.ai. (2026, May). State of AI agent memory 2026: Benchmarks, architectures, and production gaps.
-Ebbinghaus, H. (1885). Über das Gedächtnis [On Memory]. Duncker & Humblot. [Forgetting curve foundations]
-Curry, B. (2024). Memory-Node Encapsulation (MNE): A revolutionary data structure for artificial episodic memory. Vector1 Research / Medium.
-Curry, B. (2024–2026). Vector1 Research Series. Medium / vector1.ai.
-About the Author
-
-Brian Curry is a Kansas City–based AI researcher, data scientist, and founder of Vector1 Research, where he works at the intersection of cognitive AI architecture, production agent systems, and knowledge engineering. He is the creator of Memory-Node Encapsulation (MNE), Papilon, and MeaningFlow.
-
-Connect: Medium · LinkedIn · vector1.ai · brian@vector1.ai
-
-1
-
-
-Brian Curry
-
-Agentic Ai
-
-Artificial Intelligence
-
-1
-
-
-
-Brian James Curry
-
-Follow
-
-Written by Brian James Curry
-734 followers
-·
-18 following
-Senior AI & Data Science Leader. Founder, Vector1 Research. Causal inference, agent systems, and AI strategy for the enterprise.
+Observation data integrity: If observations are deleted (privacy request) between computation runs, the next computation naturally produces a lower mastery estimate. This is correct behavior.
 
+Configuration drift: If RWEA parameters change, recompute all states to ensure consistency. Store the configuration parameters used in each computation alongside the result (in the knowledge_states record or a separate computation audit table).
+
+### 10. Failure Mode — The Ceiling Problem
+
+A student who consistently performs well (mastery_estimate near 0.90) will not see further improvement from new correct responses. This is correct — a very high mastery estimate is evidence of mastery. But the time decay will gradually pull this down even if the student continues performing well. The AI should understand that a stable 0.85 mastery estimate maintained over 6 weeks represents genuine durable mastery, while a declining 0.75 estimate represents forgetting.
+
+**This is why the snapshot text (Section 5.7) includes `decayFactorApplied`** — so the AI can reason about how recently the evidence was acquired.
+
+### 11. Privacy Implications
+
+Mastery estimates are derived data — they contain no direct personal information beyond what is in the observations. However, they should be treated as sensitive educational behavioral data and subject to the same deletion and access rights as the underlying observations.
+
+**Classification: MUST HAVE NOW. This is the computational core of the student model.**
+
+---
+
+## STAGE 30 — MISCONCEPTION DETECTION
+
+### 1. Purpose
+
+Build the pipeline that identifies, records, and tracks systematic errors in student understanding — distinguishing stable misconceptions from random slips.
+
+### 2. Educational Rationale
+
+Repair Theory (Brown & VanLehn, 1980) established that student errors are often not random but systematic. A student with a Newton's Third Law misconception ("heavier objects push harder") will consistently produce errors in a predictable pattern. Identifying this pattern allows the AI to address the root cause rather than just correcting surface errors repeatedly.
+
+The evidence is clear: correcting misconceptions improves learning (Gusukuma et al., 2018; Kennedy et al., 2020). But infrastructures that try to detect misconceptions too early, from insufficient evidence, produce false positives that cause the AI to address problems the student doesn't actually have. The threshold for recording a confirmed misconception must be high enough to be meaningful.
+
+### 3. Research Evidence
+
+Sonkar et al. (2024) found that LLMs are significantly worse at identifying incorrect reasoning containing misconceptions than identifying correct reasoning. This means misconception detection is genuinely difficult, even for frontier models. A single LLM evaluation claiming "this looks like a misconception" should be treated with considerable skepticism.
+
+Ross & Andreas (2024) showed that adapting examples to students' misconceptions significantly improved tutoring effectiveness — validating that detecting misconceptions is worth the effort even if technically challenging.
+
+The appropriate architecture: infrastructure accumulates evidence of possible misconceptions across multiple observations. After sufficient evidence, a misconception record is created with `status = 'suspected'`. After further corroboration, it is promoted to `status = 'confirmed'`. The AI uses this evidence in its reasoning.
+
+### 4. Technical Architecture
+
+**Layer 1 — Inline flagging:** When the AI evaluates a student response and suspects a misconception, it flags `possible_misconception = true` in the evidence block and optionally provides a `misconception_tag` (e.g., "aristotelian_motion" or "light_travels_instantly").
+
+**Layer 2 — Pattern detection (background):** The session-end consolidation job analyzes all observations for a session. If two or more observations in the same concept area have `possible_misconception = true` with the same or similar misconception tag, a misconception record is created or updated.
+
+**Layer 3 — Confirmation:** After three or more sessions in which the same misconception pattern appears, the misconception is promoted to `confirmed`.
+
+**Layer 4 — Resolution detection:** When a student demonstrates clear correct understanding in a concept area where a misconception was previously confirmed, the misconception is marked `resolved` and the resolving observation ID is recorded.
+
+### 5. The Misconception Taxonomy Approach
+
+WaxPrep does NOT maintain a hardcoded list of allowed misconceptions. Misconceptions emerge from student behavior. The `misconception_tag` field is a free-text AI-generated label. However, a soft disambiguation mechanism exists: when a new misconception record is created, the session consolidation AI is asked to check whether the identified misconception matches any existing misconception records for this student (by reading existing misconception descriptions). If so, the new evidence supports the existing record rather than creating a new one.
+
+### 6. API/Interface Design
+
+```
+MisconceptionTracker {
+  recordPossibleMisconception(observation, tag, description) → void
+  // Called when an observation flags possible_misconception = true
+  
+  consolidateMisconceptions(waxId, sessionId) → MisconceptionUpdate[]
+  // Called by session-end job. Analyzes patterns, creates/updates records.
+  
+  confirmMisconception(misconceptionId) → Misconception
+  // Called when evidence crosses confirmation threshold
+  
+  resolveIfDemonstrated(waxId, conceptTag, correctObservation) → void
+  // Checks if an observation demonstrates resolution of a confirmed misconception
+  
+  getActiveMisconceptions(waxId) → Misconception[]
+  // Returns suspected + confirmed misconceptions, ordered by confidence
+}
+```
+
+### 7. Misconception Resolution — A Critical Design Decision
+
+A confirmed misconception is NOT automatically resolved by a single correct response. A student who has consistently shown a Newton's Third Law misconception might guess correctly once without having resolved the underlying error.
+
+**The resolution rule:** A misconception is marked `resolved` when the student demonstrates correct understanding in a clean assessment (no hints, high AI confidence, correct score ≥ 0.90) on a question that specifically targeted the misconception. The AI identifies when this has occurred as part of its inline evidence emission.
+
+This is a high bar. Correct behavior. A resolved misconception record remains in the database — it is not deleted. It informs the AI that this concept area was previously difficult and may warrant periodic revisiting to ensure the resolution is durable.
+
+### 8. Edge Cases
+
+Misconception has been resolved but partially resurfaces: evidence shows renewed confusion in the same area. This does not reopen the resolved misconception record. Instead, a new `suspected` record is created. The AI sees both the historical resolved misconception and the new suspected one — rich evidence for tailored instruction.
+
+Two different misconceptions in the same concept area: The student may have multiple misconceptions simultaneously. The schema supports multiple misconception records per `(wax_id, concept_tag)` combination. Each is a separate record. The AI receives all active misconceptions for a concept, not just one.
+
+**Classification: MUST HAVE architecture. SHOULD HAVE SOON for inline detection. FUTURE for full automated confirmation cycle.**
+
+---
+
+## STAGE 31 — LEARNING SIGNALS AND BEHAVIORAL ANALYTICS
+
+### 1. Purpose
+
+Collect and expose behavioral signals beyond mastery estimates — engagement patterns, hint dependency trends, response latency patterns, and self-efficacy signals — that give the AI richer evidence about how the student is learning, not just what they know.
+
+### 2. Educational Rationale
+
+Knowledge state alone is insufficient for intelligent tutoring. Self-determination theory (Deci & Ryan, 1985) establishes that motivation, autonomy, and engagement are as important as cognitive state. An AI tutor that knows a student has mastered a concept but is disengaged will produce different, better instruction than one that only knows about mastery.
+
+VanLehn (2011) identified that the best ITS systems model affect as well as cognition. Frustration, boredom, and confusion states produce different learning outcomes and require different instructional responses.
+
+### 3. Key Learning Signals for WaxPrep
+
+**Hint Dependency Signal:** As described in Section 1.6, hint dependency correlates negatively with learning outcomes. Track: hint use rate per concept per session, trend in hint use (increasing/decreasing), and whether correct responses consistently require hints.
+
+**Response Engagement Signal:** In WhatsApp, response length and response time give indirect engagement signals. Short responses that arrive immediately may indicate less cognitive effort. Long, thoughtful responses may indicate deeper engagement. These are weak signals individually but meaningful in aggregate.
+
+**Concept Revisit Signal:** When a student voluntarily returns to a previously covered concept, this signals either genuine curiosity (positive) or persistent confusion (context-dependent). The signal carries different meaning depending on the student's mastery estimate for the concept.
+
+**Self-Efficacy Signal:** Students occasionally express confidence or lack thereof directly ("I don't understand this at all" vs "OK I think I get it now"). Natural language captures these signals. The AI can emit them as evidence in the inline evidence block.
+
+**Session Completion Signal:** Did the student engage for the full session or abruptly stop responding? Repeated short sessions with abrupt ends may indicate frustration. The session record's `message_count` and `session_duration_minutes` contribute here.
+
+### 4. Technical Architecture
+
+Learning signals are written to the `learning_signals` table by:
+- The inline evidence block (AI emits signals alongside observations).
+- The session-end consolidation job.
+- A weekly background analytics job (for cross-session patterns).
+
+### 5. The Frustration Signal — Handling with Care
+
+Some signals (frustration, disengagement) are potentially sensitive. WaxPrep should report these to the AI as educational signals: "Student engagement signal: low over last 3 sessions. This may reflect difficulty, disengagement, or external factors." The AI should use this signal to be sensitive and supportive — asking how the student is doing, offering encouragement. Infrastructure should NEVER interpret frustration as grounds for reducing support or simplifying content without AI judgment.
+
+### 6. Privacy Implications
+
+Behavioral signals are inferred from interaction patterns. They are weaker evidence than direct assessment. They must be clearly labeled as inferred signals with confidence levels. The AI must be informed that these are signals, not facts.
+
+The self-efficacy signal is particularly sensitive — it reflects the student's emotional state. It should be stored briefly (as a session signal) and should not accumulate into a persistent "emotional profile." Long-term emotional state profiles are inappropriate for minors.
+
+**Classification: SHOULD HAVE SOON for core signals (hint dependency, session engagement). FUTURE for cross-session behavioral analytics. DO NOT BUILD YET for emotional state profiling.**
+
+---
+
+## STAGE 32 — FORMATIVE ASSESSMENT ARCHITECTURE
+
+### 1. Purpose
+
+Establish the framework for treating WaxPrep's conversational exchanges as continuous formative assessment — extracting structured learning evidence from what already happens in tutoring, rather than inserting artificial test moments.
+
+### 2. The Critical Misunderstanding to Avoid
+
+The original brief implies that Stage 32 builds "an assessment module" — something separate from tutoring. This is conceptually wrong and educationally counterproductive.
+
+Black & Wiliam (1998) established that formative assessment is most effective when it is integrated into instruction, not segregated from it. An AI tutor that stops and says "now it is time for an assessment" creates artificial breaks in the learning flow. Instead, every tutoring interaction IS a form of assessment. The AI naturally asks questions, evaluates responses, and calibrates its instruction. Stage 32's job is to make this implicit assessment explicit and recorded.
+
+**The Correct Understanding:** Stage 32 is not "add an assessment module." It is "ensure that the AI's natural tutoring interactions produce structured evidence that is captured by the evidence pipeline."
+
+### 3. Assessment Evidence Quality Hierarchy
+
+Different types of interactions produce different quality of evidence:
+
+**Tier 1 (Highest Quality):** The AI explicitly asks the student to solve a problem or answer a question. The student responds. The AI evaluates. This is the cleanest evidence — the question's relevance to the concept is clear, the expected response is defined, and the evaluation is directed.
+
+**Tier 2 (High Quality):** The AI asks the student to explain something in their own words. Self-explanation is one of the most reliable indicators of genuine understanding (Chi et al., 1989).
+
+**Tier 3 (Moderate Quality):** The AI corrects the student and the student demonstrates understanding of the correction.
+
+**Tier 4 (Lower Quality):** The AI observes an error the student made spontaneously. The error is evidence of a gap but the concept relevance may be ambiguous.
+
+**Tier 5 (Lowest Quality):** The student mentions a concept without being assessed on it.
+
+### 4. Assessment Without Assessment Anxiety
+
+A secondary consideration: Nigerian secondary students are under significant exam pressure (WAEC, JAMB, NECO). Assessment-like interactions that feel like tests may increase anxiety. WaxPrep's conversational approach naturally reduces this — the AI asks questions conversationally, not in formal test format. The infrastructure should never create interactions that feel like formal assessment unless the student explicitly wants exam practice.
+
+**The AI decides when to probe understanding. Infrastructure never triggers assessment moments.**
+
+### 5. Technical Architecture
+
+Stage 32's primary contribution is in the evidence type taxonomy (defined in Stage 28), the evidence quality weight table (used in the RWEA computation), and the system prompt guidance for evidence emission.
+
+**One new component:** A question generation guidance section in the system prompt (Stage 17 extension) that encourages the AI to periodically ask clarifying or probing questions — not as formal tests, but as natural conversational checks. The frequency and style of these questions remain entirely within the AI's judgment.
+
+### 6. What Stage 32 Does NOT Build
+
+It does not build a question bank. It does not build an item selection algorithm. It does not build a mastery masking threshold. It does not build an adaptive testing module. These are either inappropriate (hardcoded logic) or premature (require large amounts of calibration data that WaxPrep won't have at launch).
+
+**Classification: MUST HAVE conceptually (understanding what assessment means in WaxPrep's context). The technical implementation is mostly Stage 28's evidence taxonomy. No major new code required specifically for Stage 32.**
+
+---
+
+## STAGE 33 — STUDENT MODEL VERSIONING AND INTEGRITY
+
+### 1. Purpose
+
+Ensure the student model remains accurate, auditable, and recoverable under all failure conditions — including AI evaluation errors, duplicate events, out-of-order arrivals, and student data deletion requests.
+
+### 2. Technical Architecture
+
+**Model versioning:** Each knowledge state record has a `state_version` integer. Every recomputation increments the version. This provides a lightweight optimistic concurrency control mechanism: if two processes try to update the same knowledge state simultaneously, the one with the stale version loses and must retry.
+
+**Observation integrity:** The observation table is append-only. Each observation has a UUID that is the idempotency key. If the same message_id arrives twice (WhatsApp webhook retry), the second write produces an idempotency conflict. The constraint: `UNIQUE(wax_id, message_id, concept_tag, evidence_type)` prevents double-counting.
+
+**Recomputation audit:** Every recomputation of a knowledge state records: which observations were included, which configuration parameters were used, and the timestamp. This enables reproducibility — given the same inputs, the same output must be produced.
+
+**Cross-session consistency:** A student's knowledge state for a concept should be monotonically non-decreasing except for: explicit observation deletion (privacy request), time decay, or new contradicting evidence (lower correctness observations). If knowledge state unexpectedly drops without these causes, it is a bug. A consistency check job detects this.
+
+### 3. Handling AI Evaluation Errors
+
+The AI evaluates student responses to produce correctness scores. AI evaluations are probabilistic and sometimes wrong. A student who correctly explained Newton's Second Law might receive a low correctness score because the AI misunderstood the response.
+
+**The correct response: do not build an automated correction mechanism.** The AI's tutor function provides natural error correction — if the AI gives the wrong feedback, the student will push back and the conversation will correct it. The infrastructure faithfully records the AI's evaluation, including wrong ones. The `extraction_confidence` field captures uncertainty.
+
+**Future provision:** A human review queue for low-confidence evaluations where the mastery impact was large. This is a FUTURE stage — not now.
+
+**Practical mitigation at Stage 33:** Any observation with `extraction_confidence < 0.50` contributes to mastery computation with a weight proportional to its confidence. A very uncertain evaluation barely moves the mastery estimate. This naturally limits the damage from wrong AI evaluations.
+
+### 4. Student Data Deletion Protocol
+
+When a student or guardian exercises NDPA deletion rights:
+
+1. Mark all `learning_observations` as soft-deleted (`deleted_at = NOW()`).
+2. Mark all `misconceptions` as soft-deleted.
+3. Delete (or soft-delete) all `learning_signals`.
+4. Recompute all `knowledge_states` from the now-empty observation set (they all reset to defaults).
+5. Mark the student model snapshot as stale and regenerate it (the new snapshot reflects zero knowledge state data).
+6. Record the deletion event in the `compliance_deletions` table (audit trail).
+
+**The deletion must be complete within 72 hours** of the request to comply with reasonable NDPA interpretation. The background job processes the deletion and sends a confirmation when complete.
+
+### 5. Model Version Changes
+
+When the RWEA algorithm parameters change (SENSITIVITY, DECAY_LAMBDA, RECENCY_HALFLIFE), existing knowledge states become inconsistent with the new computation. Resolution options:
+
+**Option A:** Flag all states as stale and recompute lazily (on next access). This is the simplest approach and is correct for small parameter changes.
+
+**Option B:** Run a migration that recomputes all states with the new parameters. For large parameter changes, this is necessary for consistency.
+
+**Option C:** Store the algorithm version alongside each knowledge state. Support both old and new computation for a transition period. This is over-engineering for Stage 33.
+
+**RECOMMENDATION: Option A for Stage 33. Document when major parameter changes require Option B.**
+
+**Classification: MUST HAVE for integrity basics (idempotency, version tracking). SHOULD HAVE SOON for full deletion protocol and recomputation audit.**
+
+---
+
+## STAGE 34 — STUDENT MODEL TO AI INTERFACE
+
+### 1. Purpose
+
+Design and implement the interface that translates the student model (structured data in PostgreSQL) into readable, interpretable, token-budget-aware context that the AI receives before each tutoring turn.
+
+### 2. Why This Is the Most Important Stage
+
+The student model is useless if the AI cannot read it. The context interface is the moment when engineering meets pedagogy — the moment where years of designed infrastructure becomes something an AI can actually use to teach better.
+
+This stage has two sub-tasks: first, specify what the interface should look like (this should be done before any other stage to guide what is built); second, implement it (this is the final integration).
+
+### 3. The Context Interface Design Principles
+
+**Principle 1: Evidence, not decisions.** The context must communicate raw evidence and statistics, not recommendations. "mastery_estimate: 0.63, trend: declining" is correct. "Student needs remediation" is wrong infrastructure.
+
+**Principle 2: Uncertainty is information.** When evidence is sparse or confidence is low, the context must communicate this explicitly. "3 observations (2 correct), confidence: low" is more useful than "mastery: 0.67" without context.
+
+**Principle 3: Recency is information.** The age of evidence matters enormously given forgetting curves. "Last evidence: 47 days ago" changes the meaning of "mastery: 0.80" significantly.
+
+**Principle 4: Token budgeted.** The student model context must respect the token budget slot established in Stage 25. Default slot: 500 tokens. This is enough for meaningful information about 5–8 concepts with misconceptions and signals.
+
+**Principle 5: Prioritized.** Not all concepts should be presented. Only concepts with evidence above a minimum threshold. Only the most recently active concepts. Active misconceptions always shown.
+
+### 4. The Complete Context Format
+
+```
+[Student Learning Model — use as evidence for teaching, not as prescriptions]
+
+Concept Knowledge (based on {N} observations over {period}):
+• newton_second_law: mastery 0.71 | improving | 8 observations | 2 days ago | hint dependency: low
+• quadratic_equations: mastery 0.52 | declining | 5 observations | 12 days ago | hint dependency: moderate
+• chemical_balancing: mastery 0.30 | insufficient data | 2 observations | 3 days ago
+• photosynthesis: mastery 0.83 | stable | 14 observations | 3 weeks ago [stale — decay applied]
+
+Active Misconceptions:
+• newton_second_law: [CONFIRMED — 4 sessions] "Student believes F=ma means force IS 
+  the product, not that it EQUALS the product. Consistently omits identifying direction."
+• quadratic_equations: [SUSPECTED — 2 sessions] "Possible confusion about discriminant 
+  interpretation — conflates sign with solution count."
+
+Session Behavioral Signals:
+• Current session: 6 interactions, 2 hint requests, engagement: active
+• Cross-session hint dependency: stable-low (good sign)
+
+Evidence Quality Note:
+• Most knowledge estimates based on 2–8 observations. Treat as preliminary signals.
+  Do not treat mastery estimates as definitive. Use your judgment.
+```
+
+This format is:
+- Unambiguous about what the numbers mean.
+- Honest about uncertainty.
+- Clear that these are signals for AI reasoning, not instructions.
+- Token-efficient (approximately 200 tokens for this example).
+- Prioritized (most relevant concepts surfaced).
+
+### 5. Concept Selection Algorithm
+
+Which concepts appear in the context:
+
+Priority 1: All concepts with active misconceptions (regardless of recency).
+Priority 2: Concepts that appeared in the most recent session.
+Priority 3: Concepts with highest evidence count (most studied).
+Priority 4: Concepts with most recent evidence (active engagement).
+
+Token budget enforcement: include concepts in priority order until the token budget is filled. Never exceed the budget by adding a concept that doesn't fit.
+
+**Important:** Do not include concepts with zero observations for this student. Absence of evidence should not clutter the context. The AI can request information about any concept by asking "does this student have any evidence for concept X?" through a future tool call — not by having all concepts listed.
+
+### 6. The Snapshot System
+
+Because computing the full student model context from scratch on every AI request would be expensive (reading and aggregating all observations, misconceptions, and signals), a snapshot system pre-computes and caches the context.
+
+The snapshot is regenerated:
+- At session end (background job) — so the next session starts with an up-to-date snapshot.
+- When new observations arrive that significantly change a concept's mastery estimate (change > 0.10).
+- On demand, if the snapshot is older than `STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS` (configurable, default: 6 hours).
+
+The snapshot is a pre-formatted string stored in `student_model_snapshots.snapshot_text` plus the structured `snapshot_json` for programmatic access. The context assembly system reads the snapshot and injects it into the AI request's memory slot.
+
+### 7. The get_student_model API
+
+The primary programmatic interface to the student model:
+
+```
+get_student_model(waxId, options?):
+  options: {
+    conceptTags?: string[]    // Only these concepts (for targeted queries)
+    tokenBudget?: number      // Max tokens to use (default: STUDENT_MODEL_TOKEN_BUDGET)
+    includeMisconceptions?: boolean  // Default: true
+    includeSignals?: boolean  // Default: true
+    freshness?: 'cached' | 'fresh'  // Default: 'cached' (use snapshot if available)
+  }
+→ StudentModelContext {
+    formattedText: string      // Ready for AI context injection
+    conceptStates: KnowledgeState[]
+    activeMisconceptions: Misconception[]
+    signals: LearningSignal[]
+    metadata: {
+      totalTokensEstimated: number
+      conceptsIncluded: number
+      conceptsOmitted: number  // How many were left out due to token budget
+      snapshotAge: string      // "2 hours ago" or "fresh"
+      evidenceQualityNote: string
+    }
+  }
+```
+
+### 8. Dependencies
+
+Depends on all preceding stages: 27 (schema), 28 (evidence), 29 (mastery computation), 30 (misconceptions), 31 (signals), 33 (integrity). This stage is the integration point.
+
+### 9. Cold Start — The New Student Problem
+
+A new student (zero observations) produces an empty student model. The context injection must handle this gracefully: inject nothing in the student model slot (do not inject "mastery unknown for all concepts" — that wastes tokens with no information). The AI already knows how to handle a new student through its system prompt.
+
+After the first session, the snapshot is generated with the first observations. From the second session onwards, the AI sees the student model.
+
+### 10. Completion Criteria
+
+`get_student_model()` returns formatted context within 20ms (using cached snapshot). Snapshot generation job runs correctly at session end. Context includes evidence quality notes and uncertainty markers. Token budget respected. Cross-student isolation verified. Active misconceptions always included when present. Cold-start (new student) handled gracefully without errors.
+
+**Classification: The specification (what the interface should look like) is MUST HAVE NOW. The implementation is the final integration task.**
+
+---
+
+# PART SEVEN: THE AI vs DETERMINISTIC RESPONSIBILITY MATRIX
+
+## 6. Complete Responsibility Matrix
+
+| Task | Infrastructure | AI | Hybrid |
+|---|---|---|---|
+| Recording an observation | ✓ | | |
+| Assigning a timestamp | ✓ | | |
+| WaxID isolation enforcement | ✓ | | |
+| Evidence format validation | ✓ | | |
+| RWEA mastery computation | ✓ | | |
+| Temporal decay application | ✓ | | |
+| Evidence deduplication | ✓ | | |
+| Concept registry lookup | ✓ | | |
+| Snapshot generation trigger | ✓ | | |
+| Token budget enforcement | ✓ | | |
+| Database transaction management | ✓ | | |
+| Deletion authorization | ✓ | | |
+| Audit trail maintenance | ✓ | | |
+| Evaluating student response correctness | | | ✓ |
+| Identifying concept relevance in turn | | | ✓ |
+| Detecting possible misconceptions | | | ✓ |
+| Computing extraction confidence | | | ✓ |
+| Emitting evidence block | | ✓ | |
+| Promoting suspected to confirmed misconception | | | ✓ |
+| Deciding whether to explain or assess | | ✓ | |
+| Deciding when to ask a probing question | | ✓ | |
+| Deciding how to respond to a misconception | | ✓ | |
+| Deciding whether to revisit a previous topic | | ✓ | |
+| Deciding when a student has mastered a concept | | ✓ | |
+| Calibrating instruction to mastery level | | ✓ | |
+| Interpreting hint dependency signal | | ✓ | |
+| Interpreting engagement signals | | ✓ | |
+| Choosing examples based on student profile | | ✓ | |
+| Deciding to give encouragement | | ✓ | |
+| Detecting a student is struggling emotionally | | ✓ | |
+| Choosing to revisit a resolved misconception | | ✓ | |
+
+**Hybrid tasks explained:**
+
+Evidence extraction (correctness, concept identification, misconception flagging) is hybrid because the AI produces the evaluation, but infrastructure validates, persists, and structures it. The AI is the intelligence; infrastructure is the recording and computation layer.
+
+Misconception confirmation is hybrid because infrastructure counts the corroborating evidence across sessions and applies the threshold rule, but the initial identification of each misconception instance is AI-driven.
+
+---
+
+# PART EIGHT: THE EVENT/EVIDENCE MODEL
+
+## 7. Why Not Full Event Sourcing
+
+Full event sourcing — where every state change is represented as an immutable event and current state is derived by replaying events — would look like this:
+
+```
+StudentAnswerSubmitted → EvidenceExtracted → ConceptIdentified → 
+MasteryComputed → MisconceptionFlagged → SnapshotUpdated
+```
+
+This approach provides complete auditability and the ability to replay history with different algorithms. However, it adds significant operational complexity: event store management, replay infrastructure, event schema versioning, eventual consistency management.
+
+For WaxPrep at Stages 27–34, full event sourcing is over-engineering. The simpler append-only evidence model provides most of the benefits (auditability, recomputation from ground truth) with a fraction of the complexity.
+
+**The adopted approach: append-only evidence log + derived materialized state.** Observations are immutable. States are always derivable from observations. This is the core event-sourcing insight applied minimally.
+
+What this buys: if the RWEA algorithm changes, all knowledge states can be recomputed from the observation log. If an observation is found erroneous, soft-delete it and recompute. If a student requests deletion, soft-delete their observations and recompute. The audit trail is complete. The complexity is manageable.
+
+---
+
+# PART NINE: THE PRIVACY AND SECURITY MODEL
+
+## 8. Complete Privacy Architecture
+
+### 8.1 Data Classification
+
+| Data Type | Privacy Level | Retention | Deletion |
+|---|---|---|---|
+| Learning observations | Sensitive educational data | 24 months active | Soft delete + recompute |
+| Knowledge states | Derived sensitive | Derived from observations | Recompute from deleted observations |
+| Misconceptions | Sensitive educational data | 24 months | Soft delete |
+| Learning signals | Transient behavioral | 12 months | Delete |
+| Concept registry | Non-personal | Permanent | Archive only |
+| Student model snapshots | Derived, cached | 7 days (auto-expire) | Invalidate |
+
+### 8.2 Separation of Concerns — Identity vs Learning Data
+
+A critical privacy principle: identity data (WaxID, phone hash, profile facts from Stage 23) must never be JOINed with learning data (observations, misconceptions, knowledge states) in the same query for display to the AI unless the join is explicitly authorized for a specific purpose.
+
+The AI context assembly pipeline receives two separate slots: the memory context (identity, profile, episodes) and the student model context (learning data). These are constructed from separate queries and injected separately. Never merge them at the database level.
+
+### 8.3 The Separation of Behavioral Data from Personal Profiles
+
+The NDPA and general privacy-by-design principles require that behavioral educational data be treated separately from personal identity data. WaxPrep's architecture supports this by design: the student model tables reference only WaxID (pseudonymous), never raw phone numbers or personal names. The learning model does not know the student's name, only their WaxID.
+
+### 8.4 NDPA Compliance Checklist
+
+- Lawful basis for processing learning data: legitimate interest (providing educational service); consent from student (and parent for minors).
+- Data minimization: observations contain correctness metadata, not verbatim student responses.
+- Purpose limitation: learning data used only for tutoring, never for marketing or institutional reporting without additional consent.
+- Retention periods: defined and enforced by automatic deletion jobs.
+- Right to access: `get_student_model()` with a student-facing report format can satisfy data subject access requests.
+- Right to erasure: complete soft-delete protocol implemented (Stage 33).
+- Automated decision-making: knowledge states inform AI reasoning, but no automated decision with legal or significant effect is made solely on this basis. The AI makes pedagogical decisions; infrastructure does not make decisions that affect the student's rights.
+
+---
+
+# PART TEN: FAILURE HANDLING
+
+## 9. Complete Failure and Corruption Scenarios
+
+### 9.1 AI Evaluation Is Wrong
+
+Detection: low `extraction_confidence` on the observation. Student pushback in the conversation (the AI misunderstood, the student corrects it). Later correctly answered questions contradicting a previous incorrect assessment.
+
+Response: Wrong evaluations are a normal part of the system. They do not corrupt the model catastrophically because the RWEA weights by confidence and accumulates many observations. A single wrong evaluation has minimal impact on a mastery estimate based on 10 observations. Log wrong evaluations (those with confidence < 0.50) for future quality review.
+
+Recovery: If a systematic evaluation error is discovered (a prompt bug caused all evaluations in a period to score too low), identify the affected observations by their `evaluator_prompt_version`, soft-delete them, and recompute affected knowledge states.
+
+### 9.2 Duplicate Events Arrive
+
+Detection: Idempotency constraint `UNIQUE(wax_id, message_id, concept_tag, evidence_type)` triggers a conflict.
+
+Response: Log the duplicate. Ignore the second write. Return the existing observation ID. Do not count the duplicate in evidence_count.
+
+### 9.3 Messages Arrive Out of Order
+
+Response: Evidence is processed in order of `observed_at` timestamp (using the WhatsApp message timestamp, not the processing timestamp). If an observation arrives late (network delay), it is inserted with its correct `observed_at` timestamp. The knowledge state recomputation processes all observations sorted by timestamp, so out-of-order arrivals are automatically handled correctly.
+
+### 9.4 Database Write Fails
+
+Response: The BullMQ job fails and is retried (Stage 5 infrastructure). The retry will attempt to write the observation again. The idempotency constraint ensures the second write does not duplicate the first if the first actually succeeded but the confirmation was lost (network failure after write but before response).
+
+### 9.5 BKT/RWEA Calculation Fails
+
+Response: Log the failure. The previous knowledge state remains unchanged. The observation is persisted regardless of computation failure — evidence is never lost due to computation errors. The computation is retried as a background job.
+
+### 9.6 Evidence Is Malformed
+
+Response: The evidence validator rejects the malformed observation before it reaches the database. Log the rejection. The tutoring continues uninterrupted. A malformed evidence record should be surfaced to the monitoring system for investigation.
+
+### 9.7 Concept Tags Are Invalid
+
+Response: If the concept tag is not in the registry, create a new registry entry automatically (`created_by = 'ai_extraction'`). Do not reject the observation. New concepts are expected and welcome. A concept registry review queue surfaces AI-created concepts for human curation.
+
+### 9.8 AI Returns Contradictory Evidence
+
+Response: Contradictory evidence (two observations in the same turn with different correctness scores for the same concept) is a data quality problem. The validator checks for this and rejects the duplicate. Only one observation per `(wax_id, message_id, concept_tag, evidence_type)` tuple is accepted.
+
+### 9.9 Assessment Is Deleted
+
+Response: Soft-delete the observation. Mark the associated knowledge state as stale. Queue a recomputation. The knowledge state adjusts automatically to reflect the removed evidence.
+
+### 9.10 Student Requests Deletion
+
+Response: Complete soft-delete protocol (Stage 33). Knowledge states recomputed from empty observation set. Snapshots invalidated. All within 72 hours.
+
+### 9.11 Student Changes Identity/Account
+
+Response: If a student's WaxID changes (phone number change), the new WaxID has zero learning history. The old WaxID's learning history remains but is no longer accessible through the new phone number. There is no automatic transfer of learning history between WaxIDs — this would require authentication that WaxPrep doesn't implement. This is a known limitation of a phone-number-based identity system.
+
+### 9.12 Model Version Changes
+
+Response: Described in Stage 33. Parameter changes trigger a background recomputation of all affected states.
+
+---
+
+# PART ELEVEN: THE TESTING STRATEGY
+
+## 10. Complete Testing Specification
+
+### 10.1 Unit Tests — Mathematical/Model Calculations
+
+- RWEA computation: given a fixed set of observations, output is deterministic and equals hand-computed values.
+- RWEA temporal decay: mastery estimate decreases as days_since_last_evidence increases. After 46 days (one half-life), mastery has decayed by approximately 50% toward baseline.
+- RWEA with hint penalty: correct response with hint_level=2 contributes less than correct response with hint_level=0.
+- RWEA with extraction confidence: low-confidence observation contributes less than high-confidence observation.
+- RWEA trend detection: three improving observations followed by three declining observations produces `trend = 'declining'`.
+- RWEA clamping: mastery never goes below 0.05 or above 0.95.
+- RWEA with zero observations: returns default state without errors.
+- Misconception confidence increase: additional corroborating observations increase misconception confidence.
+
+### 10.2 Integration Tests — Evidence to State Updates
+
+- Write observation → knowledge state is recomputed automatically.
+- Write three observations for same concept → evidence_count is 3, not 1.
+- Write observation → snapshot is marked stale.
+- Delete observation → knowledge state recomputed without that observation.
+- Write misconception-flagged observation × 2 → misconception record created at `status = 'suspected'`.
+- Write misconception-flagged observation × 4 across 3 sessions → misconception promoted to `status = 'confirmed'`.
+
+### 10.3 Property-Based Tests
+
+- Probabilities remain in [0.05, 0.95] for any valid input.
+- Evidence cannot belong to another student (WaxID isolation is absolute).
+- Duplicate events do not double-count (idempotency).
+- Soft-deleting all observations for a student produces default knowledge states.
+- Knowledge states are always derivable (reproducible) from observations with the same algorithm parameters.
+
+### 10.4 Regression Tests
+
+- Existing student states must not change unexpectedly after a deployment. Run state consistency checks before and after each deployment: store checksums of all knowledge states before, verify checksums match after (unless a recomputation was intentional).
+
+### 10.5 AI Evaluation Reliability Tests
+
+- Sample 50 AI-generated correctness evaluations per quarter.
+- Two human raters independently score the same student responses.
+- Compute inter-rater reliability (Krippendorff's alpha). Target: >0.4.
+- Compute AI-human agreement. Target: >85% within ±0.2 of human average.
+- Alert if agreement drops below threshold (prompt regression may have occurred).
+
+### 10.6 Data Quality Tests
+
+- No knowledge state has `evidence_count = 0` with `mastery_estimate > 0.10`.
+- No observation has `correctness < 0` or `correctness > 1`.
+- No observation has a future `observed_at` timestamp.
+- All observations reference a valid WaxID.
+- All observations reference a valid `session_id`.
+
+### 10.7 Security/Isolation Tests
+
+- `StudentLearningAccess("student-A").getKnowledgeStates()` never returns data with `wax_id = "student-B"`.
+- An observation write with `wax_id = "student-B"` attempted through a `StudentLearningAccess("student-A")` instance is rejected.
+- Knowledge state query with no WaxID parameter fails (not returns all students' data).
+
+### 10.8 Educational Validity Tests (FUTURE)
+
+When sufficient data is available, verify that the RWEA mastery estimate correlates with actual student outcomes (performance on later questions, session performance trajectories, self-reported exam preparation confidence). This is a statistical analysis, not a unit test. It requires at least 100 students with meaningful history.
+
+---
+
+# PART TWELVE: OBSERVABILITY
+
+## 11. Complete Monitoring Strategy
+
+### 11.1 Engineering Observability (Operational Metrics)
+
+Log these as Pino structured log entries:
+- `evidence.written` — count per evidence_type
+- `evidence.rejected` — count per rejection reason
+- `evidence.duplicate` — count (idempotency conflicts)
+- `knowledge_state.updated` — count per update trigger (inline vs session-end vs decay)
+- `knowledge_state.computed_latency_ms` — time to compute one state
+- `misconception.created` — count per status
+- `misconception.promoted` — count (suspected → confirmed)
+- `misconception.resolved` — count
+- `snapshot.generated` — count
+- `snapshot.cache_hit_rate` — what fraction of context assembly uses cached snapshot
+- `student_model.query_latency_ms` — time to assemble student model context
+- `student_model.tokens_estimated` — token budget usage
+
+### 11.2 Data Quality Metrics
+
+Weekly automated job computes and logs:
+- `evidence.extraction_confidence_p25`, `p50`, `p75` — confidence distribution
+- `evidence.average_per_student` — how many observations per student
+- `knowledge_state.mastery_distribution` — histogram of mastery estimates across all active students
+- `misconception.active_per_student` — average active misconceptions per student
+- `knowledge_state.stale_rate` — what fraction of states haven't been updated in 30+ days
+
+### 11.3 Educational Validity Metrics (Distinguish from Engineering)
+
+These are NOT engineering metrics. They require educational analysis, not just dashboards:
+- Do students with higher mastery estimates perform better in subsequent sessions?
+- Does the RWEA's trend prediction correlate with actual performance change?
+- Are misconception records accurate (do the described errors match what the AI reports when the student makes mistakes)?
+
+These questions require human review and statistical analysis. They cannot be automated. They should be reviewed quarterly once sufficient data exists.
+
+### 11.4 Alerting Thresholds
+
+Alert at ERROR level:
+- Evidence extraction failure rate > 10% in any hour.
+- Knowledge state computation failure rate > 1% in any hour.
+- Cross-student isolation violation detected (any occurrence).
+- RWEA computation producing values outside [0.05, 0.95].
+
+Alert at WARN level:
+- Evidence extraction confidence p25 drops below 0.60 (prompt quality issue).
+- Average evidence count per student < 2 after 3 sessions (evidence is not being collected).
+- Snapshot cache hit rate < 70% (snapshot generation may be too slow).
+
+---
+
+# PART THIRTEEN: THE REVISED DATABASE MODEL — FINAL SPECIFICATION
+
+## 12. Complete Migration Specification
+
+**Migration 006_learning_intelligence_foundation.sql:**
+Creates `concepts`, `learning_observations`, `knowledge_states`, `misconceptions`, `learning_signals`, `student_model_snapshots` tables with all specified indexes, constraints, and foreign keys.
+
+**Migration 007_learning_signals_indexes.sql:**
+Additional performance indexes added after load testing reveals query patterns.
+
+**Migration 008_misconception_timeline.sql:**
+Adds `confirmed_at` and `resolution_timeline` tracking to `misconceptions` table once the confirmation cycle is implemented.
+
+**Rule: Never alter an existing migration file. Add new migrations for schema changes.**
+
+---
+
+# PART FOURTEEN: THE DEVELOPER-READY SPECIFICATION
+
+## 13. Instructions for the Coding Agent
+
+**READ THIS SECTION BEFORE WRITING ANY CODE.**
+
+### 13.1 Repository Pre-Inspection Required
+
+Before implementing any code in this specification:
+
+1. Inspect the complete repository structure. Understand which directories exist, which modules are already implemented, and how the existing codebase is organized.
+2. Read all project documentation including README, CONTRIBUTING, and any architecture documents.
+3. Read all existing database migrations in order. Understand the current schema completely before writing any new migrations.
+4. Identify the existing `StudentMemoryAccess` class (from Stage 22) and the `ContextAssembler` (from Stages 18/25). All new learning intelligence access must follow the same patterns.
+5. Identify the existing BullMQ worker architecture (from Stage 6). The consolidation worker (from Stage 24) must be extended, not duplicated.
+6. Identify the existing configuration system (from Stage 2). All new configuration parameters must be added to the existing Zod schema, not a new configuration system.
+7. Do not create duplicate systems. Do not create a second database access layer. Do not create a second logger. Do not create a second queue.
+
+### 13.2 What to Build
+
+**Files/Modules Required:**
+
+```
+src/learning/
+├── ConceptRegistry.js         — Concept lookup, creation, alias resolution
+├── EvidenceExtractor.js       — Parses AI evidence blocks from tutor responses
+├── EvidenceValidator.js       — Validates evidence format before writing
+├── EvidenceWriter.js          — Writes validated observations to database
+├── MasteryEngine.js           — RWEA computation function
+├── MasteryUpdater.js          — Orchestrates observation write → state update
+├── MisconceptionTracker.js    — Creates/updates/resolves misconception records
+├── SignalCollector.js         — Writes behavioral signals
+├── StudentModelAssembler.js   — Assembles AI context from knowledge states
+├── StudentModelSnapshot.js    — Snapshot generation and caching
+└── StudentLearningAccess.js   — Primary access class (requires waxId at construction)
+
+infra/migrations/
+├── 006_learning_intelligence_foundation.sql  — Complete schema as specified
+
+src/workers/
+└── consolidationWorker.js     — EXTEND (do not duplicate) to add:
+    - Session-end evidence extraction job
+    - Evidence decay recomputation job (weekly)
+    - Misconception consolidation job
+
+src/ai/context/
+└── ContextAssembler.js        — EXTEND to add student model context slot
+```
+
+### 13.3 Database Structures Required
+
+Apply migration `006_learning_intelligence_foundation.sql` which creates:
+- `concepts` table with `canonical_tag` unique index
+- `learning_observations` table with append-only behavior and all specified indexes
+- `knowledge_states` table with `UNIQUE(wax_id, concept_tag)` constraint
+- `misconceptions` table with lifecycle status tracking
+- `learning_signals` table
+- `student_model_snapshots` table
+
+### 13.4 Configuration Parameters Required
+
+Add to existing Zod configuration schema (inspect existing config/index.js):
+
+```javascript
+// Learning Intelligence Configuration
+MASTERY_RECENCY_HALFLIFE_DAYS: z.coerce.number().min(7).max(180).default(30),
+MASTERY_DECAY_LAMBDA: z.coerce.number().min(0.001).max(0.1).default(0.015),
+MASTERY_HINT_PENALTY_COEFFICIENT: z.coerce.number().min(0).max(1).default(0.3),
+MASTERY_SENSITIVITY: z.coerce.number().min(0.5).max(5).default(2.0),
+MASTERY_BASELINE: z.coerce.number().min(0).max(0.3).default(0.10),
+MISCONCEPTION_SUSPECTED_THRESHOLD: z.coerce.number().int().min(1).max(5).default(2),
+MISCONCEPTION_CONFIRMED_THRESHOLD: z.coerce.number().int().min(2).max(10).default(4),
+STUDENT_MODEL_TOKEN_BUDGET: z.coerce.number().int().min(100).max(1000).default(500),
+STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS: z.coerce.number().min(1).max(48).default(6),
+STUDENT_MODEL_MIN_EVIDENCE_TO_INCLUDE: z.coerce.number().int().min(1).max(5).default(1),
+EVIDENCE_MIN_EXTRACTION_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.50),
+```
+
+### 13.5 APIs Required
+
+Primary access:
+- `StudentLearningAccess(waxId)` — main access class, all learning intelligence reads and writes
+- `get_student_model(waxId, options)` — AI context assembly (returns formatted text + structured data)
+- `get_knowledge_state(waxId, conceptTag)` — single concept state
+- `get_active_misconceptions(waxId)` — active misconception records
+- `write_observation(observation)` — evidence write (called from evidence extraction pipeline)
+
+### 13.6 Logic Required
+
+- RWEA computation function (pure function, no database access, fully testable in isolation)
+- Temporal decay function (pure function)
+- Evidence block parser (parse AI-emitted JSON evidence from tutoring responses)
+- Evidence validator (type checking, range checking, WaxID consistency)
+- Concept registry lookup-or-create
+- Misconception consolidation logic (pattern detection across session observations)
+- Knowledge state snapshot generation
+- AI context formatter (produces the formatted text shown in Section 4)
+
+### 13.7 What Must NOT Be Built
+
+Do not build:
+- A mastery threshold that triggers any automatic pedagogical action.
+- A hardcoded list of allowed concepts.
+- A prerequisite enforcement system.
+- A question bank or item database.
+- An adaptive testing algorithm that selects questions.
+- A DKT or other deep learning model.
+- A separate analytics database.
+- A full event sourcing system.
+- Emotional state persistent profiling.
+- Any rule that says "if mastery < X, do Y."
+
+### 13.8 Tests That Must Pass Before Completion
+
+The following tests must pass before Stage 27–34 is considered complete:
+
+1. RWEA determinism test: Same inputs always produce same mastery output.
+2. RWEA decay test: mastery_estimate decreases monotonically as days_since_last_evidence increases.
+3. RWEA bounds test: Output always in [0.05, 0.95] for any input.
+4. WaxID isolation test: Knowledge states from one student never appear in another student's query.
+5. Evidence idempotency test: Writing the same observation twice produces one record, not two.
+6. Observation immutability test: No UPDATE is allowed on `learning_observations` rows (only soft-delete).
+7. Knowledge state derivability test: Deleting all observations and recomputing produces default state.
+8. Student model context test: Formatted context is under STUDENT_MODEL_TOKEN_BUDGET tokens.
+9. Cold start test: New student (zero observations) produces valid empty context without errors.
+10. Misconception lifecycle test: Observation × 2 flagged → suspected; × 4 across 3 sessions → confirmed.
+11. Deletion test: Soft-deleting all observations for a student and recomputing produces default knowledge states across all concepts.
+12. Cross-student isolation security test: Accessing one student's learning data through another student's access class returns zero results.
+
+### 13.9 Post-Implementation Audit Required
+
+After implementation, the coding agent must:
+
+1. Query: `SELECT COUNT(*) FROM learning_observations WHERE wax_id IS NULL` — must be 0.
+2. Query: `SELECT COUNT(*) FROM knowledge_states WHERE mastery_estimate > 0.95 OR mastery_estimate < 0.05` — must be 0.
+3. Run reconciliation: Recompute all knowledge states from observations and verify they match stored states.
+4. Verify: The student model context for a test student with known observations matches hand-computed RWEA values.
+5. Confirm: The context assembler includes the student model slot in AI requests and the token budget is respected.
+6. Confirm: The consolidation worker has been extended with the new session-end evidence extraction job.
+7. Confirm: All new configuration parameters appear in `.env.example` with default values and comments.
+
+---
+
+# PART FIFTEEN: RISKS AND UNRESOLVED QUESTIONS
+
+## 14. Known Risks
+
+**Risk 1: Evidence sparsity**
+WaxPrep's conversational format does not produce structured item responses on every turn. Many turns will produce zero evidence observations (greetings, navigation, explanation-delivery turns without student response). With sparse evidence, mastery estimates will be based on very few observations for any given concept. The RWEA's explicit evidence_count field and the "treat as preliminary signals" language in the context format mitigate this — but the AI must be explicitly informed that low evidence_count means low reliability. RECOMMENDATION: In the context format, show confidence level (LOW/MEDIUM/HIGH) alongside mastery estimate, based on evidence_count thresholds (< 3 = LOW, 3–7 = MEDIUM, > 7 = HIGH).
+
+**Risk 2: AI evaluation calibration**
+The correctness scores assigned by the AI (0.0–1.0) may be systematically biased. If the tutoring AI tends to give high correctness scores to students who express themselves confidently but imprecisely, the mastery estimates will be inflated. Resolution requires the quarterly AI evaluation reliability review described in Section 10.5.
+
+**Risk 3: Concept fragmentation**
+The AI may refer to the same concept using different tags in different sessions: "newton_second_law" and "newtons_second_law" and "N2L" are all the same concept. Without disambiguation, the student model fragments. MITIGATION: The concept registry alias system is designed for this. The session-end consolidation AI should be explicitly prompted to check for alias matches before creating new concept registry entries.
+
+**Risk 4: RWEA parameters require calibration**
+The default parameters (SENSITIVITY=2.0, DECAY_LAMBDA=0.015, HINT_PENALTY_COEFFICIENT=0.3) are research-informed estimates but have not been calibrated against WaxPrep's specific student population. Different parameters may produce better-calibrated mastery estimates for Nigerian secondary students specifically. RECOMMENDATION: Log actual student performance on later questions alongside their mastery estimate at the time of the question. This enables retrospective calibration analysis after 3–6 months of production data.
+
+**Risk 5: AI prompt leakage into evidence**
+If the tutoring AI emits evidence blocks based on its general impressions rather than specific observations, the evidence will reflect the AI's prior beliefs rather than the student's actual demonstrated knowledge. This is a form of confirmation bias embedded in evidence collection. MITIGATION: The evidence emission prompt must explicitly require the AI to base evaluations on specific student statements or responses, not on general impressions.
+
+## 15. Unresolved Questions
+
+- What is the minimum observation count before the mastery estimate is reliable enough to include in AI context? (Research suggests 3–5. WaxPrep may need to tune this.)
+- Should hint dependency be normalized across students (what is high for one student may be low for another) or reported as absolute? (Absolute is simpler; relative requires population data.)
+- How frequently should the decay recomputation job run? (Daily is ideal for accuracy; weekly is sufficient for most use cases. Configurable.)
+- What is the right misconception confirmation threshold for WaxPrep's specific student population? (2+2 = suspected+confirmed is conservative; 1+3 may be more appropriate for a conversational context with sparse data.)
+- Should the student model context include concepts the student has NOT yet encountered? (Almost certainly not — absence of evidence is not informative for the AI. But the AI might benefit from knowing what concepts are commonly associated with the student's current topic. FUTURE question.)
+
+---
+
+# PART SIXTEEN: FINAL IMPLEMENTATION ORDER AND CLASSIFICATION
+
+## 16. Definitive Implementation Sequence
+
+```
+STEP 1 (MUST HAVE NOW): Stage 34 specification
+  — Write the AI context format specification
+  — This defines what all subsequent stages are building toward
+  — No code. Just a specification document and the API contract.
+
+STEP 2 (MUST HAVE NOW): Stage 28 — Evidence Collection Pipeline
+  — Evidence taxonomy definition
+  — Evidence block format specification (AI emission format)
+  — Evidence validator and writer
+  — Concept registry with auto-creation
+  — Evidence parser integrated into AI response processing
+  
+STEP 3 (MUST HAVE NOW): Stage 27 — Student Model Schema
+  — Migration 006_learning_intelligence_foundation.sql
+  — StudentLearningAccess class (basic read/write)
+  — Configuration parameters added to Stage 2 schema
+  
+STEP 4 (MUST HAVE NOW): Stage 29 — Mastery Estimation
+  — RWEA computation function (pure, fully tested)
+  — MasteryUpdater (observation write → state update)
+  — Background decay recomputation job (weekly)
+  
+STEP 5 (SHOULD HAVE SOON): Stage 30 — Misconception Detection
+  — Inline misconception flagging (via evidence block)
+  — Session-end consolidation for misconception pattern detection
+  — Misconception lifecycle management
+  
+STEP 6 (SHOULD HAVE SOON): Stage 31 — Learning Signals
+  — Hint dependency tracking
+  — Session engagement signal
+  — Cross-session behavioral signals (weekly consolidation)
+  
+STEP 7 (SHOULD HAVE SOON): Stage 32 — Formative Assessment Architecture
+  — System prompt extension for natural probing questions
+  — Evidence quality hierarchy implemented in RWEA weights
+  — Assessment evidence classification in evidence taxonomy
+  
+STEP 8 (SHOULD HAVE SOON): Stage 33 — Integrity and Versioning
+  — Knowledge state version tracking
+  — Complete deletion protocol
+  — Evidence idempotency enforcement
+  — Recomputation audit logging
+  
+STEP 9 (MUST HAVE for launch): Stage 34 — Implementation
+  — get_student_model() API
+  — Snapshot generation and caching
+  — ContextAssembler extended with student model slot
+  — Complete integration with AI request pipeline
+```
+
+## 17. Complete Classification Table
+
+| Feature | Classification |
+|---|---|
+| Concept registry (minimal: tag + name) | MUST HAVE NOW |
+| Evidence taxonomy definition | MUST HAVE NOW |
+| Learning observations table | MUST HAVE NOW |
+| Knowledge states table | MUST HAVE NOW |
+| RWEA computation function | MUST HAVE NOW |
+| Evidence block parser | MUST HAVE NOW |
+| StudentLearningAccess class | MUST HAVE NOW |
+| Stage 34 context format specification | MUST HAVE NOW |
+| Inline evidence extraction from AI responses | MUST HAVE NOW |
+| Misconception flagging in evidence | MUST HAVE NOW |
+| Session-end evidence extraction (background job) | SHOULD HAVE SOON |
+| Misconception pattern detection and confirmation | SHOULD HAVE SOON |
+| Learning signals (hint dependency, engagement) | SHOULD HAVE SOON |
+| Temporal decay recomputation job | SHOULD HAVE SOON |
+| Complete deletion protocol | SHOULD HAVE SOON |
+| Student model snapshot system | SHOULD HAVE SOON |
+| get_student_model() API full implementation | MUST HAVE for launch |
+| Concept alias disambiguation system | SHOULD HAVE SOON |
+| Evidence quality monitoring | SHOULD HAVE SOON |
+| Knowledge state consistency checks | SHOULD HAVE SOON |
+| Cross-session behavioral analytics | FUTURE |
+| Concept relationship graph | FUTURE |
+| IRT difficulty calibration | FUTURE |
+| Evidence calibration analysis | FUTURE |
+| Educational validity statistical analysis | FUTURE |
+| Semantic concept similarity (embedding-based dedup) | FUTURE |
+| Parent/teacher access to learning data | FUTURE |
+| Item bank and adaptive testing | DO NOT BUILD YET |
+| DKT or any deep learning KT model | DO NOT BUILD YET |
+| Mastery threshold → automatic action rules | DO NOT BUILD YET |
+| Hardcoded curriculum with prerequisite enforcement | DO NOT BUILD YET |
+| Full event sourcing system | DO NOT BUILD YET |
+| Emotional state persistent profiling | DO NOT BUILD YET |
+| Population-level predictive analytics dashboard | DO NOT BUILD YET |
+
+---
+
+# COMPLETION CRITERIA — EVERY STAGE
+
+**Stage 27 Complete:**
+Migration 006 applied successfully. All six tables created. All indexes created. StudentLearningAccess reads and writes tested. WaxID isolation verified. Configuration parameters in Zod schema.
+
+**Stage 28 Complete:**
+Evidence taxonomy documented. Evidence block parser extracts all evidence types correctly. Evidence validator rejects malformed evidence without breaking tutoring. Concept registry auto-creation tested. Inline evidence extraction integrated into AI response processing pipeline. Idempotency test passing.
+
+**Stage 29 Complete:**
+RWEA function is pure and deterministic. All 8 RWEA unit tests pass. Decay behavior verified (half-life matches configuration). Mastery updates correctly after each observation write. Background decay job running weekly without errors.
+
+**Stage 30 Complete:**
+Misconception flagging in evidence blocks working. Session-end consolidation creates misconception records from flagged observations. Suspected → Confirmed promotion tested. Resolution detection working. Active misconceptions returnable via API.
+
+**Stage 31 Complete:**
+Hint dependency computed per session and per concept. Engagement signal computed at session end. Cross-session behavioral signals computed weekly. All signals stored in learning_signals with correct wax_id scoping.
+
+**Stage 32 Complete:**
+Evidence quality weight table implemented in RWEA. System prompt extended with natural probing question guidance. No new isolated "assessment module" — assessment is evidence extraction from tutoring.
+
+**Stage 33 Complete:**
+Knowledge state version tracking implemented. Idempotency constraint on observations enforced. Complete deletion protocol implemented and tested. Recomputation audit records created on every computation. All 12 specified tests pass.
+
+**Stage 34 Complete:**
+get_student_model() returns formatted context under token budget. Snapshot generation and caching working. Context assembler includes student model slot in AI requests. Cold start (zero observations) handled gracefully. Active misconceptions always included. Student model context visible in AI request logs. Educational context received by AI during tutoring is verified as meaningful and complete.
+
+---
+
+*This specification is the complete technical and educational foundation for WaxPrep's Learning Intelligence Infrastructure. Every architectural decision is grounded in peer-reviewed educational research or established production engineering practice. The specification is ready for implementation by a senior developer or capable AI coding agent following the repository pre-inspection instructions in Section 13.1.*
