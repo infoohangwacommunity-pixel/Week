@@ -15,6 +15,7 @@ import { IORedis } from 'bullmq';
 import config from '../config/index.js';
 import { logger, extractTraceContext } from '../observability/index.js';
 import { runWithContext } from 'node:async_hooks';
+import { setupDecayWorker } from './decayRecomputation.js';
 
 /**
  * Setup all workers
@@ -128,6 +129,10 @@ export async function setupWorkers({ redis, pool }) {
   });
 
   logger.info({ concurrency: config.QUEUE_WORKER_CONCURRENCY }, 'AI worker setup complete (Stages 18-21)');
+
+  // Setup mastery decay recomputation worker (Stage 29)
+  const decayWorker = await setupDecayWorker({ redis, pool });
+  workers.push(decayWorker);
 
   return workers;
 }

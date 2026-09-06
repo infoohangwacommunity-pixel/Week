@@ -18,6 +18,7 @@
  */
 
 import config from '../config/index.js';
+import { MasteryEngine } from '../mastery/MasteryEngine.js';
 
 /**
  * EvidenceWriter handles writing learning observations to the database.
@@ -27,8 +28,9 @@ export class EvidenceWriter {
    * Create an EvidenceWriter
    * @param {import('../db/index.js').Pool} pool - Database connection pool
    */
-  constructor(pool) {
+  constructor(pool, masteryEngine = null) {
     this.pool = pool;
+    this.masteryEngine = masteryEngine || new MasteryEngine(pool);
   }
 
   /**
@@ -158,6 +160,14 @@ export class EvidenceWriter {
 
     // Mark knowledge state as stale
     await this._markKnowledgeStateStale(wax_id, concept_tag);
+
+    // Update knowledge state with new evidence (Stage 29)
+    try {
+      await this.masteryEngine.updateState(wax_id, concept_tag);
+    } catch (error) {
+      // Log but don't fail the observation write
+      console.error('Failed to update knowledge state:', error);
+    }
 
     return { id: result.rows[0].id, conceptCreated, duplicate: false };
   }

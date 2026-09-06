@@ -6,6 +6,7 @@ import { pool } from '../db/index.js';
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { MemoryWriter } from '../memory/index.js';
+import SessionEvidenceExtractor from './sessionEvidenceExtractor.js';
 
 export class SessionSummarizer {
   constructor(aiService) {
@@ -30,6 +31,24 @@ export class SessionSummarizer {
         const memoryWriter = new MemoryWriter(session.wax_id);
         await memoryWriter.writeExtractedFacts(extractedFacts, session.id);
       }
+
+      // Extract learning evidence (Stage 28)
+      try {
+        const evidenceExtractor = new SessionEvidenceExtractor(pool, this.aiService);
+        const evidenceResults = await evidenceExtractor.extractEvidenceFromSession({
+          session_id: session.id,
+          wax_id: session.wax_id,
+          messages,
+          summarizedFacts: extractedFacts,
+        });
+        log.info({
+          observationsWritten: evidenceResults.observationsWritten,
+          misconceptionsDetected: evidenceResults.misconceptionsDetected,
+        }, 'Learning evidence extracted');
+      } catch (error) {
+        log.warn({ error: error.message }, 'Failed to extract learning evidence');
+      }
+
       log.info({ episodeId: episode.id, summaryLength: summary.summary_text.length }, 'Session summarized successfully');
       return { success: true, episode, extractedFacts };
     } catch (error) {

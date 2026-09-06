@@ -17,6 +17,7 @@
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { MemoryRetriever } from '../memory/index.js';
+import { createLearningModule } from '../learning/index.js';
 
 /**
  * Token budget slot constants (from research document)
@@ -32,6 +33,7 @@ const TOKEN_SLOTS = Object.freeze({
   FUTURE_RETRIEVAL: 1200,
   CURRENT_MESSAGE: 400,
   SAFETY_MARGIN: 500,
+  STUDENT_MODEL: config.STUDENT_MODEL_TOKEN_BUDGET || 500,
 });
 
 /**
@@ -67,6 +69,20 @@ export class ContextAssembler {
         currentMessage,
       });
 
+      // Get student model context (Stage 34)
+      const learningModule = createLearningModule(this.db.pool);
+      let studentModelContext = null;
+      try {
+        const modelContext = await learningModule.contextInterface.getStudentModelContext(waxId, {
+          tokenBudget: TOKEN_SLOTS.STUDENT_MODEL,
+          includeMisconceptions: true,
+          includeSignals: true,
+        });
+        studentModelContext = modelContext;
+      } catch (error) {
+        log.warn({ error: error.message }, 'Failed to load student model context');
+      }
+
       // Build messages array
       const messages = this.buildMessagesArray({
         conversationHistory,
@@ -81,7 +97,7 @@ export class ContextAssembler {
 
       // Log assembly metadata
       const assemblyTime = Date.now() - assemblyStart;
-      log.info({
+      const logData = {
         messageCount: contextWithBudget.messages.length,
         estimatedTokens: contextWithBudget.estimatedTokens,
         historyTurnCount: contextWithBudget.historyTurnCount,
@@ -90,7 +106,23 @@ export class ContextAssembler {
         truncatedTurns: contextWithBudget.truncatedTurns,
         tokenUsage: contextWithBudget.tokenUsage,
         assemblyTimeMs: assemblyTime,
-      }, 'Context assembled successfully');
+      };
+
+      if (studentModelContext) {
+        logData.studentModelTokens = studentModelContext.metadata.totalTokensEstimated;
+        logData.studentModelConcepts = studentModelContext.metadata.conceptsIncluded;
+      }
+
+      log.info(logData, 'Context assembled successfully');
+
+      // Add student model context to return value if available
+      if (studentModelContext) {
+        contextWithBudget.studentModelContext = {
+          formattedText: studentModelContext.formattedText,
+          snapshotJson: studentModelContext.snapshotJson,
+          metadata: studentModelContext.metadata,
+        };
+      }
 
       return contextWithBudget;
     } catch (error) {
