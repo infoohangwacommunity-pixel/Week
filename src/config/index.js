@@ -113,6 +113,60 @@ const configSchema = z.object({
   AI_FALLBACK_PROVIDER: z.string().optional(),
   AI_ORCHESTRATOR_TIMEOUT_MS: z.coerce.number().int().min(1000).default(60000),
 
+  // --- TOOLS (Stage 35) ---
+  TOOL_MAX_CALLS_PER_SESSION: z.coerce.number().int().min(1).default(20),
+  TOOL_WEB_SEARCH_MAX_PER_SESSION: z.coerce.number().int().min(1).default(5),
+  TOOL_MEMORY_SEARCH_MAX_PER_SESSION: z.coerce.number().int().min(1).default(10),
+  TOOL_MEMORY_WRITE_MAX_PER_SESSION: z.coerce.number().int().min(1).default(10),
+  TOOL_ASSESSMENT_GENERATE_MAX_PER_SESSION: z.coerce.number().int().min(1).default(5),
+  TOOL_ARGUMENT_MAX_SIZE_BYTES: z.coerce.number().int().min(100).default(5120),
+  TOOL_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15000),
+
+  // --- WEB SEARCH (Stage 38) ---
+  WEB_SEARCH_PROVIDER: z.enum(['serper', 'duckduckgo', 'brave', 'tavily']).default('serper'),
+  WEB_SEARCH_API_KEY: z.string().optional(),
+  WEB_SEARCH_MAX_RESULTS: z.coerce.number().int().min(1).max(10).default(3),
+  WEB_SEARCH_MAX_RESULT_CHARS: z.coerce.number().int().min(500).default(2000),
+  WEB_SEARCH_CACHE_TTL_SECONDS: z.coerce.number().int().min(60).default(21600),
+  WEB_SEARCH_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
+  WEB_SEARCH_TRUSTED_DOMAINS: z.string().default('waec.gov.ng,jamb.gov.ng,neco.gov.ng,education.gov.ng'),
+
+  // --- EMBEDDINGS (Stage 41) ---
+  EMBEDDING_PROVIDER: z.enum(['openai', 'nomic', 'cohere']).default('openai'),
+  EMBEDDING_MODEL: z.string().optional().default('text-embedding-3-small'),
+  EMBEDDING_API_KEY: z.string().optional(),
+  EMBEDDING_BASE_URL: z.string().url().optional(),
+  EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).default(1536),
+  EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(100),
+  EMBEDDING_CACHE_TTL_SECONDS: z.coerce.number().int().min(3600).default(86400),
+  EMBEDDING_RETRY_MAX: z.coerce.number().int().min(1).max(5).default(3),
+
+  // --- SAFETY (Stages 44-46) ---
+  SAFETY_CLASSIFIER_MODEL: z.string().optional().default('claude-haiku-4-5'),
+  SAFETY_CRISIS_LEVEL3_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85),
+  SAFETY_CRISIS_LEVEL2_THRESHOLD: z.coerce.number().min(0).max(1).default(0.55),
+  SAFETY_INAPPROPRIATE_RESPONSE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.80),
+  SAFETY_ADVERSARIAL_PATTERN_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
+  SAFETY_ADVERSARIAL_DISABLE_TOOLS_AFTER: z.coerce.number().int().min(1).max(10).default(3),
+  
+  // Crisis response text (deterministic, not AI-generated)
+  SAFETY_CRISIS_RESPONSE_TEXT: z.string().min(1).default(
+    'Please know you are not alone. If you are going through a difficult time, please reach out for help. Nigeria crisis support: Nigerian Suicide Prevention Initiative +234 909 000 4673 or Mentally Aware Nigeria Initiative mentallyaware.org. Please talk to a trusted adult, teacher, or counselor. You matter.'
+  ),
+  
+  // Operator alerting
+  OPERATOR_ALERT_EMAIL: z.string().email().optional(),
+  OPERATOR_ALERT_WEBHOOK_URL: z.string().url().optional(),
+  
+  // --- RETRIEVAL (Stage 43) ---
+  RETRIEVAL_HYBRID_WEIGHT_BM25: z.coerce.number().min(0).max(1).default(0.5),
+  RETRIEVAL_HYBRID_WEIGHT_SEMANTIC: z.coerce.number().min(0).max(1).default(0.5),
+  RETRIEVAL_HNSW_M: z.coerce.number().int().min(1).default(16),
+  RETRIEVAL_HNSW_EF_CONSTRUCTION: z.coerce.number().int().min(1).default(64),
+  RETRIEVAL_HNSW_EF_SEARCH: z.coerce.number().int().min(1).default(40),
+  RETRIEVAL_MAX_RESULTS: z.coerce.number().int().min(1).max(20).default(5),
+  RETRIEVAL_RRF_K: z.coerce.number().int().min(1).default(60),
+
   // --- LEARNING INTELLIGENCE (Stage 29 - RWEA) ---
   MASTERY_RECENCY_HALFLIFE_DAYS: z.coerce.number().int().min(1).default(30),
   // How quickly recent evidence matters more. 30 days = evidence halves in influence after 30 days.
@@ -185,6 +239,13 @@ export function logSafeConfig() {
     DECAY_LAMBDA: config.DECAY_LAMBDA,
     STUDENT_MODEL_TOKEN_BUDGET: config.STUDENT_MODEL_TOKEN_BUDGET,
     STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS: config.STUDENT_MODEL_SNAPSHOT_MAX_AGE_HOURS,
+    // Phase G-I
+    TOOL_MAX_CALLS_PER_SESSION: config.TOOL_MAX_CALLS_PER_SESSION,
+    WEB_SEARCH_PROVIDER: config.WEB_SEARCH_PROVIDER,
+    EMBEDDING_PROVIDER: config.EMBEDDING_PROVIDER,
+    EMBEDDING_DIMENSIONS: config.EMBEDDING_DIMENSIONS,
+    SAFETY_CLASSIFIER_MODEL: config.SAFETY_CLASSIFIER_MODEL,
+    RETRIEVAL_MAX_RESULTS: config.RETRIEVAL_MAX_RESULTS,
   };
 }
 
