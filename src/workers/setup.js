@@ -16,12 +16,21 @@ import config from '../config/index.js';
 import { logger, extractTraceContext } from '../observability/index.js';
 import { runWithContext } from 'node:async_hooks';
 import { setupDecayWorker } from './decayRecomputation.js';
+import { setupEmbeddingWorker } from './embeddingWorker.js';
 
 /**
  * Setup all workers
  */
 export async function setupWorkers({ redis, pool }) {
   const workers = [];
+
+  // Setup embedding generation worker (Stage 41)
+  try {
+    const embeddingWorker = await setupEmbeddingWorker({ redis, pool });
+    workers.push(embeddingWorker);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to setup embedding worker, skipping');
+  }
 
   // Setup AI processing worker with full orchestration (Stages 18-21)
   const aiWorker = new Worker(

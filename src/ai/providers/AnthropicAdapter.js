@@ -187,12 +187,28 @@ export class AnthropicAdapter extends AIProviderInterface {
       cacheWriteTokens: response.usage.cache_creation_input_tokens || 0,
     };
 
+    // Extract tool calls if present (Anthropic uses tool_use blocks)
+    let toolCalls = null;
+    if (finishReason === FinishReason.TOOL_CALL) {
+      const toolUseBlocks = response.content.filter(
+        block => block.type === 'tool_use'
+      );
+      if (toolUseBlocks.length > 0) {
+        toolCalls = toolUseBlocks.map(block => ({
+          id: block.id,
+          name: block.name,
+          arguments: block.input || {},
+        }));
+      }
+    }
+
     return createAIResponse({
       content,
       model: response.model || model,
       provider: 'anthropic',
       finishReason,
       usage,
+      toolCalls,
       providerRequestId: response.id,
       latencyMs,
       cacheHit: usage.cachedInputTokens > 0,

@@ -26,6 +26,13 @@ export const AIUsageSchema = z.object({
   cacheWriteTokens: z.number().int().min(0).optional(),       // Anthropic: cache_creation_input_tokens
 });
 
+// Tool call schema
+const ToolCallSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  arguments: z.record(z.unknown()),
+});
+
 // Normalized AI response
 export const AIResponseSchema = z.object({
   // Content
@@ -38,6 +45,9 @@ export const AIResponseSchema = z.object({
   
   // Usage (always persist this)
   usage: AIUsageSchema,
+  
+  // Tool calls (when finishReason is TOOL_CALL)
+  toolCalls: z.array(ToolCallSchema).optional(),
   
   // Tracing
   providerRequestId: z.string().optional(),
@@ -70,6 +80,7 @@ export function createAIResponse(options) {
     provider: options.provider,
     finishReason: options.finishReason,
     usage: options.usage,
+    toolCalls: options.toolCalls,
     providerRequestId: options.providerRequestId,
     latencyMs: options.latencyMs,
     cacheHit: options.cacheHit,

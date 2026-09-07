@@ -156,6 +156,18 @@ export class OpenAIAdapter extends AIProviderInterface {
       total_tokens: 0,
     };
 
+    // Extract tool calls if present
+    let toolCalls = null;
+    if (finishReason === FinishReason.TOOL_CALL && choice.message.tool_calls) {
+      toolCalls = choice.message.tool_calls.map(tc => ({
+        id: tc.id,
+        name: tc.function?.name || tc.name,
+        arguments: typeof tc.function?.arguments === 'object' 
+          ? tc.function.arguments 
+          : JSON.parse(tc.function?.arguments || '{}'),
+      }));
+    }
+
     return createAIResponse({
       content,
       model: response.model || model,
@@ -172,6 +184,7 @@ export class OpenAIAdapter extends AIProviderInterface {
         finishReason: choice.finish_reason,
         usage,
       },
+      toolCalls,
     });
   }
 
