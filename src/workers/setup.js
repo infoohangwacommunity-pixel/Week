@@ -56,6 +56,11 @@ export async function setupWorkers({ redis, pool }) {
           const { ResponseValidator } = await import('../validation/ResponseValidator.js');
           const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
           
+          // Phase G-I: Import tool and safety components
+          const { ToolExecutor } = await import('../tools/ToolExecutor.js');
+          const { SafetyClassifier } = await import('../safety/SafetyClassifier.js');
+          const { CrisisProtocol } = await import('../safety/CrisisProtocol.js');
+          
           // Initialize providers
           const providerRegistry = await ProviderFactory.initializeProviders();
           log.info({ provider: providerRegistry.current }, 'AI providers initialized');
@@ -66,12 +71,31 @@ export async function setupWorkers({ redis, pool }) {
           // Initialize response validator (Stage 19)
           const responseValidator = new ResponseValidator({ createPool: () => Promise.resolve(pool) });
           
-          // Create orchestrator (Stage 20)
+          // Phase G-I: Initialize tool executor
+          let toolExecutor = null;
+          if (config.TOOL_MAX_CALLS_PER_SESSION) {
+            toolExecutor = new ToolExecutor({ db: pool, queue: null, logger, configOverride: {} });
+            log.info('Tool executor initialized (Phase G)');
+          }
+          
+          // Phase I: Initialize safety classifier
+          let safetyClassifier = null;
+          let crisisProtocol = null;
+          if (config.SAFETY_CLASSIFIER_MODEL) {
+            safetyClassifier = new SafetyClassifier({ aiService: providerRegistry.primary, db: pool, logger });
+            crisisProtocol = new CrisisProtocol({ db: pool, logger, emailService: null, webhookService: null });
+            log.info('Safety classifier and crisis protocol initialized (Phase I)');
+          }
+          
+          // Create orchestrator with Phase G-I dependencies
           const orchestrator = new AIOrchestrator({
             providerFactory: providerRegistry.primary,
             contextAssembler,
             responseValidator,
             database: { createPool: () => Promise.resolve(pool) },
+            toolExecutor,
+            safetyClassifier,
+            crisisProtocol,
           });
           
           // Get current message from job data or build from messages array
