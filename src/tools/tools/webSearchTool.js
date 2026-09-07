@@ -168,12 +168,53 @@ async function fetchSerperResults(query, apiKey) {
 }
 
 /**
- * Fetch results from DuckDuckGo (simple implementation)
+ * Fetch results from DuckDuckGo (uses DuckDuckGo Instant Answer API)
  */
 async function fetchDuckDuckGoResults(query) {
-  // DuckDuckGo doesn't have a free API, so we'd need to use a different approach
-  // or use a third-party wrapper. For now, return empty results.
-  return [];
+  try {
+    const response = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&pretty=1`
+    );
+    
+    if (!response.ok) {
+      return [];
+    }
+    
+    const data = await response.json();
+    
+    // Format DuckDuckGo results
+    const results = [];
+    
+    if (data.Abstract) {
+      results.push({
+        title: data.Title || 'DuckDuckGo Result',
+        url: data.AbstractURL || '',
+        snippet: data.Abstract,
+        position: 1,
+      });
+    }
+    
+    // Add related topics
+    if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+      for (const topic of data.RelatedTopics.slice(0, 4)) {
+        if (topic.Topics && topic.Topics.length > 0) {
+          for (const sub of topic.Topics.slice(0, 2)) {
+            results.push({
+              title: sub.Text || topic.Text || 'Related Topic',
+              url: sub.URL || '',
+              snippet: topic.Text || '',
+              position: results.length + 1,
+            });
+          }
+        }
+      }
+    }
+    
+    return results;
+  } catch (error) {
+    console.warn('DuckDuckGo search failed:', error.message);
+    return [];
+  }
 }
 
 /**

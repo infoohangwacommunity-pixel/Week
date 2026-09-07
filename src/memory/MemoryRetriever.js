@@ -1,17 +1,31 @@
 import { StudentMemoryAccess } from './StudentMemoryAccess.js';
 import { FACT_CATEGORIES, TOKEN_BUDGETS, RETRIEVAL_STRATEGIES, CONFIDENCE_BOUNDS } from './MemoryTaxonomy.js';
 import { RetrievalError } from './MemoryErrors.js';
+import { HybridSearch } from '../retrieval/HybridSearch.js';
+
 export class MemoryRetriever {
-  constructor(waxId) { this.waxId = waxId; this.memoryAccess = new StudentMemoryAccess(waxId); }
+  constructor(waxId, db) {
+    this.waxId = waxId;
+    this.memoryAccess = new StudentMemoryAccess(waxId);
+    this.db = db;
+    this.hybridSearch = new HybridSearch({ db });
+  }
   async retrieveRelevantMemories(params = {}) {
-    const { sessionId = null, currentMessage = '', tokenBudget = null } = params;
+    const { sessionId = null, currentMessage = '', tokenBudget = null, useHybridSearch = true } = params;
     const startTime = Date.now();
     try {
-      const facts = await this._retrieveFacts({ currentMessage, sessionId, tokenBudget: tokenBudget || TOKEN_BUDGETS.FACTS });
+      let facts;
+      if (useHybridSearch && currentMessage) {
+        // Use hybrid search for semantic retrieval
+        facts = await this._retrieveFactsHybrid({ currentMessage, tokenBudget: tokenBudget || TOKEN_BUDGETS.FACTS });
+      } else {
+        // Use recency-based retrieval
+        facts = await this._retrieveFacts({ currentMessage, sessionId, tokenBudget: tokenBudget || TOKEN_BUDGETS.FACTS });
+      }
       const episodes = [];
       const latency = Date.now() - startTime;
-      await this._logRetrieval({ factsCount: facts.length, episodesCount: episodes.length, latency });
-      return { facts, episodes, totalTokensEstimated: this._estimateTokens(facts, episodes), latency, strategy: RETRIEVAL_STRATEGIES.RECENCY };
+      await this._logRetrieval({ factsCount: facts.length, episodesCount: episodes.length, latency, strategy: useHybridSearch && currentMessage ? RETRIEVAL_STRATEGIES.HYBRID : RETRIEVAL_STRATEGIES.RECENCY });
+      return { facts, episodes, totalTokensEstimated: this._estimateTokens(facts, episodes), latency, strategy: useHybridSearch && currentMessage ? RETRIEVAL_STRATEGIES.HYBRID : RETRIEVAL_STRATEGIES.RECENCY };
     } catch (err) { throw new RetrievalError(`Retrieval failed: ${err.message}`, this.waxId, RETRIEVAL_STRATEGIES.RECENCY); }
   }
   async _retrieveFacts(params) {
@@ -21,6 +35,34 @@ export class MemoryRetriever {
     const rankedFacts = this._rankFacts(allFacts, currentSubjects);
     const deduplicatedFacts = this._deduplicateFacts(rankedFacts, sessionId, currentMessage);
     return this._applyTokenBudget(deduplicatedFacts, tokenBudget);
+  }
+
+  async _retrieveFactsHybrid(params) {
+    const { currentMessage, tokenBudget = TOKEN_BUDGETS.FACTS } = params;
+    
+    // Use hybrid search for semantic retrieval
+    const searchResults = await this.hybridSearch.search({
+      waxId: this.waxId,
+      query: currentMessage,
+      maxResults: 10,
+    });
+
+    // Convert hybrid search results to fact format
+    const facts = searchResults
+      .filter(r => r.type === 'fact')
+      .map(r => ({
+        id: r.id,
+        fact_key: '',
+        fact_category: 'academic',
+        display_text: r.content,
+        fact_value: {},
+        confidence: 0.7,
+        provenance: 'hybrid_search',
+        created_at: new Date(),
+        _rankScore: r.rrf_score,
+      }));
+
+    return this._applyTokenBudget(facts, tokenBudget);
   }
   _extractSubjectsFromMessage(message) {
     const subjects = ['math', 'mathematics', 'physics', 'chemistry', 'biology', 'english', 'french', 'government', 'economics', 'geography', 'literature', 'commerce', 'accounting', 'civic', 'religious'];
