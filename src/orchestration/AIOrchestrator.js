@@ -80,22 +80,41 @@ const PROVIDER_CAPABILITIES = {
 
 /**
  * AIOrchestrator - Central AI orchestration layer
+ * 
+ * Extended to support:
+ * - Tool calling (Phase G)
+ * - Safety classification (Phase I)
+ * - Crisis detection (Phase I)
  */
 export class AIOrchestrator {
-  constructor({ providerFactory, contextAssembler, responseValidator, database }) {
+  constructor({ 
+    providerFactory, 
+    contextAssembler, 
+    responseValidator, 
+    database,
+    toolExecutor = null,
+    safetyClassifier = null,
+    crisisProtocol = null,
+  }) {
     this.providerFactory = providerFactory;
     this.contextAssembler = contextAssembler;
     this.responseValidator = responseValidator;
     this.db = database;
     
+    // Phase G-I dependencies (optional for backward compatibility)
+    this.toolExecutor = toolExecutor;
+    this.safetyClassifier = safetyClassifier;
+    this.crisisProtocol = crisisProtocol;
+    
     this.logger = logger.child({ service: 'AIOrchestrator' });
   }
 
   /**
-   * Complete an AI request with full orchestration
+   * Complete an AI request with full orchestration and tool calling support
    * 
    * This is the main entry point for all tutoring AI requests.
    * It orchestrates the entire flow from context assembly to response delivery.
+   * Supports Phase G tool calling loops and Phase I safety checks.
    * 
    * @param {Object} options - Request options
    * @param {string} options.waxId - Student identifier
@@ -113,25 +132,235 @@ export class AIOrchestrator {
       waxId, 
       sessionId, 
       correlationId,
-      attempt: 1,
     });
 
+    // Phase G-I: Tool calling loop support
+    if (this.toolExecutor) {
+      return await this.completeWithTools({
+        waxId,
+        sessionId,
+        currentMessage,
+        context: { ...context, correlationId },
+        startTime,
+        requestLog,
+      });
+    }
+
+    // Legacy path without tool calling
+    return await this.completeLegacy({
+      waxId,
+      sessionId,
+      currentMessage,
+      context: { ...context, correlationId },
+      startTime,
+      requestLog,
+    });
+  }
+
+  /**
+   * Complete with tool calling loop (Phase G)
+   */
+  async completeWithTools({ waxId, sessionId, currentMessage, context, startTime, requestLog }) {
+    const maxTurns = 5;
+    let turn = 0;
+    let accumulatedToolCalls = 0;
+
+    while (turn < maxTurns) {
+      turn++;
+      requestLog = requestLog.child({ turn, accumulatedToolCalls });
+      
+      try {
+        // Phase I: Safety classification before AI call
+        const safetyResult = await this.safetyClassifier?.classify({
+          waxId,
+          sessionId,
+          aiRequestId: context.aiRequestId,
+          content: currentMessage || (context.messages?.[context.messages.length - 1]?.content || ''),
+        });
+
+        // Phase I: Check for crisis
+        if (safetyResult && safetyResult.level === 3) {
+          requestLog.warn('Crisis detected at Level 3');
+          const crisisResponse = await this.crisisProtocol?.handleCrisis({
+            waxId,
+            sessionId,
+            aiRequestId: context.aiRequestId,
+            level: 3,
+          });
+
+          if (crisisResponse) {
+            return {
+              ...crisisResponse,
+              safetyEvent: safetyResult,
+              isCrisis: true,
+            };
+          }
+        }
+
+        // Assemble context with tool definitions
+        requestLog.info('Assembling context with tool definitions');
+        const contextResult = await this.contextAssembler.assemble({
+          waxId,
+          sessionId,
+          currentMessage,
+          trace: { correlationId: context.correlationId },
+        });
+
+        // Inject tool definitions into context if available
+        if (contextResult.toolDefinitions) {
+          contextResult.messages.push({
+            role: 'system',
+            content: 'You have access to the following tools. Use them when appropriate:\n' + 
+                     JSON.stringify(contextResult.toolDefinitions, null, 2),
+          });
+        }
+
+        // Build AI request
+        const request = createAIRequest({
+          systemPrompt: contextResult.systemPrompt || await this.buildSystemPrompt({ waxId, sessionId, context }),
+          messages: contextResult.messages,
+          model: config.AI_PRIMARY_MODEL,
+          maxOutputTokens: config.AI_MAX_TOKENS,
+          temperature: config.AI_TEMPERATURE,
+          waxId,
+          sessionId,
+          correlationId: context.correlationId,
+          promptVersion: 'phase-g-tools',
+        });
+
+        // Call AI provider
+        requestLog.info('Calling AI provider');
+        const providerResponse = await this.callProviderWithFallback(request, {
+          waxId,
+          sessionId,
+          correlationId: context.correlationId,
+          contextResult,
+        });
+
+        // Check for tool calls
+        if (providerResponse.finishReason === 'tool_call' && providerResponse.toolCalls) {
+          requestLog.info({ toolCalls: providerResponse.toolCalls.length }, 'AI requested tool calls');
+
+          // Check rate limit
+          if (accumulatedToolCalls + providerResponse.toolCalls.length > config.TOOL_MAX_CALLS_PER_SESSION) {
+            requestLog.warn('Tool call limit would be exceeded');
+            return {
+              ...providerResponse,
+              content: 'I\'ve reached my limit for this conversation. Please start a new topic.',
+              finishReason: 'tool_limit_reached',
+            };
+          }
+
+          // Execute tool calls
+          const toolResults = await this.executeToolCalls({
+            waxId,
+            sessionId,
+            toolCalls: providerResponse.toolCalls,
+            aiRequestId: context.aiRequestId,
+          });
+
+          // Build tool result message
+          const toolResultMessage = this.buildToolResultMessage(toolResults);
+
+          // Continue loop with tool results
+          currentMessage = null;
+          context.messages = [...(context.messages || []), toolResultMessage];
+          accumulatedToolCalls += providerResponse.toolCalls.length;
+          
+          continue;
+        }
+
+        // No tool calls, return response
+        return providerResponse;
+
+      } catch (error) {
+        requestLog.error({ error: error.message }, 'Tool calling turn failed');
+        throw error;
+      }
+    }
+
+    // Max turns reached
+    return {
+      content: 'I\'m having trouble completing this request. Could you please rephrase?',
+      finishReason: 'max_turns_reached',
+    };
+  }
+
+  /**
+   * Execute tool calls
+   */
+  async executeToolCalls({ waxId, sessionId, toolCalls, aiRequestId }) {
+    const results = [];
+
+    for (const toolCall of toolCalls) {
+      try {
+        const result = await this.toolExecutor.execute({
+          waxId,
+          sessionId,
+          aiRequestId,
+          toolName: toolCall.name,
+          arguments: toolCall.arguments,
+          turnIndex: results.length,
+        });
+
+        results.push({
+          toolName: toolCall.name,
+          toolId: toolCall.id,
+          success: result.success,
+          data: result.data,
+          error: result.error ? result.error.message : null,
+        });
+      } catch (error) {
+        results.push({
+          toolName: toolCall.name,
+          toolId: toolCall.id,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Build tool result message
+   */
+  buildToolResultMessage(toolResults) {
+    const parts = toolResults.map((result, index) => {
+      if (result.success) {
+        return `[Tool ${index + 1} Result: ${result.toolName}]\n${JSON.stringify(result.data, null, 2)}`;
+      } else {
+        return `[Tool ${index + 1} Error: ${result.toolName}]\nError: ${result.error}`;
+      }
+    });
+
+    return {
+      role: 'user',
+      content: 'Tool Results:\n\n' + parts.join('\n\n'),
+    };
+  }
+
+  /**
+   * Legacy complete without tool calling
+   */
+  async completeLegacy({ waxId, sessionId, currentMessage, context, startTime, requestLog }) {
     try {
-      // Step 1: Assemble context (Stage 18)
+      // Step 1: Assemble context
       requestLog.info('Assembling conversation context');
       const contextResult = await this.contextAssembler.assemble({
         waxId,
         sessionId,
         currentMessage,
-        trace: { correlationId },
+        trace: { correlationId: context.correlationId },
       });
 
-      // Step 2: Build system prompt (Stage 17 - existing)
+      // Step 2: Build system prompt
       requestLog.info('Building system prompt');
       const { systemPrompt, promptVersion } = await this.buildSystemPrompt({
         waxId,
         sessionId,
-        context: { ...context, correlationId },
+        context,
       });
 
       // Step 3: Create AI request
@@ -143,9 +372,8 @@ export class AIOrchestrator {
         temperature: config.AI_TEMPERATURE,
         waxId,
         sessionId,
-        correlationId,
+        correlationId: context.correlationId,
         promptVersion,
-        responseSchema: null, // Stage 20: default to free text
       });
 
       const tokenEstimate = estimateTokenUsage(request);
@@ -153,37 +381,31 @@ export class AIOrchestrator {
       requestLog.info({
         messageCount: contextResult.messages.length,
         historyTurnCount: contextResult.historyTurnCount,
-        estimatedTokens: contextResult.estimatedTokens,
-        tokenBudget: contextResult.tokenBudget,
       }, 'Context assembled, preparing AI request');
 
-      // Step 4: Call provider with fallback (Stage 20)
+      // Step 4: Call provider
       requestLog.info('Calling AI provider');
       const providerResponse = await this.callProviderWithFallback(request, {
         waxId,
         sessionId,
-        correlationId,
+        correlationId: context.correlationId,
         contextResult,
       });
 
-      // Step 5: Validate response (Stage 19)
+      // Step 5: Validate response
       requestLog.info('Validating response');
       const validation = await this.responseValidator.validate({
         response: providerResponse.content,
         finishReason: providerResponse.finishReason,
-        trace: { correlationId },
+        trace: { correlationId: context.correlationId },
       });
 
       if (!validation.valid) {
-        requestLog.warn({
-          state: validation.state,
-          message: validation.message,
-        }, 'Response validation failed');
+        requestLog.warn({ state: validation.state, message: validation.message }, 'Response validation failed');
 
-        // If validation failed but can retry, retry with different approach
         if (validation.canRetry && context.retryCount < 2) {
           requestLog.info('Retrying with validation failure');
-          return await this.complete({
+          return await this.completeLegacy({
             waxId,
             sessionId,
             currentMessage,
@@ -191,12 +413,12 @@ export class AIOrchestrator {
               ...context,
               retryCount: (context.retryCount || 0) + 1,
               previousResponse: providerResponse.content,
-              correlationId,
             },
+            startTime,
+            requestLog,
           });
         }
 
-        // Return graceful fallback message
         return {
           ...providerResponse,
           content: config.AI_FAILURE_STUDENT_MESSAGE || 
@@ -212,17 +434,13 @@ export class AIOrchestrator {
         provider: providerResponse.provider,
         model: providerResponse.model,
         latencyMs,
-        tokens: providerResponse.usage,
-        historyTurnCount: contextResult.historyTurnCount,
-        contextWasTruncated: contextResult.truncationOccurred,
-        fallbackUsed: providerResponse.fallbackUsed || false,
       }, 'AI request completed successfully');
 
       // Step 7: Persist metadata
       await this.persistMetadata({
         waxId,
         sessionId,
-        correlationId,
+        correlationId: context.correlationId,
         request,
         response: providerResponse,
         tokenEstimate,
@@ -231,11 +449,11 @@ export class AIOrchestrator {
         contextResult,
       });
 
-      // Step 8: Update delivery state to queued
+      // Step 8: Update delivery state
       await this.responseValidator.createDeliveryRecord({
         waxId,
         sessionId,
-        correlationId,
+        correlationId: context.correlationId,
         state: 'queued',
       });
 
@@ -248,23 +466,6 @@ export class AIOrchestrator {
         errorType: error.errorType,
         latencyMs,
       }, 'AI request failed');
-
-      // Persist failure
-      await this.persistFailure({
-        waxId,
-        sessionId,
-        correlationId,
-        request: null,
-        error,
-        tokenEstimate: null,
-        startTime,
-      });
-
-      // Update delivery state to failed
-      await this.responseValidator.updateDeliveryState({
-        correlationId,
-        state: 'failed',
-      });
 
       throw error;
     }

@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "eslint": "^9.20.1",
-    "vitest": "^3.0.7"
+    "vitest": "^3.2.7"
   },
   "license": "MIT",
   "private": true
