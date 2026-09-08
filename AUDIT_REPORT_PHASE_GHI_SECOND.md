@@ -1,4 +1,4 @@
-# WAXPREP PHASES G-I — SECOND AUDIT REPORT
+ # WAXPREP PHASES G-I — SECOND AUDIT REPORT
 
 **Date:** September 2026  
 **Branch:** `feat/phases-ghi-infrastructure`  
