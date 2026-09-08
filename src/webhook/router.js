@@ -136,19 +136,19 @@ router.post('/', async (req, res) => {
   } catch (err) {
     const log = logger.child({ correlationId, stage: 'catch' });
     
-    // Log error details with proper serialization
+    // Primitive-only error logging (no complex objects)
+    log.error(
+      'ERROR: ' + (err.name || 'Error') + ' - ' + (err.message || 'Unknown error'),
+      'Webhook POST handler error - simple'
+    );
+    
+    // Also log execution state
     log.error({
-      'error.name': err.name,
-      'error.message': err.message,
-      'error.code': err.code,
-      'error.stack': err.stack?.split('\n').slice(0, 5).join('\n'),
-      'error.constructor': err.constructor?.name,
-      'isError': err instanceof Error,
-      'typeof': typeof err,
-      'req.body.type': req.body?.constructor?.name,
-      'req.body.isBuffer': Buffer.isBuffer(req.body),
-      'req.body.isObject': typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body),
-    }, 'Webhook POST handler error - detailed');
+      stage: 'error-handling',
+      errorName: err.name || 'unknown',
+      errorMessage: err.message ? err.message.substring(0, 100) : 'unknown',
+      errorStackFirstLine: err.stack ? err.stack.split('\n')[0] : 'unknown',
+    }, 'Webhook POST handler - error details');
     
     res.status(500).json({ error: 'Internal server error' });
   }
