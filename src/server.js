@@ -13,7 +13,7 @@ import { registerGlobalErrorHandlers, registerGracefulShutdown } from './errors/
 import healthRoutes from './health/routes.js';
 import webhookRouter from './webhook/router.js';
 
-logger.info({ config: config.logSafeConfig() }, 'Configuration loaded');
+logger.info({ config: logSafeConfig() }, 'Configuration loaded');
 
 const pool = await createPool(config);
 logger.info({ max: config.DATABASE_POOL_MAX }, 'Database pool created');
