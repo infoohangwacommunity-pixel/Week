@@ -8,7 +8,6 @@
 import { randomUUID } from 'crypto';
 import { Redis } from 'ioredis';
 import { Queue, Worker, QueueScheduler } from 'bullmq';
-import { IORedis } from 'bullmq';
 
 /**
  * Create a Redis client for BullMQ
@@ -36,7 +35,7 @@ export async function createRedisClient(config) {
  */
 export function createQueue(name, redis) {
   return new Queue(name, {
-    connection: new IORedis(redis),
+    connection: redis,
     defaultJobOptions: {
       removeOnComplete: 100,
       removeOnFail: 100,
@@ -54,7 +53,7 @@ export function createWorker(queueName, jobHandler, redis, concurrency) {
       return jobHandler(job);
     },
     {
-      connection: new IORedis(redis),
+      connection: redis,
       concurrency: concurrency,
       lockDuration: 30000, // 30 seconds
       lockRenewalTime: 15000, // Renew every 15 seconds
@@ -67,7 +66,7 @@ export function createWorker(queueName, jobHandler, redis, concurrency) {
  */
 export function createQueueScheduler(queueName, redis) {
   return new QueueScheduler(queueName, {
-    connection: new IORedis(redis),
+    connection: redis,
     run: true,
   });
 }
