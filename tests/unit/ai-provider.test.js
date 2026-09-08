@@ -205,7 +205,21 @@ describe('AI Provider Abstraction (Stage 15-17)', () => {
           correlationId: '123e4567-e89b-12d3-a456-426614174002',
           promptVersion: 'v1',
         });
-      }).toThrow('At least one message is required');
+          }).toThrow('At least one message is required');
+      });
+  });
+
+  describe('Provider Factory', () => {
+    it('should return available providers', async () => {
+      const { getAvailableProviders } = await import('../../src/ai/providers/ProviderFactory.js');
+      const providers = getAvailableProviders();
+      
+      expect(providers).toContain('fake');
+      expect(providers).toContain('anthropic');
+      expect(providers).toContain('openai');
+      expect(providers).toContain('groq');
+      expect(providers).toContain('cerebras');
+      expect(providers).toContain('gemini');
     });
   });
 });

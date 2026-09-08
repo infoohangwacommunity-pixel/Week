@@ -80,6 +80,8 @@ export class EmbeddingService {
         return await this.generateNomicEmbedding(text);
       case 'cohere':
         return await this.generateCohereEmbedding(text);
+      case 'gemini':
+        return await this.generateGeminiEmbedding(text);
       default:
         throw new Error(`Unknown embedding provider: ${provider}`);
     }
@@ -171,6 +173,63 @@ export class EmbeddingService {
 
     const data = await response.json();
     return data.embeddings[0];
+  }
+
+  /**
+   * Generate Gemini embedding
+   */
+  async generateGeminiEmbedding(text) {
+    const apiKey = config.EMBEDDING_API_KEY;
+    const model = config.EMBEDDING_MODEL || 'gemini-embedding-2';
+    const dimensions = config.EMBEDDING_DIMENSIONS || 1536;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+        },
+        body: JSON.stringify({
+          content: {
+            parts: [{ text }],
+          },
+          outputDimensionality: dimensions,
+        }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        `Gemini API error: ${response.status} ${response.statusText} - ${
+          errorData.error?.message || 'Unknown error'
+        }`
+      );
+    }
+
+    const data = await response.json();
+
+    if (!data.embedding || !data.embedding.values) {
+      throw new Error('Invalid response from Gemini API: missing embedding values');
+    }
+
+    let embedding = data.embedding.values;
+
+    // Handle dimensionality mismatch
+    if (embedding.length !== dimensions) {
+      if (embedding.length > dimensions) {
+        // Truncate
+        embedding = embedding.slice(0, dimensions);
+      } else {
+        // Pad with zeros
+        embedding = [...embedding, ...Array(dimensions - embedding.length).fill(0)];
+      }
+    }
+
+    return embedding;
   }
 
   /**

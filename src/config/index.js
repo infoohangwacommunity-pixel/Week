@@ -65,6 +65,10 @@ const configSchema = z.object({
   AI_GROQ_API_KEY: z.string().optional(),
   AI_GROQ_MODEL: z.string().optional(),
   
+  // --- AI PROVIDER - CEREBRAS (OpenAI-compatible) ---
+  AI_CEREBRAS_API_KEY: z.string().optional(),
+  AI_CEREBRAS_MODEL: z.string().optional(),
+  
   // --- AI FAKE PROVIDER (for development/testing) ---
   AI_FAKE_RESPONSE: z.string().optional().default('This is a simulated response from the Fake AI Provider.'),
   AI_FAKE_LATENCY_MS: z.coerce.number().int().min(0).default(500),
@@ -132,7 +136,7 @@ const configSchema = z.object({
   WEB_SEARCH_TRUSTED_DOMAINS: z.string().default('waec.gov.ng,jamb.gov.ng,neco.gov.ng,education.gov.ng'),
 
   // --- EMBEDDINGS (Stage 41) ---
-  EMBEDDING_PROVIDER: z.enum(['openai', 'nomic', 'cohere']).default('openai'),
+  EMBEDDING_PROVIDER: z.enum(['openai', 'nomic', 'cohere', 'gemini']).default('openai'),
   EMBEDDING_MODEL: z.string().optional().default('text-embedding-3-small'),
   EMBEDDING_API_KEY: z.string().optional(),
   EMBEDDING_BASE_URL: z.string().url().optional(),
@@ -229,6 +233,7 @@ export function logSafeConfig() {
     AI_ANTHROPIC_API_KEY: config.AI_ANTHROPIC_API_KEY ? '[REDACTED]' : undefined,
     AI_OPENAI_API_KEY: config.AI_OPENAI_API_KEY ? '[REDACTED]' : undefined,
     AI_GROQ_API_KEY: config.AI_GROQ_API_KEY ? '[REDACTED]' : undefined,
+    AI_CEREBRAS_API_KEY: config.AI_CEREBRAS_API_KEY ? '[REDACTED]' : undefined,
     QUEUE_DEBOUNCE_WINDOW_MS: config.QUEUE_DEBOUNCE_WINDOW_MS,
     RESPONSE_MAX_CHUNK_CHARS: config.RESPONSE_MAX_CHUNK_CHARS,
     PHONE_HMAC_SECRET: '[REDACTED]',

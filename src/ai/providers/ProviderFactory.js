@@ -49,6 +49,15 @@ export async function getProvider(providerName) {
     return provider;
   }
   
+  if (name === 'cerebras') {
+    const { default: CerebrasAIAdapter } = await import('./CerebrasAIAdapter.js');
+    const provider = new CerebrasAIAdapter();
+    if (!validateProviderImplementation(provider)) {
+      throw new Error('CerebrasAIAdapter does not implement AIProviderInterface correctly');
+    }
+    return provider;
+  }
+  
   if (name === 'gemini') {
     throw createAIError({
       errorType: AIErrorTypes.MODEL_UNAVAILABLE_ERROR,
@@ -58,7 +67,7 @@ export async function getProvider(providerName) {
   
   throw createAIError({
     errorType: AIErrorTypes.MODEL_UNAVAILABLE_ERROR,
-    providerMessage: `Unknown AI provider: ${providerName}. Supported providers: fake, anthropic, openai, groq, gemini`,
+    providerMessage: `Unknown AI provider: ${providerName}. Supported providers: fake, anthropic, openai, groq, cerebras, gemini`,
   });
 }
 
@@ -85,7 +94,7 @@ export async function initializeProviders() {
     console.error(`  Provider: ${providerName}`);
     console.error(`  Error: ${error.message}`);
     console.error('\nPlease check your AI_PRIMARY_PROVIDER configuration.');
-    console.error('Supported providers: fake, anthropic, openai, groq, gemini');
+    console.error('Supported providers: fake, anthropic, openai, groq, cerebras, gemini');
     throw error;
   }
 }
@@ -96,7 +105,7 @@ export async function initializeProviders() {
  * @returns {Array<string>} - List of available provider names
  */
 export function getAvailableProviders() {
-  return ['fake', 'anthropic', 'openai', 'groq', 'gemini'];
+  return ['fake', 'anthropic', 'openai', 'groq', 'cerebras', 'gemini'];
 }
 
 export default {
