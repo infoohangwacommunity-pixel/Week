@@ -11,32 +11,17 @@ import { randomUUID } from 'crypto';
 import { logger } from '../observability/index.js';
 import { getRateLimiter } from './rateLimiter.js';
 
-export async function enqueueStudentMessage(phoneNumber, messageId, message, databaseUrl, redisUrl, debounceWindowMs, log) {
-  const pool = await createPool({ DATABASE_URL: databaseUrl });
-  const redis = await createRedisClient({ REDIS_URL: redisUrl });
-  const queue = createQueue('student-messages', redis);
+export async function enqueueStudentMessage(from, messageId, message, databaseUrl, redisUrl, debounceWindowMs, logger) {
+  // Rate limiting is now enforced in router.js for earlier detection
+  // This is a safety check in enqueue
   const rateLimiter = getRateLimiter({ messagesPerMinute: 10, messagesPerDay: 200, burstAllowance: 3 });
+  const waxId = await resolveWaxIDFromPhone(from);
   
-  try {
-    const messageContent = message.type === 'text' ? message.text?.body : null;
-    const messageType = message.type;
-    
-    const waxId = await resolveWaxID(pool, phoneNumber);
-    log = log.child({ waxId, messageId });
-
-    const rateLimitResult = rateLimiter.checkLimit(waxId);
-    if (!rateLimitResult.allowed) {
-      log.warn({ reason: rateLimitResult.reason, limit: rateLimitResult.limit, retryAfter: rateLimitResult.retryAfter }, 'Message rate limited');
-      
-      await pool.query(
-        `INSERT INTO audit_log (event_type, wax_id, event_data)
-         VALUES ('rate_limit_exceeded', $1, $2)
-         ON CONFLICT DO NOTHING`,
-        [waxId, JSON.stringify({ reason: rateLimitResult.reason, limit: rateLimitResult.limit, retry_after: rateLimitResult.retryAfter })]
-      );
-      
-      return { rateLimited: true, reason: rateLimitResult.reason };
-    }
+  const rateLimitResult = rateLimiter.checkLimit(waxId);
+  if (!rateLimitResult.allowed) {
+    logger.warn({ waxId, reason: rateLimitResult.reason, retryAfter: rateLimitResult.retryAfter }, 'Rate limit exceeded in enqueue (safety check)');
+    return { success: false, reason: rateLimitResult.reason, retryAfter: rateLimitResult.retryAfter };
+  }
 
     const session = await getOrCreateSession(pool, waxId);
     log = log.child({ sessionId: session.id });

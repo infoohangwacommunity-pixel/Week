@@ -92,26 +92,40 @@ export class ContextAssembler {
       // Validate context integrity
       this.validateContextIntegrity(messages);
 
+      // Get tool definitions for AI to use
+      const toolDefinitions = this.getToolDefinitions();
+
       // Calculate token usage and apply budget
       const contextWithBudget = this.applyTokenBudget(messages);
 
       // Log assembly metadata
       const assemblyTime = Date.now() - assemblyStart;
       const logData = {
-        messageCount: contextWithBudget.messages.length,
-        estimatedTokens: contextWithBudget.estimatedTokens,
-        historyTurnCount: contextWithBudget.historyTurnCount,
-        currentMessageCount: contextWithBudget.currentMessageCount,
-        truncationOccurred: contextWithBudget.truncationOccurred,
-        truncatedTurns: contextWithBudget.truncatedTurns,
-        tokenUsage: contextWithBudget.tokenUsage,
-        assemblyTimeMs: assemblyTime,
+        messages: messages.length,
+        historyTurnCount: conversationHistory.length,
+        memoryCount: memories.length,
+        tokenCount: contextWithBudget.tokens,
+        toolCount: toolDefinitions.length,
+        assemblyTime,
+        ...trace,
       };
+      log.info(logData, 'Context assembled successfully');
 
-      if (studentModelContext) {
-        logData.studentModelTokens = studentModelContext.metadata.totalTokensEstimated;
-        logData.studentModelConcepts = studentModelContext.metadata.conceptsIncluded;
-      }
+      return {
+        systemPrompt,
+        messages: contextWithBudget.messages,
+        historyTurnCount: conversationHistory.length,
+        memoryCount: memories.length,
+        tokenCount: contextWithBudget.tokens,
+        memory: memories,
+        studentModel: studentModelContext,
+        toolDefinitions, // Expose tools to AI orchestrator
+      };
+    } catch (error) {
+      log.error({ error: error.message, ...trace }, 'Context assembly failed');
+      throw error;
+    }
+  }
 
       log.info(logData, 'Context assembled successfully');
 
@@ -548,3 +562,133 @@ export class ContextAssembler {
 }
 
 export default ContextAssembler;
+
+  /**
+   * Get tool definitions for AI to use
+   * 
+   * @returns {Array} - Array of tool definitions
+   */
+  getToolDefinitions() {
+    // Define tools that AI can use
+    // These are infrastructure capabilities, not hardcoded educational logic
+    return [
+      {
+        name: 'memory_write',
+        description: 'Write a memory or fact about the student to help with future tutoring',
+        parameters: {
+          type: 'object',
+          properties: {
+            content: {
+              type: 'string',
+              description: 'The memory or fact to remember',
+            },
+            category: {
+              type: 'string',
+              enum: ['student_preference', 'learning_style', 'knowledge_gap', 'progress', 'other'],
+              description: 'Category of the memory',
+            },
+            confidence: {
+              type: 'number',
+              minimum: 0,
+              maximum: 1,
+              description: 'Confidence in this memory (0-1)',
+            },
+          },
+          required: ['content', 'category'],
+        },
+      },
+      {
+        name: 'memory_search',
+        description: 'Search for relevant memories about the student',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'What to search for in memories',
+            },
+            maxResults: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 10,
+              default: 5,
+              description: 'Maximum number of results to return',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'record_evidence',
+        description: 'Record evidence of student learning (correct/incorrect answers, hints used, etc.)',
+        parameters: {
+          type: 'object',
+          properties: {
+            conceptTag: {
+              type: 'string',
+              description: 'The concept or skill being assessed',
+            },
+            evidenceType: {
+              type: 'string',
+              enum: ['correct_answer', 'incorrect_answer', 'hint_used', 'worked_example', 'attempted_problem'],
+              description: 'Type of evidence',
+            },
+            correctness: {
+              type: 'boolean',
+              description: 'Whether the response was correct',
+            },
+            context: {
+              type: 'string',
+              description: 'Additional context about the evidence',
+            },
+          },
+          required: ['conceptTag', 'evidenceType', 'correctness'],
+        },
+      },
+      {
+        name: 'web_search',
+        description: 'Search the web for current information to help answer student questions',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query',
+            },
+            maxResults: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 10,
+              default: 3,
+              description: 'Maximum number of results to retrieve',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'generate_question',
+        description: 'Generate a practice question for the student to test their understanding',
+        parameters: {
+          type: 'object',
+          properties: {
+            concept: {
+              type: 'string',
+              description: 'The concept to base the question on',
+            },
+            difficulty: {
+              type: 'string',
+              enum: ['easy', 'medium', 'hard'],
+              description: 'Difficulty level of the question',
+            },
+            questionType: {
+              type: 'string',
+              enum: ['multiple_choice', 'short_answer', 'problem_solving'],
+              description: 'Type of question to generate',
+            },
+          },
+          required: ['concept'],
+        },
+      },
+    ];
+  }
