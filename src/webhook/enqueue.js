@@ -24,6 +24,11 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
   const logSafe = log || logger;
   
   try {
+    // Initialize queue if not already done
+    if (!queue) {
+      await initializeQueue();
+    }
+    
     // Create database pool
     const pool = await createPool(config);
     
@@ -98,11 +103,10 @@ async function initializeQueue() {
   if (queue) return queue;
   
   const redis = await createRedisClient(config);
-  const { Queue } = await import('bullmq');
-  const { IORedis } = await import('bullmq');
+  const bullmq = await import('bullmq');
   
-  queue = new Queue('student-messages', { 
-    connection: new IORedis(redis),
+  queue = new bullmq.Queue('student-messages', { 
+    connection: redis,
     defaultJobOptions: { 
       removeOnComplete: 100,
       removeOnFail: 100
