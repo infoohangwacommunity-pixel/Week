@@ -43,7 +43,18 @@ router.get('/', (req, res) => {
  */
 router.post('/', async (req, res) => {
   const start = Date.now();
-  const rawBody = req.body instanceof globalThis.Buffer ? req.body : req.body;
+  
+  // DEBUG: Log raw body state
+  const log = logger.child({ stage: 'middleware' });
+  log.info({
+    'req.body.type': typeof req.body,
+    'req.body.constructor': req.body?.constructor?.name,
+    'req.body.isBuffer': Buffer.isBuffer(req.body),
+    'req.body.keys': req.body && typeof req.body === 'object' ? Object.keys(req.body).slice(0, 5) : null,
+    'req.body.length': req.body?.length,
+  }, 'POST handler - raw body state after middleware');
+  
+  const rawBody = req.body instanceof Buffer ? req.body : req.body;
   
   let correlationId;
   try {
