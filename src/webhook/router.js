@@ -123,15 +123,22 @@ router.post('/', async (req, res) => {
       res.status(200).json({ status: 'success' });
     });
   } catch (err) {
-    const log = logger.child({ correlationId });
+    const log = logger.child({ correlationId, stage: 'catch' });
+    
+    // Log error details with proper serialization
     log.error({
-      err: {
-        name: err.name,
-        message: err.message,
-        code: err.code,
-        stack: err.stack,
-      },
-    }, 'Webhook POST handler error');
+      'error.name': err.name,
+      'error.message': err.message,
+      'error.code': err.code,
+      'error.stack': err.stack?.split('\n').slice(0, 5).join('\n'),
+      'error.constructor': err.constructor?.name,
+      'isError': err instanceof Error,
+      'typeof': typeof err,
+      'req.body.type': req.body?.constructor?.name,
+      'req.body.isBuffer': Buffer.isBuffer(req.body),
+      'req.body.isObject': typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body),
+    }, 'Webhook POST handler error - detailed');
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 });

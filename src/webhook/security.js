@@ -11,6 +11,7 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { randomBytes } from 'node:crypto';
+import { logger } from '../observability/index.js';
 import { LRUCache } from 'lru-cache';
 
 /**
@@ -30,7 +31,19 @@ const seenMessageIds = new LRUCache({
  * @returns {boolean}
  */
 export function verifyWebhookSignature(rawBody, signatureHeader, appSecret) {
+  const log = logger.child({ func: 'verifyWebhookSignature' });
+  
+  log.info({
+    'rawBody.type': typeof rawBody,
+    'rawBody.isBuffer': Buffer.isBuffer(rawBody),
+    'rawBody.constructor': rawBody?.constructor?.name,
+    'signatureHeader.exists': !!signatureHeader,
+    'signatureHeader.startsWith': signatureHeader?.startsWith?.('sha256='),
+    'appSecret.length': appSecret?.length,
+  }, 'Signature verification - input types');
+  
   if (!signatureHeader?.startsWith('sha256=')) {
+    log.warn('Signature header missing or invalid format');
     return false;
   }
 
@@ -45,7 +58,10 @@ export function verifyWebhookSignature(rawBody, signatureHeader, appSecret) {
   const computedBuffer = Buffer.from(computedSignature, 'hex');
   const expectedBuffer = Buffer.from(expectedSignature, 'hex');
 
-  return timingSafeEqual(computedBuffer, expectedBuffer);
+  const result = timingSafeEqual(computedBuffer, expectedBuffer);
+  
+  log.info({ result }, 'Signature verification - result');
+  return result;
 }
 
 /**
