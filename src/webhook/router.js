@@ -61,7 +61,7 @@ router.post('/', async (req, res) => {
     correlationId = req.headers['x-correlation-id'] ?? randomUUID();
     
     await runWithContext({ correlationId, service: 'webhook' }, async () => {
-      const log = logger.child({ correlationId, method: 'POST', path: '/webhook/whatsapp' });
+      let log = logger.child({ correlationId, method: 'POST', path: '/webhook/whatsapp' });
       
       log.info({ bodyLength: rawBody.length }, 'Webhook POST received');
 
