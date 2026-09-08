@@ -6,7 +6,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { randomUUID } from 'crypto';
-import config from './config/index.js';
+import config, { logSafeConfig } from './config/index.js';
 import { logger, runWithContext } from './observability/index.js';
 import { createPool } from './db/index.js';
 import { registerGlobalErrorHandlers, registerGracefulShutdown } from './errors/index.js';
