@@ -7,7 +7,8 @@
 
 import { randomUUID } from 'crypto';
 import { Redis } from 'ioredis';
-import { Queue, Worker, QueueScheduler } from 'bullmq';
+import bullmq from 'bullmq';
+const { Queue, Worker, QueueScheduler } = bullmq;
 
 /**
  * Create a Redis client for BullMQ
