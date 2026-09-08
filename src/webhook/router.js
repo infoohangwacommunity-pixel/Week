@@ -124,7 +124,14 @@ router.post('/', async (req, res) => {
     });
   } catch (err) {
     const log = logger.child({ correlationId });
-    log.error({ err }, 'Webhook POST handler error');
+    log.error({
+      err: {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        stack: err.stack,
+      },
+    }, 'Webhook POST handler error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

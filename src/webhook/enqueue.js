@@ -90,7 +90,16 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
     return { success: true, waxId, sessionId: session.id };
     
   } catch (err) {
-    logSafe.error({ err }, 'Failed to enqueue message');
+    logSafe.error({
+      err: {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        stack: err.stack,
+      },
+      from,
+      messageId,
+    }, 'Failed to enqueue message');
     throw err;
   }
 }
@@ -102,18 +111,27 @@ let queue = null;
 async function initializeQueue() {
   if (queue) return queue;
   
-  const redis = await createRedisClient(config);
-  const bullmq = await import('bullmq');
-  
-  queue = new bullmq.Queue('student-messages', { 
-    connection: redis,
-    defaultJobOptions: { 
-      removeOnComplete: 100,
-      removeOnFail: 100
-    } 
-  });
-  
-  return queue;
+  try {
+    const redis = await createRedisClient(config);
+    const bullmq = await import('bullmq');
+    
+    queue = new bullmq.Queue('student-messages', { 
+      connection: redis,
+      defaultJobOptions: { 
+        removeOnComplete: 100,
+        removeOnFail: 100
+      } 
+    });
+    
+    return queue;
+  } catch (err) {
+    console.error('Failed to initialize queue:', {
+      name: err.name,
+      message: err.message,
+      code: err.code,
+    });
+    throw err;
+  }
 }
 
 async function createRedisClient(cfg) {
