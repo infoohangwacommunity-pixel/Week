@@ -51,9 +51,8 @@ app.use(helmet({
 }));
 
 // Raw body middleware must come BEFORE json middleware for webhook
+// Raw body for all requests - webhook needs Buffer, JSON can be parsed manually
 app.use(express.raw({ limit: '1mb', type: 'application/json' }));
-// JSON middleware for other endpoints (health, etc.)
-app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
   const correlationId = req.headers['x-correlation-id'] ?? randomUUID();
