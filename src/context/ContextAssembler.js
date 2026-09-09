@@ -221,11 +221,9 @@ export class ContextAssembler {
   async fetchConversationHistory({ waxId, sessionId }) {
     const maxHistoryMessages = config.CONTEXT_MAX_HISTORY_MESSAGES || 20;
 
-    const pool = await this.db.createPool(config);
-
     // Fetch recent messages for this student and session
     // Order: oldest first (for context building)
-    const result = await pool.query(
+    const result = await this.db.query(
       `
       SELECT 
         id,

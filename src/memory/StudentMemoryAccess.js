@@ -1,4 +1,5 @@
-import { pool } from '../db/index.js';
+import { getDefaultPool } from '../db/index.js';
+import config from '../config/index.js';
 import { FACT_CATEGORIES, FACT_KEYS, PROVENANCE, CONFLICT_TYPES, CONFIDENCE_BOUNDS, RETRIEVAL_STRATEGIES, CHANGE_REASONS } from './MemoryTaxonomy.js';
 import { applyConfidenceTransition, createConfidenceHistoryRecord, isValidConfidence, isConfidenceValidForWrite, isConfidenceValidForRetrieval, getInitialConfidence } from './ConfidenceEngine.js';
 import { StudentIsolationError, FactConflictError, ConfidenceBoundsError, FactNotFoundError, DatabaseError } from './MemoryErrors.js';
@@ -10,6 +11,7 @@ export class StudentMemoryAccess {
   }
 
   async writeFact(params) {
+    const pool = await getDefaultPool(config);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');

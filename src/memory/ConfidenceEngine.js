@@ -1,5 +1,8 @@
 import { CONFIDENCE_BOUNDS, CHANGE_REASONS } from './MemoryTaxonomy.js';
 import { getInitialConfidence, getReinforceDelta, getContradictDelta } from './ProvenanceRegistry.js';
+
+// Re-export getInitialConfidence for external use
+export { getInitialConfidence };
 export function applyConfidenceTransition(currentConfidence, provenance, operation, decayRate = 0) {
   const bounds = CONFIDENCE_BOUNDS;
   switch (operation) {
@@ -30,4 +33,4 @@ export function applyDecay(currentConfidence, category, daysSinceLastEvidence) {
 }
 export function getDecayRate(category) { const r = { profile: 0, academic: 0.02, misconception: 0.05, preference: 0.02, progress: 0.03, behavioral: 0.02 }; return r[category] || 0; }
 export function getConfidenceLevel(confidence) { if (confidence >= 0.85) return 'very_high'; if (confidence >= 0.70) return 'high'; if (confidence >= 0.50) return 'reasonable'; if (confidence >= 0.30) return 'moderate'; return 'weak'; }
-export default { applyConfidenceTransition, calculateConfidenceChange, isValidConfidence, isConfidenceValidForWrite, isConfidenceValidForRetrieval, shouldArchiveByConfidence, createConfidenceHistoryRecord, applyDecay, getDecayRate, getConfidenceLevel };
+export default { applyConfidenceTransition, calculateConfidenceChange, isValidConfidence, isConfidenceValidForWrite, isConfidenceValidForRetrieval, shouldArchiveByConfidence, createConfidenceHistoryRecord, applyDecay, getDecayRate, getConfidenceLevel, getInitialConfidence };

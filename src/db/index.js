@@ -12,6 +12,16 @@ import { Pool } from 'pg';
  * @param {import('./index.js').Config} config - Application configuration
  * @returns {Promise<import('pg').Pool>}
  */
+// Module-level pool for legacy code that expects a shared pool instance
+let _defaultPool = null;
+
+export async function getDefaultPool(config) {
+  if (!_defaultPool) {
+    _defaultPool = await createPool(config);
+  }
+  return _defaultPool;
+}
+
 export async function createPool(config) {
   const pool = new Pool({
     connectionString: config.DATABASE_URL,

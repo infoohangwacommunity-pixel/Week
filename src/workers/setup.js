@@ -102,10 +102,10 @@ export async function setupWorkers({ redis, pool }) {
             log.info({ provider: providerRegistry.current }, 'AI providers initialized');
             
             // Initialize context assembler (Stage 18)
-            const contextAssembler = new ContextAssembler({ createPool: () => Promise.resolve(pool) });
+            const contextAssembler = new ContextAssembler(pool);
             
             // Initialize response validator (Stage 19)
-            const responseValidator = new ResponseValidator({ createPool: () => Promise.resolve(pool) });
+            const responseValidator = new ResponseValidator(pool);
             
             // Phase G-I: Initialize tool executor
             let toolExecutor = null;

@@ -6,7 +6,7 @@ import { HybridSearch } from '../retrieval/HybridSearch.js';
 export class MemoryRetriever {
   constructor(waxId, db) {
     this.waxId = waxId;
-    this.memoryAccess = new StudentMemoryAccess(waxId);
+    this.memoryAccess = new StudentMemoryAccess(waxId, db);
     this.db = db;
     this.hybridSearch = new HybridSearch({ db });
   }
