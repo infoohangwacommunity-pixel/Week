@@ -57,12 +57,15 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
     const messageContent = message.text?.body || message.text?.value || JSON.stringify(message);
     const messageType = message.type || 'text';
     
+    // Generate UUID for internal message ID
+    const messageUuid = randomUUID();
+    
     // Persist message to database
     await pool.query(
-      `INSERT INTO messages (id, wax_id, session_id, direction, content, message_type, created_at)
-       VALUES ($1, $2, $3, 'inbound', $4, $5, NOW())
-       ON CONFLICT (id) DO NOTHING`,
-      [messageId, waxId, session.id, messageContent, messageType]
+      `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, created_at)
+       VALUES ($1, $2, $3, $4, 'inbound', $5, $6, NOW())
+       ON CONFLICT (external_id) DO NOTHING`,
+      [messageUuid, waxId, session.id, messageId, messageContent, messageType]
     );
     
     // Create debounce job ID
