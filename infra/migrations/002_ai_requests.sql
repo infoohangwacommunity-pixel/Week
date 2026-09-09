@@ -77,4 +77,4 @@ COMMENT ON COLUMN ai_requests.cache_write_tokens IS 'Cache write tokens (Anthrop
 COMMENT ON COLUMN ai_requests.started_at IS 'Request start timestamp';
 COMMENT ON COLUMN ai_requests.completed_at IS 'Request completion timestamp';
 COMMENT ON COLUMN ai_requests.latency_ms IS 'Total latency in milliseconds';
-COMMENT ON COLUMN ai_requests.provider_request_id IS 'Provider\'s own request ID for debugging';
+COMMENT ON COLUMN ai_requests.provider_request_id IS 'Provider''s own request ID for debugging';
