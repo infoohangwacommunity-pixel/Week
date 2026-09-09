@@ -207,18 +207,20 @@ export class AIOrchestrator {
           trace: { correlationId: context.correlationId },
         });
 
-        // Inject tool definitions into context if available
+        // Build system prompt
+        const systemPromptResult = await this.buildSystemPrompt({ waxId, sessionId, context });
+        let systemPrompt = systemPromptResult.systemPrompt;
+
+        // Add tool definitions to system prompt if available
         if (contextResult.toolDefinitions) {
-          contextResult.messages.push({
-            role: 'system',
-            content: 'You have access to the following tools. Use them when appropriate:\n' + 
-                     JSON.stringify(contextResult.toolDefinitions, null, 2),
-          });
+          systemPrompt += '\n\nTOOL CAPABILITIES\n' +
+            'You have access to the following tools. Use them when appropriate:\n' +
+            JSON.stringify(contextResult.toolDefinitions, null, 2);
         }
 
         // Build AI request
         const request = createAIRequest({
-          systemPrompt: contextResult.systemPrompt || await this.buildSystemPrompt({ waxId, sessionId, context }),
+          systemPrompt,
           messages: contextResult.messages,
           model: config.AI_PRIMARY_MODEL,
           maxOutputTokens: config.AI_MAX_TOKENS,
@@ -226,7 +228,7 @@ export class AIOrchestrator {
           waxId,
           sessionId,
           correlationId: context.correlationId,
-          promptVersion: 'phase-g-tools',
+          promptVersion: systemPromptResult.promptVersion || 'phase-g-tools',
         });
 
         // Call AI provider
@@ -358,11 +360,12 @@ export class AIOrchestrator {
 
       // Step 2: Build system prompt
       requestLog.info('Building system prompt');
-      const { systemPrompt, promptVersion } = await this.buildSystemPrompt({
+      const systemPromptResult = await this.buildSystemPrompt({
         waxId,
         sessionId,
         context,
       });
+      const systemPrompt = systemPromptResult.systemPrompt;
 
       // Step 3: Create AI request
       const request = createAIRequest({
@@ -374,7 +377,7 @@ export class AIOrchestrator {
         waxId,
         sessionId,
         correlationId: context.correlationId,
-        promptVersion,
+        promptVersion: systemPromptResult.promptVersion || 'v1',
       });
 
       const tokenEstimate = estimateTokenUsage(request);
