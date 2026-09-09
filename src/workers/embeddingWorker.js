@@ -7,9 +7,9 @@
 
 import { Worker } from 'bullmq';
 import { IORedis } from 'bullmq';
-import config from '../../config/index.js';
-import { logger } from '../../observability/index.js';
-import { EmbeddingService } from '../../retrieval/EmbeddingService.js';
+import config from '../config/index.js';
+import { logger } from '../observability/index.js';
+import { EmbeddingService } from '../retrieval/EmbeddingService.js';
 
 /**
  * Setup embedding generation worker
