@@ -220,7 +220,7 @@ export class SafetyClassifier {
       const response = await this.aiService.generate({
         messages: [
           {
-            role: 'system',
+            role: 'user',
             content: `You are a safety classifier for WaxPrep, a Nigerian secondary school tutoring platform.
 
 Determine if the following student message is educational in nature (i.e., related to learning, studying, or academic questions).
@@ -236,11 +236,9 @@ Only mark as NON-educational if it's clearly not academic at all (greetings, chi
 Respond with a single number between 0.0 and 1.0:
 - 0.9-1.0: Clearly educational
 - 0.5-0.8: Possibly educational
-- 0.0-0.4: Not educational`,
-          },
-          {
-            role: 'user',
-            content: `Classify this message: ${this.sanitizeForPrompt(content)}`,
+- 0.0-0.4: Not educational
+
+Classify this message: ${this.sanitizeForPrompt(content)}`,
           },
         ],
         model: config.SAFETY_CLASSIFIER_MODEL,
@@ -268,7 +266,7 @@ Respond with a single number between 0.0 and 1.0:
       const response = await this.aiService.generate({
         messages: [
           {
-            role: 'system',
+            role: 'user',
             content: `You are a welfare concern classifier for WaxPrep.
 
 Determine if the student message indicates potential distress, mental health concerns, or welfare issues.
@@ -287,11 +285,9 @@ Flag as welfare concern ONLY when:
 Respond with a number 0.0-1.0:
 - 0.0: Clearly not a welfare concern
 - 0.5-0.7: Ambiguous, possible concern
-- 0.8-1.0: High-confidence welfare concern`,
-          },
-          {
-            role: 'user',
-            content: `Classify for welfare concern: ${this.sanitizeForPrompt(content)}`,
+- 0.8-1.0: High-confidence welfare concern
+
+Classify for welfare concern: ${this.sanitizeForPrompt(content)}`,
           },
         ],
         model: config.SAFETY_CLASSIFIER_MODEL,
