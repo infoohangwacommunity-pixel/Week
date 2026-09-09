@@ -9,7 +9,7 @@
 
 import { validateProviderImplementation } from './AIProviderInterface.js';
 import { createAIError, AIErrorTypes } from '../schemas/AIErrors.js';
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Get a provider instance by name

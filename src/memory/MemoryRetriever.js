@@ -113,9 +113,7 @@ export class MemoryRetriever {
       const text = level !== 'high' && level !== 'very_high' ? ` (${level})` : '';
       return `• ${fact.display_text}${text}`;
     });
-    return `[Student Profile Memory${lines.length > 0 ? ' — use this to personalize responses' : ''}]
-` + lines.join('
-');
+    return `[Student Profile Memory${lines.length > 0 ? ' — use this to personalize responses' : ''}]\n` + lines.join('\n');
   }
   async _logRetrieval(params) { const { factsCount, episodesCount, latency } = params; console.log(`Memory retrieval: ${factsCount} facts, ${episodesCount} episodes, ${latency}ms`); }
 }

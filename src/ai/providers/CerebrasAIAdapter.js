@@ -20,7 +20,7 @@ import {
   createMalformedResponseError,
   createUnknownError,
 } from '../schemas/AIErrors.js';
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 export class CerebrasAIAdapter extends AIProviderInterface {
   constructor() {

@@ -5,7 +5,7 @@
  * Integrates with Phase F learning intelligence evidence collection.
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Execute evidence recording

@@ -11,7 +11,7 @@
  * - Cache results for cost control
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 import { WebContentSanitizer } from '../WebContentSanitizer.js';
 
 /**
@@ -390,7 +390,6 @@ async function hashString(str) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export { SourceTier, WebContentSanitizer };
 export default {
   executeWebSearch,
   getSourceTier,

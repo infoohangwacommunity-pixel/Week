@@ -11,7 +11,7 @@
  * 4. Return fused results
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Reciprocal Rank Fusion (RRF) scoring

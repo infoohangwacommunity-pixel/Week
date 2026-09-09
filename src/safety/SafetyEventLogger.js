@@ -4,7 +4,7 @@
  * Logs safety events to the database and tracks patterns over time.
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Safety event logger class

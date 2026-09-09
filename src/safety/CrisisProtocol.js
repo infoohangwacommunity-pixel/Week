@@ -14,7 +14,7 @@
  * - Level 3: High-Confidence Crisis - DETERMINISTIC response (not AI-generated).
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Crisis response levels
@@ -182,7 +182,7 @@ export class CrisisProtocol {
       try {
         if (this.emailService) {
           await this.emailService.send({
-            to: /* get from student profile */,
+            to: studentProfile?.email || 'support@waxprep.local',
             subject: 'WaxPrep Crisis Support',
             text: text,
           });

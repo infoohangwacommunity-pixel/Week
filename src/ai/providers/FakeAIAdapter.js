@@ -16,7 +16,7 @@
 import { AIProviderInterface } from './AIProviderInterface.js';
 import { createAIResponse, FinishReason, AIUsageSchema } from '../schemas/AIResponse.js';
 import { createAIError, AIErrorTypes } from '../schemas/AIErrors.js';
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * FakeAIAdapter implements the full AIProviderInterface

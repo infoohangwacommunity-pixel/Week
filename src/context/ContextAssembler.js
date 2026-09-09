@@ -127,24 +127,6 @@ export class ContextAssembler {
     }
   }
 
-      log.info(logData, 'Context assembled successfully');
-
-      // Add student model context to return value if available
-      if (studentModelContext) {
-        contextWithBudget.studentModelContext = {
-          formattedText: studentModelContext.formattedText,
-          snapshotJson: studentModelContext.snapshotJson,
-          metadata: studentModelContext.metadata,
-        };
-      }
-
-      return contextWithBudget;
-    } catch (error) {
-      log.error({ error: error.message }, 'Context assembly failed');
-      throw error;
-    }
-  }
-
   /**
    * Validate context integrity before returning
    * 
@@ -559,15 +541,6 @@ export class ContextAssembler {
       memories,
        messages: truncated, tokens: finalTokens, removedTurns };
   }
-}
-
-export default ContextAssembler;
-
-  /**
-   * Get tool definitions for AI to use
-   * 
-   * @returns {Array} - Array of tool definitions
-   */
   getToolDefinitions() {
     // Define tools that AI can use
     // These are infrastructure capabilities, not hardcoded educational logic
@@ -692,3 +665,11 @@ export default ContextAssembler;
       },
     ];
   }
+}
+
+
+  /**
+   * Get tool definitions for AI to use
+   * 
+   * @returns {Array} - Array of tool definitions
+   */

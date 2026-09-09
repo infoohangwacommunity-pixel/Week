@@ -498,4 +498,3 @@ export class ResponseValidator {
 }
 
 export default ResponseValidator;
-export { ValidationState, DeliveryState };

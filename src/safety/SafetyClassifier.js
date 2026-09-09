@@ -13,7 +13,7 @@
  * appear in WAEC/JAMB syllabi. Keyword blocks = catastrophic false positives.
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Safety classification dimensions

@@ -9,7 +9,7 @@
  * AI validation where necessary (open-ended explanations).
  */
 
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 /**
  * Execute question generation

@@ -590,7 +590,7 @@ export function getToolRegistry() {
  * @param {object} arguments - Arguments to validate
  * @returns {object} { valid: boolean, errors: string[] }
  */
-export function validateToolArguments(toolName, arguments) {
+export function validateToolArguments(toolName, toolArguments) {
   const tool = getToolByName(toolName);
   if (!tool) {
     return { valid: false, errors: ['Unknown tool'] };
@@ -602,7 +602,7 @@ export function validateToolArguments(toolName, arguments) {
   // Check required fields
   if (schema.required) {
     for (const requiredField of schema.required) {
-      if (!(requiredField in arguments)) {
+      if (!(requiredField in toolArguments)) {
         errors.push(`Missing required field: ${requiredField}`);
       }
     }
@@ -611,7 +611,7 @@ export function validateToolArguments(toolName, arguments) {
   // Check additional properties
   if (schema.additionalProperties === false) {
     const allowedProps = Object.keys(schema.properties || {});
-    for (const argKey of Object.keys(arguments)) {
+    for (const argKey of Object.keys(toolArguments)) {
       if (!allowedProps.includes(argKey)) {
         errors.push(`Additional property not allowed: ${argKey}`);
       }
@@ -621,7 +621,7 @@ export function validateToolArguments(toolName, arguments) {
   // Validate field types and constraints
   if (schema.properties) {
     for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
-      if (fieldName in arguments) {
+      if (fieldName in toolArguments) {
         const value = arguments[fieldName];
         const fieldErrors = validateFieldValue(fieldName, value, fieldSchema);
         errors.push(...fieldErrors);
