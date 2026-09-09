@@ -102,9 +102,8 @@ BEGIN
     sent_at = NOW(),
     updated_at = NOW()
   WHERE outbound_chunk_id = p_outbound_chunk_id
-  AND processing_status != 'sent'  -- Idempotent: only update if not already sent;
-  
-  SELECT EXISTS (SELECT 1 FROM outbound_messages WHERE outbound_chunk_id = p_outbound_chunk_id)
+  AND processing_status != 'sent'  -- Idempotent: only update if not already sent
+  RETURNING EXISTS (SELECT 1 FROM outbound_messages WHERE outbound_chunk_id = p_outbound_chunk_id)
   INTO v_exists;
   
   RETURN v_exists;
