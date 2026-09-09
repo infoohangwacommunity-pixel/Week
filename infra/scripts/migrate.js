@@ -64,15 +64,46 @@ async function runMigration(pool, filename) {
 
 /**
  * Acquire advisory lock to prevent concurrent migration runs
+ * Uses session-level lock that persists across transactions
  */
 async function acquireMigrationLock(pool) {
   // Use a fixed lock ID for migrations
   const lockId = 99999999;
-  const result = await pool.query(
-    'SELECT pg_advisory_xact_lock($1) AS acquired',
-    [lockId]
-  );
-  return result.rows[0].acquired;
+  
+  // Try to acquire lock with retry logic
+  const maxRetries = 10;
+  const retryDelay = 500; // ms
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // pg_advisory_lock is session-level, not transaction-level
+      const result = await pool.query(
+        'SELECT pg_advisory_lock($1) AS acquired',
+        [lockId]
+      );
+      
+      if (result.rows[0].acquired) {
+        return true;
+      }
+      
+      // Lock not available, wait and retry
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    } catch (err) {
+      // Log but don't throw - will retry
+      console.log(`Lock attempt ${attempt + 1}/${maxRetries} failed: ${err.message}`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Release advisory lock
+ */
+async function releaseMigrationLock(pool) {
+  const lockId = 99999999;
+  await pool.query('SELECT pg_advisory_unlock($1)', [lockId]);
 }
 
 /**
@@ -93,10 +124,35 @@ async function runMigrations() {
       )
     `);
 
-    // Acquire migration lock
+    // Check if all migrations are already applied (optimistic check)
+    const applied = await getAppliedMigrations(pool);
+    const files = await getMigrationFiles();
+    const pending = files.filter((f) => {
+      const version = f.replace('.sql', '');
+      return !applied.includes(version);
+    });
+    
+    if (pending.length === 0) {
+      console.log('All migrations already applied - skipping');
+      return;
+    }
+    
+    // Acquire migration lock only if migrations are pending
     const locked = await acquireMigrationLock(pool);
     if (!locked) {
-      throw new Error('Could not acquire migration lock - another migration is running');
+      // Check again if migrations are still pending
+      const stillApplied = await getAppliedMigrations(pool);
+      const stillPending = files.filter((f) => {
+        const version = f.replace('.sql', '');
+        return !stillApplied.includes(version);
+      });
+      
+      if (stillPending.length === 0) {
+        console.log('All migrations already applied - skipping');
+        return;
+      }
+      
+      throw new Error('Could not acquire migration lock - another migration may be running');
     }
 
     // Get applied migrations and migration files
@@ -123,6 +179,12 @@ async function runMigrations() {
 
     console.log('Migrations complete');
   } finally {
+    // Release lock if we acquired it
+    try {
+      await releaseMigrationLock(pool);
+    } catch (err) {
+      // Lock might already be released, ignore
+    }
     await pool.end();
   }
 }
