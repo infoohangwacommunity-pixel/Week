@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS ai_requests (
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     
     -- Tracing
-    correlation_id TEXT NOT NULL,
+    correlation_id TEXT NOT NULL UNIQUE,
     
     -- Request metadata
     provider TEXT NOT NULL,                 -- 'anthropic', 'openai', 'fake'
