@@ -41,15 +41,16 @@ export async function setupWorkers({ redis, pool }) {
         // Restore trace context from job payload
         const trace = extractTraceContext(job.data);
         
-        return runWithContext(trace, async () => {
-          const log = logger.child({
-            jobId: job.id,
-            waxId: trace.waxId,
-            sessionId: trace.sessionId,
-            messageId: trace.messageId,
-          });
+        try {
+          return runWithContext(trace, async () => {
+            const log = logger.child({
+              jobId: job.id,
+              waxId: trace.waxId,
+              sessionId: trace.sessionId,
+              messageId: trace.messageId,
+            });
 
-          log.info('Processing AI job with full orchestration (Stages 18-21)');
+            log.info('Processing AI job with full orchestration (Stages 18-21)');
 
           // Debug: Log trace context
           log.debug({ trace, hasWaxId: !!trace.waxId, hasSessionId: !!trace.sessionId, hasMessageId: !!trace.messageId }, 'Trace context extracted');
@@ -190,6 +191,19 @@ export async function setupWorkers({ redis, pool }) {
             // Re-throw to trigger BullMQ retry logic
             throw error;
           }
+          });
+        } catch (outerError) {
+          // Error happened outside the inner try-catch (e.g., in runWithContext or logger.child)
+          logger.error({
+            jobId: job.id,
+            error: {
+              name: outerError.name,
+              message: outerError.message,
+              stack: outerError.stack?.split('\n').slice(0, 5).join('\n'),
+            },
+          }, 'Error in runWithContext or logger.child');
+          throw outerError;
+        }
       });
     },
       {
