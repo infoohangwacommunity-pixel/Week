@@ -110,18 +110,20 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
     }
     
     // Add to queue with debounce delay
-    // Include phone number in payload for outbound delivery
+    // Include phone number and message content in payload for outbound delivery
     await queueInstance.add('process-student-messages', {
       waxId,
       phoneNumber: from,
       messageId,
       sessionId: session.id,
+      currentMessage: messageContent,
       _trace: { 
         correlationId: randomUUID(), 
         waxId, 
         messageId, 
         sessionId: session.id,
-        phoneNumber: from
+        phoneNumber: from,
+        currentMessage: messageContent
       },
     }, { jobId: debounceJobId, delay: debounceWindowMs });
     
