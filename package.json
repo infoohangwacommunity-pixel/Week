@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node infra/scripts/migrate.js && node src/server.js",
     "start:worker": "node src/workers/aiWorker.js",
     "dev": "node --watch src/server.js",
     "dev:worker": "node --watch src/workers/aiWorker.js",
