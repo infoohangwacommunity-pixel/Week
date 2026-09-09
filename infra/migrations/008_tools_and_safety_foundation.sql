@@ -1,4 +1,4 @@
--- Migration: 007_tools_and_safety_foundation.sql
+-- Migration: 008_tools_and_safety_foundation.sql
 -- Phase G-I: Tools, Safety, and Crisis Infrastructure (Stages 35-46)
 --
 -- This migration creates the complete schema for:
@@ -280,15 +280,16 @@ CREATE INDEX idx_embedding_jobs_status
   ON embedding_jobs(status, created_at ASC) 
   WHERE status IN ('pending', 'retrying');
 
-CREATE INDEX idx_embedding_jobs_wax 
-  ON embedding_jobs(
-    CASE WHEN target_type = 'student_fact' THEN (
-      SELECT wax_id FROM student_facts WHERE id = target_id
-    ) ELSE (
-      SELECT wax_id FROM student_episodes WHERE id = target_id
-    ) END,
-    created_at DESC
-  );
+-- Create separate indexes for each target type since PostgreSQL doesn't support
+-- subqueries in index expressions. This maintains the same query performance
+-- for looking up embedding jobs by student wax_id.
+CREATE INDEX idx_embedding_jobs_wax_student_facts 
+  ON embedding_jobs(target_id, created_at DESC) 
+  WHERE target_type = 'student_fact';
+
+CREATE INDEX idx_embedding_jobs_wax_student_episodes 
+  ON embedding_jobs(target_id, created_at DESC) 
+  WHERE target_type = 'student_episodes';
 
 -- ============================================================
 -- WEB SEARCH CACHE (Stage 38)
@@ -409,5 +410,5 @@ CREATE INDEX idx_crisis_responses_followup
 -- MIGRATION TRACKING
 -- ============================================================
 
-INSERT INTO schema_migrations (version) VALUES (7)
+INSERT INTO schema_migrations (version) VALUES (8)
 ON CONFLICT (version) DO NOTHING;
