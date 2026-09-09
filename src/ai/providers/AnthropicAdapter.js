@@ -18,6 +18,7 @@ import {
   createContentSafetyError,
   createProviderServerError,
   createMalformedResponseError,
+  createUnknownError,
 } from '../schemas/AIErrors.js';
 import config from '../../config/index.js';
 
