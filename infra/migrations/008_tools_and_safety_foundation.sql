@@ -321,9 +321,11 @@ CREATE TABLE IF NOT EXISTS web_search_cache (
 CREATE INDEX idx_web_search_cache_hash 
   ON web_search_cache(query_hash, provider);
 
+-- Note: Using regular index instead of partial index with NOW() because
+-- NOW() is not an immutable function and cannot be used in index predicates.
+-- The regular index provides adequate performance for expired cache lookups.
 CREATE INDEX idx_web_search_cache_expires 
-  ON web_search_cache(expires_at) 
-  WHERE expires_at > NOW();
+  ON web_search_cache(expires_at);
 
 -- ============================================================
 -- ADVERSARIAL PATTERN TRACKING (Stage 45)
