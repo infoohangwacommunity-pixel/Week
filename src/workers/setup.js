@@ -62,16 +62,20 @@ export async function setupWorkers({ redis, pool }) {
             const { AIOrchestrator } = await import('../orchestration/AIOrchestrator.js');
             log.info('AIOrchestrator imported');
             
+            let ContextAssembler;
             try {
-              const { ContextAssembler } = await import('../context/ContextAssembler.js');
+              const contextModule = await import('../context/ContextAssembler.js');
+              ContextAssembler = contextModule.ContextAssembler;
               log.info('ContextAssembler imported');
             } catch (importError) {
               log.error({ err: { name: importError.name, message: importError.message, stack: importError.stack?.split('\n').slice(0, 3).join('\n') } }, 'Failed to import ContextAssembler');
               throw importError;
             }
             
+            let ResponseValidator;
             try {
-              const { ResponseValidator } = await import('../validation/ResponseValidator.js');
+              const responseModule = await import('../validation/ResponseValidator.js');
+              ResponseValidator = responseModule.ResponseValidator;
               log.info('ResponseValidator imported');
             } catch (importError) {
               log.error({ err: { name: importError.name, message: importError.message, stack: importError.stack?.split('\n').slice(0, 3).join('\n') } }, 'Failed to import ResponseValidator');
