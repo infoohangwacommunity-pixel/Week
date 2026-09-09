@@ -8,7 +8,7 @@
  */
 
 import http from 'http';
-import config from '../config/index.js';
+import config, { logSafeConfig } from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { createPool } from '../db/index.js';
 import { createRedisClient } from '../queue/index.js';
@@ -16,7 +16,7 @@ import { registerGlobalErrorHandlers, registerGracefulShutdown } from '../errors
 import { setupWorkers } from './setup.js';
 
 // Load configuration first
-logger.info({ config: config.logSafeConfig() }, 'Configuration loaded');
+logger.info({ config: logSafeConfig() }, 'Configuration loaded');
 
 // Create database pool
 const pool = await createPool(config);
