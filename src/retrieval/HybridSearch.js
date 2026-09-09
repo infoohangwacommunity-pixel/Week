@@ -214,11 +214,9 @@ export class HybridSearch {
       LIMIT 20
     `;
 
-    try {
-    // Use pg_format to safely embed vector literal without quoting
-    // %I is for identifiers, but we need unquoted literal
-    // Use format() with %s for string that won't be quoted
-    const safeEmbedding = embeddingParam.replace(/'/g, "''"); // Simple escaping
+    // Use format string to embed vector literal directly without quoting
+    // Escape single quotes to prevent SQL injection
+    const safeEmbedding = embeddingParam.replace(/'/g, "''");
     const safeWaxId = waxId.replace(/'/g, "''");
     
     const formattedQuery = `
@@ -240,10 +238,16 @@ export class HybridSearch {
       ORDER BY semantic_score DESC
       LIMIT 20
     `;
-    
-    const result = await this.db.query(formattedQuery);
-    return result.rows;
-  }
+
+    try {
+      const result = await this.db.query(formattedQuery);
+      console.log('[HybridSearch] Semantic search completed, got', result.rows.length, 'results');
+      return result.rows;
+    } catch (err) {
+      console.error('[HybridSearch] Semantic search error:', err.message);
+      console.error('[HybridSearch] Embedding param (first 100 chars):', embeddingParam.substring(0, 100));
+      throw err;
+    }
   }
 
   /**
