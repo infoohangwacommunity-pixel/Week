@@ -2,13 +2,17 @@ import { StudentMemoryAccess } from './StudentMemoryAccess.js';
 import { FACT_CATEGORIES, TOKEN_BUDGETS, RETRIEVAL_STRATEGIES, CONFIDENCE_BOUNDS } from './MemoryTaxonomy.js';
 import { RetrievalError } from './MemoryErrors.js';
 import { HybridSearch } from '../retrieval/HybridSearch.js';
+import { EmbeddingService } from '../retrieval/EmbeddingService.js';
 
 export class MemoryRetriever {
-  constructor(waxId, db) {
+  constructor(waxId, db, logger) {
     this.waxId = waxId;
     this.memoryAccess = new StudentMemoryAccess(waxId, db);
     this.db = db;
-    this.hybridSearch = new HybridSearch({ db });
+    this.logger = logger;
+    // Create embedding service for hybrid search
+    const embeddingService = new EmbeddingService({ db, queue: null, logger });
+    this.hybridSearch = new HybridSearch({ db, embeddingService });
   }
   async retrieveRelevantMemories(params = {}) {
     const { sessionId = null, currentMessage = '', tokenBudget = null, useHybridSearch = true } = params;

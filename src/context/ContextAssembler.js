@@ -63,7 +63,7 @@ export class ContextAssembler {
       const conversationHistory = await this.fetchConversationHistory({ waxId, sessionId });
 
       // Retrieve relevant memories (Stage 25)
-      const memoryRetriever = new MemoryRetriever(waxId, this.db);
+      const memoryRetriever = new MemoryRetriever(waxId, this.db, logger);
       const memories = await memoryRetriever.retrieveRelevantMemories({
         sessionId,
         currentMessage,

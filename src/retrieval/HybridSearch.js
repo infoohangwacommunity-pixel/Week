@@ -12,6 +12,7 @@
  */
 
 import config from '../config/index.js';
+import { EmbeddingService } from './EmbeddingService.js';
 
 /**
  * Reciprocal Rank Fusion (RRF) scoring
@@ -99,8 +100,9 @@ class HybridSearchResult {
  * Hybrid search service
  */
 export class HybridSearch {
-  constructor({ db }) {
+  constructor({ db, embeddingService }) {
     this.db = db;
+    this.embeddingService = embeddingService;
   }
 
   /**
@@ -314,13 +316,21 @@ export class HybridSearch {
    * Generate embedding for query
    */
   async generateEmbedding(text) {
-    // This would integrate with the embedding service
-    // For now, return mock embedding as pgvector tuple string
-    // We return a string that will be used in raw SQL concatenation
-    // to avoid pg driver double-escaping
+    // Try to use the injected embedding service
+    if (this.embeddingService) {
+      try {
+        const embedding = await this.embeddingService.generateEmbedding(text);
+        // Convert to pgvector tuple format for raw SQL
+        return `(${embedding.join(',')})`;
+      } catch (error) {
+        // Log error but continue with mock embedding
+        console.warn('Embedding service failed, using mock embedding:', error.message);
+      }
+    }
+    
+    // Fallback to mock embedding if service unavailable
     const dimensions = config.EMBEDDING_DIMENSIONS || 1536;
     const embedding = Array(dimensions).fill(0);
-    // pgvector accepts vector in tuple format: (v1,v2,v3,...)
     return `(${embedding.join(',')})`;
   }
 }
