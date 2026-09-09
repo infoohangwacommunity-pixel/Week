@@ -13,7 +13,7 @@
  * - Layer 2 (AI/Schema): Force structured schema with provenance and confidence
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 
 /**
  * What CAN be written to memory:

@@ -4,7 +4,7 @@
  * Fetches content from approved educational URLs.
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 
 /**
  * Approved domains for document fetching

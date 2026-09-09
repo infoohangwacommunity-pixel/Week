@@ -17,7 +17,7 @@
  * Configuration is loaded from environment variables.
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 
 /**
  * Default configuration values for RWEA computation

@@ -11,7 +11,7 @@
  * - Cache results for cost control
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 import { WebContentSanitizer } from '../WebContentSanitizer.js';
 
 /**

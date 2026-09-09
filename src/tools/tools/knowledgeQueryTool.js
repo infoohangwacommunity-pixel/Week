@@ -7,7 +7,7 @@
  * Integrates with Phase F learning intelligence infrastructure.
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 import { StudentLearningAccess } from '../../learning/StudentLearningAccess.js';
 
 /**

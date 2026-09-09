@@ -8,7 +8,7 @@
  * CRITICAL: WaxID is derived from trusted session context, NEVER from AI-provided arguments.
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 
 /**
  * Execute memory search

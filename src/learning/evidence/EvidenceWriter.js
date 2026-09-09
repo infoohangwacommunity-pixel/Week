@@ -17,7 +17,7 @@
  * - Dedicated evaluation jobs
  */
 
-import config from '../config/index.js';
+import config from '../../config/index.js';
 import { MasteryEngine } from '../mastery/MasteryEngine.js';
 
 /**
