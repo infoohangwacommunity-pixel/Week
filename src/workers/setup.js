@@ -51,19 +51,38 @@ export async function setupWorkers({ redis, pool }) {
 
           log.info('Processing AI job with full orchestration (Stages 18-21)');
 
+          // Debug: Log trace context
+          log.debug({ trace, hasWaxId: !!trace.waxId, hasSessionId: !!trace.sessionId, hasMessageId: !!trace.messageId }, 'Trace context extracted');
+
           try {
+            // Debug: Log before imports
+            log.info('Starting imports...');
+            
             // Import orchestration components
             const { AIOrchestrator } = await import('../orchestration/AIOrchestrator.js');
+            log.info('AIOrchestrator imported');
+            
             const { ContextAssembler } = await import('../context/ContextAssembler.js');
+            log.info('ContextAssembler imported');
+            
             const { ResponseValidator } = await import('../validation/ResponseValidator.js');
+            log.info('ResponseValidator imported');
+            
             const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
+            log.info('ProviderFactory imported');
             
             // Phase G-I: Import tool and safety components
             const { ToolExecutor } = await import('../tools/ToolExecutor.js');
+            log.info('ToolExecutor imported');
+            
             const { SafetyClassifier } = await import('../safety/SafetyClassifier.js');
+            log.info('SafetyClassifier imported');
+            
             const { CrisisProtocol } = await import('../safety/CrisisProtocol.js');
+            log.info('CrisisProtocol imported');
             
             // Initialize providers
+            log.info('Initializing providers...');
             const providerRegistry = await ProviderFactory.initializeProviders();
             log.info({ provider: providerRegistry.current }, 'AI providers initialized');
             
@@ -100,12 +119,20 @@ export async function setupWorkers({ redis, pool }) {
               crisisProtocol,
             });
             
+            // Validate trace context
+            if (!trace.waxId) {
+              throw new Error('Missing waxId in trace context');
+            }
+            if (!trace.sessionId) {
+              throw new Error('Missing sessionId in trace context');
+            }
+            
             // Get current message from job data or build from messages array
             const currentMessage = trace.messages && trace.messages.length > 0
               ? trace.messages[trace.messages.length - 1]?.content || trace.currentMessage
               : trace.currentMessage;
             
-            if (!currentMessage && (!trace.messages || trace.messages.length === 0)) {
+            if (!currentMessage) {
               throw new Error('No current message provided in job data');
             }
             
