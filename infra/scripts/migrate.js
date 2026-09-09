@@ -6,12 +6,14 @@
  * Migrations are applied in order and tracked in the schema_migrations table.
  */
 
-import { createPool } from '../src/db/index.js';
-import config from '../src/config/index.js';
+import { createPool } from '../../src/db/index.js';
+import config from '../../src/config/index.js';
 import { readdir, readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const MIGRATIONS_DIR = join(import.meta.dirname, '..', 'infra', 'migrations');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
 
 /**
  * Get list of applied migrations from schema_migrations table
