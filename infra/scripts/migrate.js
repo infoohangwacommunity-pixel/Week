@@ -64,32 +64,44 @@ async function runMigration(pool, filename) {
 
 /**
  * Acquire advisory lock to prevent concurrent migration runs
- * Uses session-level lock that persists across transactions
+ * Uses session-level lock with retry logic
  */
 async function acquireMigrationLock(pool) {
-  // Use a fixed lock ID for migrations
   const lockId = 99999999;
   
-  // Try to acquire lock with retry logic
-  const maxRetries = 10;
+  // Try to acquire lock with extended retry logic
+  const maxRetries = 30; // Try for up to ~15 seconds
   const retryDelay = 500; // ms
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // pg_advisory_lock is session-level, not transaction-level
+      // Try to acquire lock
       const result = await pool.query(
         'SELECT pg_advisory_lock($1) AS acquired',
         [lockId]
       );
       
       if (result.rows[0].acquired) {
+        console.log(`✓ Acquired migration lock (attempt ${attempt + 1})`);
         return true;
       }
       
-      // Lock not available, wait and retry
+      // Lock not available, check if another process completed migrations
+      const applied = await getAppliedMigrations(pool);
+      const files = await getMigrationFiles();
+      const stillPending = files.filter((f) => {
+        const version = f.replace('.sql', '');
+        return !applied.includes(version);
+      });
+      
+      if (stillPending.length === 0) {
+        console.log('All migrations completed by another process - skipping');
+        return false; // Signal that we should skip
+      }
+      
+      // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, retryDelay));
     } catch (err) {
-      // Log but don't throw - will retry
       console.log(`Lock attempt ${attempt + 1}/${maxRetries} failed: ${err.message}`);
       await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
@@ -103,7 +115,11 @@ async function acquireMigrationLock(pool) {
  */
 async function releaseMigrationLock(pool) {
   const lockId = 99999999;
-  await pool.query('SELECT pg_advisory_unlock($1)', [lockId]);
+  try {
+    await pool.query('SELECT pg_advisory_unlock($1)', [lockId]);
+  } catch (err) {
+    // Lock might already be released, ignore
+  }
 }
 
 /**
@@ -124,11 +140,9 @@ async function runMigrations() {
       )
     `);
 
-    // Get applied migrations and migration files
+    // Check if all migrations are already applied (optimistic check)
     const applied = await getAppliedMigrations(pool);
     const files = await getMigrationFiles();
-    
-    // Find pending migrations
     const pending = files.filter((f) => {
       const version = f.replace('.sql', '');
       return !applied.includes(version);
@@ -140,11 +154,17 @@ async function runMigrations() {
     }
     
     console.log(`Found ${pending.length} pending migration(s)`);
-
-    // Acquire migration lock before running migrations
+    
+    // Acquire migration lock with retry
     const locked = await acquireMigrationLock(pool);
+    
+    // If lock acquisition returned false, it means migrations completed by another process
+    if (locked === false) {
+      return;
+    }
+    
     if (!locked) {
-      throw new Error('Could not acquire migration lock - another migration may be running');
+      throw new Error('Could not acquire migration lock after multiple attempts');
     }
 
     // Apply migrations in order
