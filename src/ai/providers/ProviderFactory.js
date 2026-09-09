@@ -39,12 +39,18 @@ export async function getProvider(providerName) {
       console.log('[ProviderFactory] Anthropic adapter constructor called');
       const provider = new AnthropicAdapter();
       console.log('[ProviderFactory] Anthropic adapter instance created');
+      if (!validateProviderImplementation(provider)) {
+        throw new Error('AnthropicAdapter does not implement AIProviderInterface correctly');
+      }
       return provider;
     }
-    if (!validateProviderImplementation(provider)) {
-      throw new Error('AnthropicAdapter does not implement AIProviderInterface correctly');
-    }
-    return provider;
+  } catch (error) {
+    console.error('Failed to load provider:', {
+      provider: name,
+      error: error.message,
+      errorType: error.errorType || 'UNKNOWN',
+    });
+    throw error;
   }
   
   if (name === 'openai' || name === 'groq') {
