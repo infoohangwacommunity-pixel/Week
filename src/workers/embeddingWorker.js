@@ -52,7 +52,9 @@ export async function setupEmbeddingWorker({ redis, pool }) {
       }
     },
     {
-      connection: new Redis(redis),
+      connection: new Redis(redis, {
+        maxRetriesPerRequest: null, // Required by BullMQ
+      }),
       concurrency: 5,
     }
   );

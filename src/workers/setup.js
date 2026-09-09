@@ -158,7 +158,9 @@ export async function setupWorkers({ redis, pool }) {
       });
     },
       {
-        connection: new Redis(redis),
+        connection: new Redis(redis, {
+          maxRetriesPerRequest: null, // Required by BullMQ
+        }),
         concurrency: config.QUEUE_WORKER_CONCURRENCY,
         lockDuration: config.QUEUE_LOCK_DURATION_MS,
         lockRenewalTime: config.QUEUE_LOCK_DURATION_MS / 2,

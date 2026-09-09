@@ -75,7 +75,9 @@ export async function setupDecayWorker({ redis, pool }) {
       }
     },
     {
-      connection: new Redis(redis),
+      connection: new Redis(redis, {
+        maxRetriesPerRequest: null, // Required by BullMQ
+      }),
       concurrency: 1,
       lockDuration: 300000, // 5 minutes
       limiter: {

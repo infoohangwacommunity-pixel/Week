@@ -26,7 +26,6 @@ export async function createRedisClient(config) {
 
   // Test connection
   await redis.ping();
-  console.log('✓ Redis connection successful');
 
   return redis;
 }

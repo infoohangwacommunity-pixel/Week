@@ -285,7 +285,9 @@ async function queueEmbeddingGeneration({ targetType, targetId, waxId, text }) {
     const { Redis } = await import('ioredis');
     
     const queue = new Queue('generate-embedding', {
-      connection: new Redis(config.REDIS_URL),
+      connection: new Redis(config.REDIS_URL, {
+        maxRetriesPerRequest: null, // Required by BullMQ
+      }),
     });
 
     await queue.add('generate-embedding', {
