@@ -64,7 +64,7 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
     await pool.query(
       `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, created_at)
        VALUES ($1, $2, $3, $4, 'inbound', $5, $6, NOW())
-       ON CONFLICT (external_id) WHERE deleted_at IS NULL DO NOTHING`,
+       ON CONFLICT (external_id) WHERE external_id IS NOT NULL AND deleted_at IS NULL DO NOTHING`,
       [messageUuid, waxId, session.id, messageId, messageContent, messageType]
     );
     
