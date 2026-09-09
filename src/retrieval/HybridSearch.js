@@ -181,8 +181,8 @@ export class HybridSearch {
     // Generate embedding for query
     const queryEmbedding = await this.generateEmbedding(query);
 
-    // Use raw SQL with string concatenation to avoid pg driver escaping
-    // The embedding is already in pgvector tuple format: (0,0,0,...)
+    // Pass embedding as JavaScript array for proper pgvector conversion
+    // The pg driver will convert [0.1,0.2,...] to vector format
     const queryStr = `
       SELECT 
         sf.id,
@@ -194,16 +194,28 @@ export class HybridSearch {
         sf.confidence,
         sf.created_at,
         'fact' as type,
-        1 - (sf.embedding <=> '${queryEmbedding}') as semantic_score
+        1 - (sf.embedding <=> $1) as semantic_score
       FROM student_facts sf
-      WHERE sf.wax_id = $1
+      WHERE sf.wax_id = $2
         AND sf.status = 'active'
         AND sf.embedding IS NOT NULL
       ORDER BY semantic_score DESC
       LIMIT 20
     `;
 
-    const result = await this.db.query(queryStr, [waxId]);
+    // Convert string embedding back to array if needed
+    let embeddingArray;
+    if (typeof queryEmbedding === 'string') {
+      // Parse "(0.1,0.2,...)" format back to array
+      embeddingArray = queryEmbedding
+        .slice(1, -1) // Remove parentheses
+        .split(',')
+        .map(Number);
+    } else {
+      embeddingArray = queryEmbedding;
+    }
+
+    const result = await this.db.query(queryStr, [embeddingArray, waxId]);
     return result.rows;
   }
 
