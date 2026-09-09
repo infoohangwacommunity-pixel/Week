@@ -186,8 +186,6 @@ export class HybridSearch {
     console.log('[HybridSearch] Embedding length:', queryEmbedding.length);
     console.log('[HybridSearch] Embedding sample (first 3):', queryEmbedding.slice(0, 3));
     
-    // Pass embedding as JavaScript array - pg driver will handle serialization
-    // pgvector supports array parameters natively
     const queryStr = `
       SELECT 
         sf.id,
@@ -209,9 +207,10 @@ export class HybridSearch {
     `;
 
     try {
-      // Pass embedding array directly - pg driver should serialize correctly
-      console.log('[HybridSearch] Passing embedding as array with', queryEmbedding.length, 'dimensions');
-      const result = await this.db.query(queryStr, [queryEmbedding, waxId]);
+      // Build vector literal for pgvector: [0.1,0.2,0.3]
+      const vectorLiteral = '[' + queryEmbedding.join(',') + ']';
+      console.log('[HybridSearch] Passing embedding as vector literal with', queryEmbedding.length, 'dimensions');
+      const result = await this.db.query(queryStr, [vectorLiteral, waxId]);
       console.log('[HybridSearch] Semantic search completed, got', result.rows.length, 'results');
       return result.rows;
     } catch (err) {
@@ -329,7 +328,7 @@ export class HybridSearch {
 
   /**
    * Generate embedding for query
-   * Returns JavaScript array [0.1, 0.2, ...] for proper pg vector binding
+   * Returns JavaScript array [0.1, 0.2, ...] which is converted to vector literal in queries
    */
   async generateEmbedding(text) {
     // Try to use the injected embedding service

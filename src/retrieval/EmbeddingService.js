@@ -236,22 +236,26 @@ export class EmbeddingService {
    * Update record with embedding
    */
   async updateEmbedding({ targetType, targetId, embedding }) {
-    // Pass embedding as JavaScript array - pg driver will handle serialization
+    // Build vector literal for pgvector: [0.1,0.2,0.3]
+    // The pg driver does not automatically serialize arrays to pgvector format,
+    // so we construct the literal string and cast with ::vector
+    const vectorLiteral = '[' + embedding.join(',') + ']';
+    
     if (targetType === 'student_fact') {
       await this.db.query(
         `UPDATE student_facts
-         SET embedding = $1,
+         SET embedding = $1::vector,
              updated_at = NOW()
          WHERE id = $2`,
-        [embedding, targetId]
+        [vectorLiteral, targetId]
       );
     } else if (targetType === 'student_episode') {
       await this.db.query(
         `UPDATE student_episodes
-         SET embedding = $1,
+         SET embedding = $1::vector,
              updated_at = NOW()
          WHERE id = $2`,
-        [embedding, targetId]
+        [vectorLiteral, targetId]
       );
     } else {
       throw new Error(`Unknown target type: ${targetType}`);
@@ -308,10 +312,10 @@ export class EmbeddingService {
 
   /**
    * Convert embedding array to PostgreSQL vector format
-   * pgvector expects: {val1,val2,...} (curly braces, no spaces)
+   * pgvector accepts: [val1,val2,...] (square brackets, no spaces)
    */
   embeddingToArray(embedding) {
-    return `{${embedding.join(',')}}`;
+    return '[' + embedding.join(',') + ']';
   }
 
   /**
