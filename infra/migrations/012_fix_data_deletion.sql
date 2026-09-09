@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION delete_student_data(p_wax_id UUID, p_operator_id TEXT
 RETURNS TABLE (
   messages_deleted BIGINT, observations_deleted BIGINT, facts_deleted BIGINT,
   episodes_deleted BIGINT, misconceptions_deleted BIGINT, knowledge_states_reset BIGINT,
-  sessions_deleted BIGINT, audit_log_id UUID
+  sessions_archived BIGINT, audit_log_id UUID
 ) AS $$
 DECLARE
   v_audit_id UUID;
