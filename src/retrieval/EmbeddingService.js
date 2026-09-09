@@ -307,9 +307,10 @@ export class EmbeddingService {
 
   /**
    * Convert embedding array to PostgreSQL vector format
+   * pgvector expects: {val1,val2,...} (curly braces, no spaces)
    */
   embeddingToArray(embedding) {
-    return `[${embedding.join(',')}]`;
+    return `{${embedding.join(',')}}`;
   }
 
   /**
