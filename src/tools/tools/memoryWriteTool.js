@@ -282,10 +282,10 @@ async function queueEmbeddingGeneration({ targetType, targetId, waxId, text }) {
 
     // Add job to queue
     const { Queue } = await import('bullmq');
-    const { IORedis } = await import('bullmq');
+    const { Redis } = await import('ioredis');
     
     const queue = new Queue('generate-embedding', {
-      connection: new IORedis(config.REDIS_URL),
+      connection: new Redis(config.REDIS_URL),
     });
 
     await queue.add('generate-embedding', {

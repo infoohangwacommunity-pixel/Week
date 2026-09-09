@@ -6,7 +6,7 @@
  */
 
 import { Worker } from 'bullmq';
-import { IORedis } from 'bullmq';
+import { Redis } from 'ioredis';
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { EmbeddingService } from '../retrieval/EmbeddingService.js';
@@ -52,23 +52,8 @@ export async function setupEmbeddingWorker({ redis, pool }) {
       }
     },
     {
-      connection: new IORedis(redis),
+      connection: new Redis(redis),
       concurrency: 5,
-      async processJob(job) {
-        // Custom error handling for retry logic
-        try {
-          return await worker.processJob.call(worker, job);
-        } catch (error) {
-          // Handle specific error types
-          if (error.message.includes('API key') || error.message.includes('Authentication')) {
-            // Don't retry on auth errors
-            await job.moveToFailed(error, 'API authentication failed');
-          } else {
-            // Retry on other errors
-            throw error;
-          }
-        }
-      },
     }
   );
 
