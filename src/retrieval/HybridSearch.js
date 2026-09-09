@@ -181,8 +181,11 @@ export class HybridSearch {
     // Generate embedding for query (returns JS array [0.1, 0.2, ...])
     const queryEmbedding = await this.generateEmbedding(query);
 
-    // Pass embedding as JavaScript array for proper pgvector conversion
-    // The pg driver will convert [0.1,0.2,...] to vector format
+    // Format embedding as pgvector expects: {val1,val2,...}
+    // The pg driver does not automatically convert arrays to vector format
+    const embeddingValue = queryEmbedding.join(',');
+    const embeddingParam = `{${embeddingValue}}`;
+
     const queryStr = `
       SELECT 
         sf.id,
@@ -194,7 +197,7 @@ export class HybridSearch {
         sf.confidence,
         sf.created_at,
         'fact' as type,
-        1 - (sf.embedding <=> $1) as semantic_score
+        1 - (sf.embedding <=> $1::vector) as semantic_score
       FROM student_facts sf
       WHERE sf.wax_id = $2
         AND sf.status = 'active'
@@ -203,7 +206,7 @@ export class HybridSearch {
       LIMIT 20
     `;
 
-    const result = await this.db.query(queryStr, [queryEmbedding, waxId]);
+    const result = await this.db.query(queryStr, [embeddingParam, waxId]);
     return result.rows;
   }
 
