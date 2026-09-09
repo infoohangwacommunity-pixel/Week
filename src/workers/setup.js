@@ -200,7 +200,7 @@ export async function setupWorkers({ redis, pool }) {
             }
           
           } catch (error) {
-            // Log detailed error information
+            // Log detailed error information to both logger and console
             const errorInfo = {
               jobId: job.id,
               // Try to extract normalized error properties
@@ -216,6 +216,7 @@ export async function setupWorkers({ redis, pool }) {
             };
             
             logger.error(errorInfo, 'AI request failed');
+            console.error('AI Request Failed - Full Error:', JSON.stringify(errorInfo, null, 2));
             
             // Re-throw to trigger BullMQ retry logic
             throw error;
