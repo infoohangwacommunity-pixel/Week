@@ -178,7 +178,7 @@ export class HybridSearch {
    * Run semantic search using pgvector
    */
   async runSemanticSearch({ waxId, query }) {
-    // Generate embedding for query
+    // Generate embedding for query (returns JS array [0.1, 0.2, ...])
     const queryEmbedding = await this.generateEmbedding(query);
 
     // Pass embedding as JavaScript array for proper pgvector conversion
@@ -203,19 +203,7 @@ export class HybridSearch {
       LIMIT 20
     `;
 
-    // Convert string embedding back to array if needed
-    let embeddingArray;
-    if (typeof queryEmbedding === 'string') {
-      // Parse "(0.1,0.2,...)" format back to array
-      embeddingArray = queryEmbedding
-        .slice(1, -1) // Remove parentheses
-        .split(',')
-        .map(Number);
-    } else {
-      embeddingArray = queryEmbedding;
-    }
-
-    const result = await this.db.query(queryStr, [embeddingArray, waxId]);
+    const result = await this.db.query(queryStr, [queryEmbedding, waxId]);
     return result.rows;
   }
 
@@ -326,14 +314,15 @@ export class HybridSearch {
 
   /**
    * Generate embedding for query
+   * Returns JavaScript array [0.1, 0.2, ...] for proper pg vector binding
    */
   async generateEmbedding(text) {
     // Try to use the injected embedding service
     if (this.embeddingService) {
       try {
         const embedding = await this.embeddingService.generateEmbedding(text);
-        // Convert to pgvector tuple format for raw SQL
-        return `(${embedding.join(',')})`;
+        // EmbeddingService already returns a JavaScript array
+        return embedding;
       } catch (error) {
         // Log error but continue with mock embedding
         console.warn('Embedding service failed, using mock embedding:', error.message);
@@ -342,8 +331,7 @@ export class HybridSearch {
     
     // Fallback to mock embedding if service unavailable
     const dimensions = config.EMBEDDING_DIMENSIONS || 1536;
-    const embedding = Array(dimensions).fill(0);
-    return `(${embedding.join(',')})`;
+    return Array(dimensions).fill(0);
   }
 }
 
