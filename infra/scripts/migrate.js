@@ -4,6 +4,7 @@
  * 
  * Runs database migrations with advisory locking to prevent concurrent execution.
  * Migrations are applied in order and tracked in the schema_migrations table.
+ * Migration version is extracted from filename prefix (e.g., "001_initial_schema.sql" -> 1)
  */
 
 import { createPool } from '../../src/db/index.js';
@@ -19,7 +20,23 @@ const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
 let poolClosed = false;
 
 /**
+ * Extract migration version number from filename
+ * e.g., "001_initial_schema.sql" -> 1
+ *        "011_fix_data_deletion.sql" -> 11
+ * @param {string} filename - Migration filename
+ * @returns {number} - Migration version as integer
+ */
+function extractVersion(filename) {
+  const match = filename.match(/^(\d+)_/);
+  if (!match) {
+    throw new Error(`Invalid migration filename format: ${filename}. Expected format: NNN_description.sql`);
+  }
+  return parseInt(match[1], 10);
+}
+
+/**
  * Get list of applied migrations from schema_migrations table
+ * Returns array of version numbers (integers)
  */
 async function getAppliedMigrations(pool) {
   const result = await pool.query(
@@ -30,34 +47,43 @@ async function getAppliedMigrations(pool) {
 
 /**
  * Get list of migration files from the migrations directory
+ * Returns sorted array of filenames
  */
 async function getMigrationFiles() {
   const files = await readdir(MIGRATIONS_DIR);
   return files
     .filter((f) => f.endsWith('.sql'))
-    .sort((a, b) => a.localeCompare(b));
+    .sort((a, b) => {
+      // Sort by version number (extracted from filename prefix)
+      const versionA = extractVersion(a);
+      const versionB = extractVersion(b);
+      return versionA - versionB;
+    });
 }
 
 /**
  * Run a single migration
+ * @param {import('pg').Pool} pool - Database pool
+ * @param {string} filename - Migration filename
  */
 async function runMigration(pool, filename) {
-  const version = filename.replace('.sql', '');
+  const version = extractVersion(filename);
   const filePath = join(MIGRATIONS_DIR, filename);
   const sql = await readFile(filePath, 'utf-8');
 
-  console.log(`Applying migration: ${filename}`);
+  console.log(`Applying migration: ${filename} (version: ${version})`);
   
   // Wrap in transaction for atomicity
   await pool.query('BEGIN');
   try {
     await pool.query(sql);
+    // Insert version as INTEGER (not string!)
     await pool.query(
       'INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING',
-      [version]
+      [version]  // Pass integer, not string
     );
     await pool.query('COMMIT');
-    console.log(`✓ Applied: ${filename}`);
+    console.log(`✓ Applied: ${filename} (version ${version})`);
   } catch (err) {
     await pool.query('ROLLBACK');
     console.error(`✗ Failed: ${filename}`, err.message);
@@ -67,8 +93,7 @@ async function runMigration(pool, filename) {
 
 /**
  * Acquire migration lock using a try-lock pattern with timeout
- * Returns true if lock acquired, false if lock is held by another process
- * Throws error if migrations are already complete
+ * Returns 'complete' if migrations already done, true if lock acquired, or throws on timeout
  */
 async function acquireMigrationLock(pool) {
   const lockId = 99999999;
@@ -79,7 +104,7 @@ async function acquireMigrationLock(pool) {
   const applied = await getAppliedMigrations(pool);
   const files = await getMigrationFiles();
   const allApplied = files.every((f) => {
-    const version = f.replace('.sql', '');
+    const version = extractVersion(f);
     return applied.includes(version);
   });
   
@@ -109,7 +134,7 @@ async function acquireMigrationLock(pool) {
       // Lock not available, check again if migrations completed
       const stillApplied = await getAppliedMigrations(pool);
       const stillPending = files.filter((f) => {
-        const version = f.replace('.sql', '');
+        const version = extractVersion(f);
         return !stillApplied.includes(version);
       });
       
@@ -188,13 +213,14 @@ async function runMigrations() {
 
     // Check if all migrations are already applied (optimistic check)
     const applied = await getAppliedMigrations(pool);
-    console.log(`Applied migrations: ${applied.join(', ') || 'none'}`);
+    console.log(`Applied migrations (versions): ${applied.join(', ') || 'none'}`);
     
     const files = await getMigrationFiles();
-    console.log(`Available migrations: ${files.join(', ')}`);
+    const fileVersions = files.map(f => extractVersion(f));
+    console.log(`Available migrations: ${files.join(', ')} (versions: ${fileVersions.join(', ')})`);
     
     const pending = files.filter((f) => {
-      const version = f.replace('.sql', '');
+      const version = extractVersion(f);
       return !applied.includes(version);
     });
     
@@ -204,7 +230,8 @@ async function runMigrations() {
       return;
     }
     
-    console.log(`Found ${pending.length} pending migration(s): ${pending.join(', ')}`);
+    const pendingVersions = pending.map(f => extractVersion(f));
+    console.log(`Found ${pending.length} pending migration(s): ${pending.join(', ')} (versions: ${pendingVersions.join(', ')})`);
     
     // Acquire migration lock
     const lockResult = await acquireMigrationLock(pool);
