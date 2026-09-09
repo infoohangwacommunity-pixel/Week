@@ -93,6 +93,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Helper function: Mark outbound message as sent
 CREATE OR REPLACE FUNCTION mark_outbound_as_sent(p_outbound_chunk_id TEXT)
 RETURNS BOOLEAN AS $$
+DECLARE
+  v_exists BOOLEAN;
 BEGIN
   UPDATE outbound_messages
   SET 
@@ -100,8 +102,12 @@ BEGIN
     sent_at = NOW(),
     updated_at = NOW()
   WHERE outbound_chunk_id = p_outbound_chunk_id
-  AND processing_status != 'sent'  -- Idempotent: only update if not already sent
-  RETURN EXISTS (SELECT 1 FROM outbound_messages WHERE outbound_chunk_id = p_outbound_chunk_id);
+  AND processing_status != 'sent'  -- Idempotent: only update if not already sent;
+  
+  SELECT EXISTS (SELECT 1 FROM outbound_messages WHERE outbound_chunk_id = p_outbound_chunk_id)
+  INTO v_exists;
+  
+  RETURN v_exists;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
