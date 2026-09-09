@@ -8,12 +8,12 @@
  */
 
 import http from 'http';
-import config from './config/index.js';
-import { logger } from './observability/index.js';
-import { createPool } from './db/index.js';
-import { createRedisClient } from './queue/index.js';
-import { registerGlobalErrorHandlers, registerGracefulShutdown } from './errors/index.js';
-import { setupWorkers } from './workers/setup.js';
+import config from '../config/index.js';
+import { logger } from '../observability/index.js';
+import { createPool } from '../db/index.js';
+import { createRedisClient } from '../queue/index.js';
+import { registerGlobalErrorHandlers, registerGracefulShutdown } from '../errors/index.js';
+import { setupWorkers } from './setup.js';
 
 // Load configuration first
 logger.info({ config: config.logSafeConfig() }, 'Configuration loaded');
