@@ -129,8 +129,18 @@ export class HybridSearch {
    * Run BM25 (full-text) search
    */
   async runBM25Search({ waxId, query }) {
+    // Extract text content if query is an object (e.g., webhook payload)
+    let searchText = query;
+    if (typeof query === 'object' && query !== null) {
+      // Try to extract text from common webhook/message formats
+      searchText = query.content || query.text || query.message || '';
+    }
+    if (typeof searchText !== 'string') {
+      searchText = String(searchText || '');
+    }
+    
     // Normalize query
-    const searchQuery = query.toLowerCase().trim();
+    const searchQuery = searchText.toLowerCase().trim();
 
     // Build tsquery
     const tsquery = this.buildTsQuery(searchQuery);
