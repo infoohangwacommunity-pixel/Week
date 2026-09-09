@@ -186,14 +186,8 @@ export class HybridSearch {
     console.log('[HybridSearch] Embedding length:', queryEmbedding.length);
     console.log('[HybridSearch] Embedding sample (first 3):', queryEmbedding.slice(0, 3));
     
-    // Format embedding as pgvector expects: {val1,val2,...}
-    // The pg driver does not automatically convert arrays to vector format
-    const embeddingValue = queryEmbedding.join(',');
-    const embeddingParam = `{${embeddingValue}}`;
-    
-    console.log('[HybridSearch] Embedding param length:', embeddingParam.length);
-    console.log('[HybridSearch] Embedding param sample (first 50 chars):', embeddingParam.substring(0, 50) + '...');
-
+    // Pass embedding as JavaScript array - pg driver will handle serialization
+    // pgvector supports array parameters natively
     const queryStr = `
       SELECT 
         sf.id,
@@ -214,38 +208,16 @@ export class HybridSearch {
       LIMIT 20
     `;
 
-    // Use format string to embed vector literal directly without quoting
-    // Escape single quotes to prevent SQL injection
-    const safeEmbedding = embeddingParam.replace(/'/g, "''");
-    const safeWaxId = waxId.replace(/'/g, "''");
-    
-    const formattedQuery = `
-      SELECT 
-        sf.id,
-        sf.wax_id,
-        sf.display_text,
-        sf.fact_value,
-        sf.fact_category,
-        sf.provenance,
-        sf.confidence,
-        sf.created_at,
-        'fact' as type,
-        1 - (sf.embedding <=> '${safeEmbedding}'::vector) as semantic_score
-      FROM student_facts sf
-      WHERE sf.wax_id = '${safeWaxId}'
-        AND sf.status = 'active'
-        AND sf.embedding IS NOT NULL
-      ORDER BY semantic_score DESC
-      LIMIT 20
-    `;
-
     try {
-      const result = await this.db.query(formattedQuery);
+      // Pass embedding array directly - pg driver should serialize correctly
+      console.log('[HybridSearch] Passing embedding as array with', queryEmbedding.length, 'dimensions');
+      const result = await this.db.query(queryStr, [queryEmbedding, waxId]);
       console.log('[HybridSearch] Semantic search completed, got', result.rows.length, 'results');
       return result.rows;
     } catch (err) {
       console.error('[HybridSearch] Semantic search error:', err.message);
-      console.error('[HybridSearch] Embedding param (first 100 chars):', embeddingParam.substring(0, 100));
+      console.error('[HybridSearch] Embedding type:', typeof queryEmbedding, Array.isArray(queryEmbedding) ? 'array' : 'not array');
+      console.error('[HybridSearch] Embedding sample:', queryEmbedding.slice(0, 3));
       throw err;
     }
   }

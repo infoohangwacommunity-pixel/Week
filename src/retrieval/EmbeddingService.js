@@ -236,23 +236,22 @@ export class EmbeddingService {
    * Update record with embedding
    */
   async updateEmbedding({ targetType, targetId, embedding }) {
-    const vectorValue = this.embeddingToArray(embedding);
-    const safeVector = vectorValue.replace(/'/g, "''");
-    const safeId = targetId.replace(/'/g, "''");
-    
+    // Pass embedding as JavaScript array - pg driver will handle serialization
     if (targetType === 'student_fact') {
       await this.db.query(
         `UPDATE student_facts
-         SET embedding = '${safeVector}'::vector,
+         SET embedding = $1,
              updated_at = NOW()
-         WHERE id = '${safeId}'`
+         WHERE id = $2`,
+        [embedding, targetId]
       );
     } else if (targetType === 'student_episode') {
       await this.db.query(
         `UPDATE student_episodes
-         SET embedding = '${safeVector}'::vector,
+         SET embedding = $1,
              updated_at = NOW()
-         WHERE id = '${safeId}'`
+         WHERE id = $2`,
+        [embedding, targetId]
       );
     } else {
       throw new Error(`Unknown target type: ${targetType}`);
