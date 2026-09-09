@@ -215,14 +215,35 @@ export class HybridSearch {
     `;
 
     try {
-      const result = await this.db.query(queryStr, [embeddingParam, waxId]);
-      console.log('[HybridSearch] Semantic search completed, got', result.rows.length, 'results');
-      return result.rows;
-    } catch (err) {
-      console.error('[HybridSearch] Semantic search error:', err.message);
-      console.error('[HybridSearch] Embedding param (first 100 chars):', embeddingParam.substring(0, 100));
-      throw err;
-    }
+    // Use pg_format to safely embed vector literal without quoting
+    // %I is for identifiers, but we need unquoted literal
+    // Use format() with %s for string that won't be quoted
+    const safeEmbedding = embeddingParam.replace(/'/g, "''"); // Simple escaping
+    const safeWaxId = waxId.replace(/'/g, "''");
+    
+    const formattedQuery = `
+      SELECT 
+        sf.id,
+        sf.wax_id,
+        sf.display_text,
+        sf.fact_value,
+        sf.fact_category,
+        sf.provenance,
+        sf.confidence,
+        sf.created_at,
+        'fact' as type,
+        1 - (sf.embedding <=> '${safeEmbedding}'::vector) as semantic_score
+      FROM student_facts sf
+      WHERE sf.wax_id = '${safeWaxId}'
+        AND sf.status = 'active'
+        AND sf.embedding IS NOT NULL
+      ORDER BY semantic_score DESC
+      LIMIT 20
+    `;
+    
+    const result = await this.db.query(formattedQuery);
+    return result.rows;
+  }
   }
 
   /**
