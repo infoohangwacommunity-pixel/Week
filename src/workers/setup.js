@@ -143,13 +143,22 @@ export async function setupWorkers({ redis, pool }) {
             }
           
           } catch (error) {
-            // Error is already normalized by AIOrchestrator
-            logger.error({
+            // Log detailed error information
+            const errorInfo = {
               jobId: job.id,
-              errorType: error.errorType,
-              message: error.providerMessage,
-              isRetryable: error.isRetryable,
-            }, 'AI request failed');
+              // Try to extract normalized error properties
+              errorType: error.errorType || 'UNKNOWN',
+              message: error.providerMessage || error.message || 'Unknown error',
+              isRetryable: error.isRetryable || false,
+              // Always include raw error details for debugging
+              rawError: {
+                name: error.name,
+                message: error.message,
+                stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+              },
+            };
+            
+            logger.error(errorInfo, 'AI request failed');
             
             // Re-throw to trigger BullMQ retry logic
             throw error;

@@ -463,8 +463,14 @@ export class AIOrchestrator {
       const latencyMs = Date.now() - startTime;
       
       this.logger.error({
-        error: error.message,
-        errorType: error.errorType,
+        errorType: error.errorType || 'UNKNOWN',
+        message: error.providerMessage || error.message || 'Unknown error',
+        isRetryable: error.isRetryable || false,
+        rawError: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+        },
         latencyMs,
       }, 'AI request failed');
 

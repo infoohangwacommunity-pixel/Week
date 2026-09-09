@@ -21,6 +21,8 @@ import config from '../../config/index.js';
 export async function getProvider(providerName) {
   const name = providerName.toLowerCase();
   
+  console.log(`[ProviderFactory] Initializing provider: ${providerName}`);
+  
   // Lazy import adapters to avoid circular dependencies
   if (name === 'fake') {
     const { default: FakeAIAdapter } = await import('./FakeAIAdapter.js');
@@ -33,6 +35,7 @@ export async function getProvider(providerName) {
   
   if (name === 'anthropic') {
     const { default: AnthropicAdapter } = await import('./AnthropicAdapter.js');
+    console.log('[ProviderFactory] Anthropic adapter initialized');
     const provider = new AnthropicAdapter();
     if (!validateProviderImplementation(provider)) {
       throw new Error('AnthropicAdapter does not implement AIProviderInterface correctly');
@@ -89,14 +92,15 @@ export async function initializeProviders() {
       primary: provider,
       current: providerName,
     };
-  } catch (error) {
-    console.error('Failed to initialize AI provider:');
-    console.error(`  Provider: ${providerName}`);
-    console.error(`  Error: ${error.message}`);
-    console.error('\nPlease check your AI_PRIMARY_PROVIDER configuration.');
-    console.error('Supported providers: fake, anthropic, openai, groq, cerebras, gemini');
-    throw error;
-  }
+    } catch (error) {
+      console.error('Failed to initialize AI provider:');
+      console.error(`  Provider: ${providerName}`);
+      console.error(`  Error: ${error.message}`);
+      console.error(`  Error Type: ${error.errorType || 'UNKNOWN'}`);
+      console.error('\nPlease check your AI_PRIMARY_PROVIDER configuration.');
+      console.error('Supported providers: fake, anthropic, openai, groq, cerebras, gemini');
+      throw error;
+    }
 }
 
 /**
