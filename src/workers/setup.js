@@ -78,9 +78,10 @@ export async function setupWorkers({ redis, pool }) {
               throw importError;
             }
             
+            let ProviderFactory;
             try {
               const providerModule = await import('../ai/providers/ProviderFactory.js');
-              const ProviderFactory = providerModule.default;
+              ProviderFactory = providerModule.default;
               log.info('ProviderFactory imported');
             } catch (importError) {
               log.error({ err: { name: importError.name, message: importError.message, stack: importError.stack?.split('\n').slice(0, 3).join('\n') } }, 'Failed to import ProviderFactory');
