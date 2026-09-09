@@ -34,134 +34,140 @@ export async function setupWorkers({ redis, pool }) {
   }
 
   // Setup AI processing worker with full orchestration (Stages 18-21)
-  const aiWorker = new Worker(
-    'ai-processing',
-    async (job) => {
-      // Restore trace context from job payload
-      const trace = extractTraceContext(job.data);
-      
-      return runWithContext(trace, async () => {
-        const log = logger.child({
-          jobId: job.id,
-          waxId: trace.waxId,
-          sessionId: trace.sessionId,
-          messageId: trace.messageId,
-        });
-
-        log.info('Processing AI job with full orchestration (Stages 18-21)');
-
-        try {
-          // Import orchestration components
-          const { AIOrchestrator } = await import('../orchestration/AIOrchestrator.js');
-          const { ContextAssembler } = await import('../context/ContextAssembler.js');
-          const { ResponseValidator } = await import('../validation/ResponseValidator.js');
-          const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
-          
-          // Phase G-I: Import tool and safety components
-          const { ToolExecutor } = await import('../tools/ToolExecutor.js');
-          const { SafetyClassifier } = await import('../safety/SafetyClassifier.js');
-          const { CrisisProtocol } = await import('../safety/CrisisProtocol.js');
-          
-          // Initialize providers
-          const providerRegistry = await ProviderFactory.initializeProviders();
-          log.info({ provider: providerRegistry.current }, 'AI providers initialized');
-          
-          // Initialize context assembler (Stage 18)
-          const contextAssembler = new ContextAssembler({ createPool: () => Promise.resolve(pool) });
-          
-          // Initialize response validator (Stage 19)
-          const responseValidator = new ResponseValidator({ createPool: () => Promise.resolve(pool) });
-          
-          // Phase G-I: Initialize tool executor
-          let toolExecutor = null;
-          if (config.TOOL_MAX_CALLS_PER_SESSION) {
-            toolExecutor = new ToolExecutor({ db: pool, queue: null, logger, configOverride: {} });
-            log.info('Tool executor initialized (Phase G)');
-          }
-          
-          // Phase I: Initialize safety classifier
-          let safetyClassifier = null;
-          let crisisProtocol = null;
-          if (config.SAFETY_CLASSIFIER_MODEL) {
-            safetyClassifier = new SafetyClassifier({ aiService: providerRegistry.primary, db: pool, logger });
-            crisisProtocol = new CrisisProtocol({ db: pool, logger, emailService: null, webhookService: null });
-            log.info('Safety classifier and crisis protocol initialized (Phase I)');
-          }
-          
-          // Create orchestrator with Phase G-I dependencies
-          const orchestrator = new AIOrchestrator({
-            providerFactory: providerRegistry.primary,
-            contextAssembler,
-            responseValidator,
-            database: { createPool: () => Promise.resolve(pool) },
-            toolExecutor,
-            safetyClassifier,
-            crisisProtocol,
-          });
-          
-          // Get current message from job data or build from messages array
-          const currentMessage = trace.messages && trace.messages.length > 0
-            ? trace.messages[trace.messages.length - 1]?.content || trace.currentMessage
-            : trace.currentMessage;
-          
-          if (!currentMessage && (!trace.messages || trace.messages.length === 0)) {
-            throw new Error('No current message provided in job data');
-          }
-          
-          // Complete the AI request through orchestrator
-          const response = await orchestrator.complete({
+  let aiWorker;
+  try {
+    aiWorker = new Worker(
+      'ai-processing',
+      async (job) => {
+        // Restore trace context from job payload
+        const trace = extractTraceContext(job.data);
+        
+        return runWithContext(trace, async () => {
+          const log = logger.child({
+            jobId: job.id,
             waxId: trace.waxId,
             sessionId: trace.sessionId,
-            currentMessage,
-            context: { correlationId: trace.correlationId },
+            messageId: trace.messageId,
           });
+
+          log.info('Processing AI job with full orchestration (Stages 18-21)');
+
+          try {
+            // Import orchestration components
+            const { AIOrchestrator } = await import('../orchestration/AIOrchestrator.js');
+            const { ContextAssembler } = await import('../context/ContextAssembler.js');
+            const { ResponseValidator } = await import('../validation/ResponseValidator.js');
+            const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
+            
+            // Phase G-I: Import tool and safety components
+            const { ToolExecutor } = await import('../tools/ToolExecutor.js');
+            const { SafetyClassifier } = await import('../safety/SafetyClassifier.js');
+            const { CrisisProtocol } = await import('../safety/CrisisProtocol.js');
+            
+            // Initialize providers
+            const providerRegistry = await ProviderFactory.initializeProviders();
+            log.info({ provider: providerRegistry.current }, 'AI providers initialized');
+            
+            // Initialize context assembler (Stage 18)
+            const contextAssembler = new ContextAssembler({ createPool: () => Promise.resolve(pool) });
+            
+            // Initialize response validator (Stage 19)
+            const responseValidator = new ResponseValidator({ createPool: () => Promise.resolve(pool) });
+            
+            // Phase G-I: Initialize tool executor
+            let toolExecutor = null;
+            if (config.TOOL_MAX_CALLS_PER_SESSION) {
+              toolExecutor = new ToolExecutor({ db: pool, queue: null, logger, configOverride: {} });
+              log.info('Tool executor initialized (Phase G)');
+            }
+            
+            // Phase I: Initialize safety classifier
+            let safetyClassifier = null;
+            let crisisProtocol = null;
+            if (config.SAFETY_CLASSIFIER_MODEL) {
+              safetyClassifier = new SafetyClassifier({ aiService: providerRegistry.primary, db: pool, logger });
+              crisisProtocol = new CrisisProtocol({ db: pool, logger, emailService: null, webhookService: null });
+              log.info('Safety classifier and crisis protocol initialized (Phase I)');
+            }
+            
+            // Create orchestrator with Phase G-I dependencies
+            const orchestrator = new AIOrchestrator({
+              providerFactory: providerRegistry.primary,
+              contextAssembler,
+              responseValidator,
+              database: { createPool: () => Promise.resolve(pool) },
+              toolExecutor,
+              safetyClassifier,
+              crisisProtocol,
+            });
+            
+            // Get current message from job data or build from messages array
+            const currentMessage = trace.messages && trace.messages.length > 0
+              ? trace.messages[trace.messages.length - 1]?.content || trace.currentMessage
+              : trace.currentMessage;
+            
+            if (!currentMessage && (!trace.messages || trace.messages.length === 0)) {
+              throw new Error('No current message provided in job data');
+            }
+            
+            // Complete the AI request through orchestrator
+            const response = await orchestrator.complete({
+              waxId: trace.waxId,
+              sessionId: trace.sessionId,
+              currentMessage,
+              context: { correlationId: trace.correlationId },
+            });
+            
+            // Log successful response
+            log.info({
+              provider: response.provider,
+              model: response.model,
+              finishReason: response.finishReason,
+              tokens: `${response.usage.inputTokens}/${response.usage.outputTokens}`,
+              fallbackUsed: response.fallbackUsed || false,
+            }, 'AI request completed successfully');
+            
+            // Send response to student via WhatsApp
+            if (response.content && trace.phoneNumber) {
+              try {
+                const messageIds = await sendResponse(trace.phoneNumber, response.content, {
+                  correlationId: trace.correlationId,
+                  messageId: trace.messageId,
+                });
+                log.info({ messageIds, contentLength: response.content.length }, 'Response sent successfully');
+              } catch (err) {
+                log.error({ err: { name: err.name, message: err.message } }, 'Failed to send response to student');
+                // Don't rethrow - AI request succeeded, just delivery failed
+              }
+            } else {
+              log.warn({ hasContent: !!response.content, hasPhoneNumber: !!trace.phoneNumber }, 'Skipping outbound delivery - missing content or phone number');
+            }
           
-           // Log successful response
-           log.info({
-             provider: response.provider,
-             model: response.model,
-             finishReason: response.finishReason,
-             tokens: `${response.usage.inputTokens}/${response.usage.outputTokens}`,
-             fallbackUsed: response.fallbackUsed || false,
-           }, 'AI request completed successfully');
-           
-           // Send response to student via WhatsApp
-           if (response.content && trace.phoneNumber) {
-             try {
-               const messageIds = await sendResponse(trace.phoneNumber, response.content, {
-                 correlationId: trace.correlationId,
-                 messageId: trace.messageId,
-               });
-               log.info({ messageIds, contentLength: response.content.length }, 'Response sent successfully');
-             } catch (err) {
-               log.error({ err: { name: err.name, message: err.message } }, 'Failed to send response to student');
-               // Don't rethrow - AI request succeeded, just delivery failed
-             }
-           } else {
-             log.warn({ hasContent: !!response.content, hasPhoneNumber: !!trace.phoneNumber }, 'Skipping outbound delivery - missing content or phone number');
-           }
-          
-        } catch (error) {
-          // Error is already normalized by AIOrchestrator
-          logger.error({
-            jobId: job.id,
-            errorType: error.errorType,
-            message: error.providerMessage,
-            isRetryable: error.isRetryable,
-          }, 'AI request failed');
-          
-          // Re-throw to trigger BullMQ retry logic
-          throw error;
-        }
+          } catch (error) {
+            // Error is already normalized by AIOrchestrator
+            logger.error({
+              jobId: job.id,
+              errorType: error.errorType,
+              message: error.providerMessage,
+              isRetryable: error.isRetryable,
+            }, 'AI request failed');
+            
+            // Re-throw to trigger BullMQ retry logic
+            throw error;
+          }
       });
     },
-    {
-      connection: new Redis(redis),
-      concurrency: config.QUEUE_WORKER_CONCURRENCY,
-      lockDuration: config.QUEUE_LOCK_DURATION_MS,
-      lockRenewalTime: config.QUEUE_LOCK_DURATION_MS / 2,
-    },
-  );
+      {
+        connection: new Redis(redis),
+        concurrency: config.QUEUE_WORKER_CONCURRENCY,
+        lockDuration: config.QUEUE_LOCK_DURATION_MS,
+        lockRenewalTime: config.QUEUE_LOCK_DURATION_MS / 2,
+      },
+    );
+  } catch (err) {
+    logger.fatal({ err: { name: err.name, message: err.message, stack: err.stack } }, 'Failed to create AI worker - crashing');
+    throw err;
+  }
 
   workers.push(aiWorker);
 

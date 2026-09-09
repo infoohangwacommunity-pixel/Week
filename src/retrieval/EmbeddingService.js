@@ -58,7 +58,7 @@ export class EmbeddingService {
         error: error.message,
         targetType,
         targetId,
-      });
+      }, 'Embedding generation failed');
 
       // Update job status to failed
       await this.markJobFailed({ targetType, targetId, error: error.message });
