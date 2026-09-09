@@ -11,23 +11,51 @@
  */
 
 import { createPool } from '../db/index.js';
-import { createQueue } from '../queue/index.js';
 import { resolveWaxID } from '../identity/waxId.js';
 import { getOrCreateSession } from '../session/manager.js';
 import { randomUUID } from 'crypto';
 import { logger } from '../observability/index.js';
 import { getRateLimiter } from './rateLimiter.js';
 import config from '../config/index.js';
+import { Redis } from 'ioredis';
+import { Queue } from 'bullmq';
+
+// Module-level queue instance (created once, shared across requests)
+let queue = null;
+
+/**
+ * Get or initialize the BullMQ queue
+ */
+async function getQueue() {
+  if (queue) return queue;
+  
+  try {
+    const redis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+    await redis.ping();
+    
+    queue = new Queue('ai-processing', { 
+      connection: redis,
+      defaultJobOptions: { 
+        removeOnComplete: 100,
+        removeOnFail: 100
+      } 
+    });
+    
+    logger.info('AI processing queue initialized');
+    return queue;
+  } catch (err) {
+    logger.error({ err: { name: err.name, message: err.message, code: err.code } }, 'Failed to initialize queue');
+    throw err;
+  }
+}
 
 export async function enqueueStudentMessage(from, messageId, message, databaseUrl, redisUrl, debounceWindowMs, log) {
   // Ensure we have a logger
   const logSafe = log || logger;
   
   try {
-    // Initialize queue if not already done
-    if (!queue) {
-      await initializeQueue();
-    }
+    // Get or initialize queue
+    const queueInstance = await getQueue();
     
     // Create database pool
     const pool = await createPool(config);
@@ -72,7 +100,7 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
     const debounceJobId = `debounce:student:${waxId}`;
     
     try {
-      const existingJob = await queue.getJob(debounceJobId);
+      const existingJob = await queueInstance.getJob(debounceJobId);
       if (existingJob) {
         await existingJob.remove();
         sessionLog.debug({ debounceJobId }, 'Cancelled pending debounce job');
@@ -82,11 +110,19 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
     }
     
     // Add to queue with debounce delay
-    await queue.add('process-student-messages', {
+    // Include phone number in payload for outbound delivery
+    await queueInstance.add('process-student-messages', {
       waxId,
+      phoneNumber: from,
       messageId,
       sessionId: session.id,
-      _trace: { correlationId: randomUUID(), waxId, messageId, sessionId: session.id },
+      _trace: { 
+        correlationId: randomUUID(), 
+        waxId, 
+        messageId, 
+        sessionId: session.id,
+        phoneNumber: from
+      },
     }, { jobId: debounceJobId, delay: debounceWindowMs });
     
     sessionLog.info({ waxId, messageId, sessionId: session.id }, 'Message enqueued for processing');
@@ -107,41 +143,4 @@ export async function enqueueStudentMessage(from, messageId, message, databaseUr
   }
 }
 
-// Module-level queue instance (created once)
-let queue = null;
-
-// Initialize queue
-async function initializeQueue() {
-  if (queue) return queue;
-  
-  try {
-    const redis = await createRedisClient(config);
-    const bullmq = await import('bullmq');
-    
-    queue = new bullmq.Queue('student-messages', { 
-      connection: redis,
-      defaultJobOptions: { 
-        removeOnComplete: 100,
-        removeOnFail: 100
-      } 
-    });
-    
-    return queue;
-  } catch (err) {
-    console.error('Failed to initialize queue:', {
-      name: err.name,
-      message: err.message,
-      code: err.code,
-    });
-    throw err;
-  }
-}
-
-async function createRedisClient(cfg) {
-  const { Redis } = await import('ioredis');
-  const redis = new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: null });
-  await redis.ping();
-  return redis;
-}
-
-export default { enqueueStudentMessage, initializeQueue };
+export default { enqueueStudentMessage };

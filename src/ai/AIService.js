@@ -9,6 +9,7 @@
  * Business logic never calls providers directly.
  */
 
+import { randomUUID } from 'crypto';
 import { createAIRequest, estimateTokenUsage } from './schemas/AIRequest.js';
 import { createAIResponse, FinishReason } from './schemas/AIResponse.js';
 import { createAIError, AIErrorTypes } from './schemas/AIErrors.js';

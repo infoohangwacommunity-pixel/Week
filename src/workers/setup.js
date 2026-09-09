@@ -13,8 +13,9 @@
 import { Worker } from 'bullmq';
 import { IORedis } from 'bullmq';
 import config from '../config/index.js';
-import { logger, extractTraceContext } from '../observability/index.js';
-import { runWithContext } from 'node:async_hooks';
+import { logger, extractTraceContext, runWithContext } from '../observability/index.js';
+import { sendResponse } from '../messaging/outbound.js';
+import { getOrCreateSession } from '../session/manager.js';
 import { setupDecayWorker } from './decayRecomputation.js';
 import { setupEmbeddingWorker } from './embeddingWorker.js';
 
@@ -115,18 +116,30 @@ export async function setupWorkers({ redis, pool }) {
             context: { correlationId: trace.correlationId },
           });
           
-          // Log successful response
-          log.info({
-            provider: response.provider,
-            model: response.model,
-            finishReason: response.finishReason,
-            tokens: `${response.usage.inputTokens}/${response.usage.outputTokens}`,
-            fallbackUsed: response.fallbackUsed || false,
-          }, 'AI request completed successfully');
-          
-          // Queue outbound message with response.content (Stage 21 integration)
-          // TODO: Implement outbound queue integration
-          log.info({ contentLength: response.content?.length || 0 }, 'Response ready for outbound delivery');
+           // Log successful response
+           log.info({
+             provider: response.provider,
+             model: response.model,
+             finishReason: response.finishReason,
+             tokens: `${response.usage.inputTokens}/${response.usage.outputTokens}`,
+             fallbackUsed: response.fallbackUsed || false,
+           }, 'AI request completed successfully');
+           
+           // Send response to student via WhatsApp
+           if (response.content && trace.phoneNumber) {
+             try {
+               const messageIds = await sendResponse(trace.phoneNumber, response.content, {
+                 correlationId: trace.correlationId,
+                 messageId: trace.messageId,
+               });
+               log.info({ messageIds, contentLength: response.content.length }, 'Response sent successfully');
+             } catch (err) {
+               log.error({ err: { name: err.name, message: err.message } }, 'Failed to send response to student');
+               // Don't rethrow - AI request succeeded, just delivery failed
+             }
+           } else {
+             log.warn({ hasContent: !!response.content, hasPhoneNumber: !!trace.phoneNumber }, 'Skipping outbound delivery - missing content or phone number');
+           }
           
         } catch (error) {
           // Error is already normalized by AIOrchestrator

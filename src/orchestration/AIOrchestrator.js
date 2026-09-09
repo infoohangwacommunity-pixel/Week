@@ -19,6 +19,7 @@
  * The AI is the intelligence. This provides the infrastructure for orchestration.
  */
 
+import { randomUUID } from 'crypto';
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { createAIRequest, estimateTokenUsage } from '../ai/schemas/AIRequest.js';

@@ -11,6 +11,7 @@
  * - Cache results for cost control
  */
 
+import { randomUUID } from 'crypto';
 import config from '../../config/index.js';
 import { WebContentSanitizer } from '../WebContentSanitizer.js';
 
