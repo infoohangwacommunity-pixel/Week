@@ -236,21 +236,23 @@ export class EmbeddingService {
    * Update record with embedding
    */
   async updateEmbedding({ targetType, targetId, embedding }) {
+    const vectorValue = this.embeddingToArray(embedding);
+    const safeVector = vectorValue.replace(/'/g, "''");
+    const safeId = targetId.replace(/'/g, "''");
+    
     if (targetType === 'student_fact') {
       await this.db.query(
         `UPDATE student_facts
-         SET embedding = $1,
+         SET embedding = '${safeVector}'::vector,
              updated_at = NOW()
-         WHERE id = $2`,
-        [this.embeddingToArray(embedding), targetId]
+         WHERE id = '${safeId}'`
       );
     } else if (targetType === 'student_episode') {
       await this.db.query(
         `UPDATE student_episodes
-         SET embedding = $1,
+         SET embedding = '${safeVector}'::vector,
              updated_at = NOW()
-         WHERE id = $2`,
-        [this.embeddingToArray(embedding), targetId]
+         WHERE id = '${safeId}'`
       );
     } else {
       throw new Error(`Unknown target type: ${targetType}`);
