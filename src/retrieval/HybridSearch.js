@@ -169,6 +169,8 @@ export class HybridSearch {
     // Generate embedding for query
     const queryEmbedding = await this.generateEmbedding(query);
 
+    // Use raw SQL with string concatenation to avoid pg driver escaping
+    // The embedding is already in pgvector tuple format: (0,0,0,...)
     const queryStr = `
       SELECT 
         sf.id,
@@ -180,16 +182,16 @@ export class HybridSearch {
         sf.confidence,
         sf.created_at,
         'fact' as type,
-        1 - (sf.embedding <=> $1) as semantic_score
+        1 - (sf.embedding <=> '${queryEmbedding}') as semantic_score
       FROM student_facts sf
-      WHERE sf.wax_id = $2
+      WHERE sf.wax_id = $1
         AND sf.status = 'active'
         AND sf.embedding IS NOT NULL
       ORDER BY semantic_score DESC
       LIMIT 20
     `;
 
-    const result = await this.db.query(queryStr, [queryEmbedding, waxId]);
+    const result = await this.db.query(queryStr, [waxId]);
     return result.rows;
   }
 
@@ -303,12 +305,12 @@ export class HybridSearch {
    */
   async generateEmbedding(text) {
     // This would integrate with the embedding service
-    // For now, return mock embedding as pgvector string format
+    // For now, return mock embedding as pgvector tuple string
+    // We return a string that will be used in raw SQL concatenation
+    // to avoid pg driver double-escaping
     const dimensions = config.EMBEDDING_DIMENSIONS || 1536;
     const embedding = Array(dimensions).fill(0);
-    // pgvector accepts vector as a string in format "(v1,v2,v3,...)"
-    // or as a PostgreSQL array "{v1,v2,v3,...}"
-    // We use the tuple format which is more explicit
+    // pgvector accepts vector in tuple format: (v1,v2,v3,...)
     return `(${embedding.join(',')})`;
   }
 }
