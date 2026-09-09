@@ -1,6 +1,9 @@
 -- Migration 001: Initial Schema
 -- Creates the schema_migrations table and foundational tables
 
+-- Required extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- Schema migrations tracking table (created by migrate.js, but defining here for reference)
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version INTEGER PRIMARY KEY,

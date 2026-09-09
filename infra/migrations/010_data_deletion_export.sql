@@ -99,4 +99,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-INSERT INTO schema_migrations (version) VALUES (9) ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version) VALUES (10) ON CONFLICT (version) DO NOTHING;

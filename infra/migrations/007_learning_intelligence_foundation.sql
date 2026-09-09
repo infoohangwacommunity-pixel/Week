@@ -377,5 +377,5 @@ CREATE INDEX idx_snapshots_wax_fresh
 -- MIGRATION TRACKING
 -- ============================================================
 
-INSERT INTO schema_migrations (version) VALUES (6)
+INSERT INTO schema_migrations (version) VALUES (7)
 ON CONFLICT (version) DO NOTHING;
