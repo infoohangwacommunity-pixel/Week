@@ -11,7 +11,6 @@
  */
 
 import { Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import config from '../config/index.js';
 import { logger, extractTraceContext, runWithContext } from '../observability/index.js';
 import { sendResponse } from '../messaging/outbound.js';
@@ -158,9 +157,7 @@ export async function setupWorkers({ redis, pool }) {
       });
     },
       {
-        connection: new Redis(redis, {
-          maxRetriesPerRequest: null, // Required by BullMQ
-        }),
+        connection: redis,
         concurrency: config.QUEUE_WORKER_CONCURRENCY,
         lockDuration: config.QUEUE_LOCK_DURATION_MS,
         lockRenewalTime: config.QUEUE_LOCK_DURATION_MS / 2,

@@ -6,7 +6,6 @@
  */
 
 import { Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { EmbeddingService } from '../retrieval/EmbeddingService.js';
@@ -52,9 +51,7 @@ export async function setupEmbeddingWorker({ redis, pool }) {
       }
     },
     {
-      connection: new Redis(redis, {
-        maxRetriesPerRequest: null, // Required by BullMQ
-      }),
+      connection: redis,
       concurrency: 5,
     }
   );

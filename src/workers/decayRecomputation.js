@@ -12,7 +12,6 @@
  */
 
 import { Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { MasteryEngine } from '../learning/mastery/MasteryEngine.js';
@@ -75,9 +74,7 @@ export async function setupDecayWorker({ redis, pool }) {
       }
     },
     {
-      connection: new Redis(redis, {
-        maxRetriesPerRequest: null, // Required by BullMQ
-      }),
+      connection: redis,
       concurrency: 1,
       lockDuration: 300000, // 5 minutes
       limiter: {
