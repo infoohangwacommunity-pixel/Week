@@ -303,9 +303,13 @@ export class HybridSearch {
    */
   async generateEmbedding(text) {
     // This would integrate with the embedding service
-    // For now, return mock embedding
-    const dimensions = config.EMBEDDING_DIMENSIONS;
-    return Array(dimensions).fill(0);
+    // For now, return mock embedding as pgvector string format
+    const dimensions = config.EMBEDDING_DIMENSIONS || 1536;
+    const embedding = Array(dimensions).fill(0);
+    // pgvector accepts vector as a string in format "(v1,v2,v3,...)"
+    // or as a PostgreSQL array "{v1,v2,v3,...}"
+    // We use the tuple format which is more explicit
+    return `(${embedding.join(',')})`;
   }
 }
 
