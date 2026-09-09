@@ -62,14 +62,29 @@ export async function setupWorkers({ redis, pool }) {
             const { AIOrchestrator } = await import('../orchestration/AIOrchestrator.js');
             log.info('AIOrchestrator imported');
             
-            const { ContextAssembler } = await import('../context/ContextAssembler.js');
-            log.info('ContextAssembler imported');
+            try {
+              const { ContextAssembler } = await import('../context/ContextAssembler.js');
+              log.info('ContextAssembler imported');
+            } catch (importError) {
+              log.error({ err: { name: importError.name, message: importError.message, stack: importError.stack?.split('\n').slice(0, 3).join('\n') } }, 'Failed to import ContextAssembler');
+              throw importError;
+            }
             
-            const { ResponseValidator } = await import('../validation/ResponseValidator.js');
-            log.info('ResponseValidator imported');
+            try {
+              const { ResponseValidator } = await import('../validation/ResponseValidator.js');
+              log.info('ResponseValidator imported');
+            } catch (importError) {
+              log.error({ err: { name: importError.name, message: importError.message, stack: importError.stack?.split('\n').slice(0, 3).join('\n') } }, 'Failed to import ResponseValidator');
+              throw importError;
+            }
             
-            const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
-            log.info('ProviderFactory imported');
+            try {
+              const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
+              log.info('ProviderFactory imported');
+            } catch (importError) {
+              log.error({ err: { name: importError.name, message: importError.message, stack: importError.stack?.split('\n').slice(0, 3).join('\n') } }, 'Failed to import ProviderFactory');
+              throw importError;
+            }
             
             // Phase G-I: Import tool and safety components
             const { ToolExecutor } = await import('../tools/ToolExecutor.js');
@@ -137,6 +152,7 @@ export async function setupWorkers({ redis, pool }) {
             }
             
             // Complete the AI request through orchestrator
+            log.info({ waxId: trace.waxId, sessionId: trace.sessionId, hasMessage: !!currentMessage, correlationId: trace.correlationId }, 'Calling orchestrator.complete');
             const response = await orchestrator.complete({
               waxId: trace.waxId,
               sessionId: trace.sessionId,
