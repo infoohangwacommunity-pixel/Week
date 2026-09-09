@@ -21,22 +21,26 @@ import config from '../../config/index.js';
 export async function getProvider(providerName) {
   const name = providerName.toLowerCase();
   
-  console.log(`[ProviderFactory] Initializing provider: ${providerName}`);
+  console.log(`[ProviderFactory] Loading provider: ${providerName}`);
   
-  // Lazy import adapters to avoid circular dependencies
-  if (name === 'fake') {
-    const { default: FakeAIAdapter } = await import('./FakeAIAdapter.js');
-    const provider = new FakeAIAdapter();
-    if (!validateProviderImplementation(provider)) {
-      throw new Error('FakeAIAdapter does not implement AIProviderInterface correctly');
+  try {
+    // Lazy import adapters to avoid circular dependencies
+    if (name === 'fake') {
+      const { default: FakeAIAdapter } = await import('./FakeAIAdapter.js');
+      const provider = new FakeAIAdapter();
+      if (!validateProviderImplementation(provider)) {
+        throw new Error('FakeAIAdapter does not implement AIProviderInterface correctly');
+      }
+      return provider;
     }
-    return provider;
-  }
-  
-  if (name === 'anthropic') {
-    const { default: AnthropicAdapter } = await import('./AnthropicAdapter.js');
-    console.log('[ProviderFactory] Anthropic adapter initialized');
-    const provider = new AnthropicAdapter();
+    
+    if (name === 'anthropic') {
+      const { default: AnthropicAdapter } = await import('./AnthropicAdapter.js');
+      console.log('[ProviderFactory] Anthropic adapter constructor called');
+      const provider = new AnthropicAdapter();
+      console.log('[ProviderFactory] Anthropic adapter instance created');
+      return provider;
+    }
     if (!validateProviderImplementation(provider)) {
       throw new Error('AnthropicAdapter does not implement AIProviderInterface correctly');
     }
@@ -84,6 +88,7 @@ export async function getProvider(providerName) {
  */
 export async function initializeProviders() {
   const providerName = config.AI_PRIMARY_PROVIDER.toLowerCase();
+  console.log(`[ProviderFactory] Initializing primary provider: ${providerName}`);
   
   try {
     const provider = await getProvider(providerName);

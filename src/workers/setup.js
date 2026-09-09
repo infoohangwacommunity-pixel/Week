@@ -98,8 +98,20 @@ export async function setupWorkers({ redis, pool }) {
             
             // Initialize providers
             log.info('Initializing providers...');
-            const providerRegistry = await ProviderFactory.initializeProviders();
-            log.info({ provider: providerRegistry.current }, 'AI providers initialized');
+            try {
+              const providerRegistry = await ProviderFactory.initializeProviders();
+              log.info({ provider: providerRegistry.current }, 'AI providers initialized');
+            } catch (providerInitError) {
+              log.error({
+                err: {
+                  name: providerInitError.name,
+                  message: providerInitError.message,
+                  stack: providerInitError.stack?.split('\n').slice(0, 5).join('\n'),
+                  errorType: providerInitError.errorType,
+                },
+              }, 'Failed to initialize AI providers');
+              throw providerInitError;
+            }
             
             // Initialize context assembler (Stage 18)
             const contextAssembler = new ContextAssembler(pool);
