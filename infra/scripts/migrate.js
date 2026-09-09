@@ -124,58 +124,28 @@ async function runMigrations() {
       )
     `);
 
-    // Check if all migrations are already applied (optimistic check)
+    // Get applied migrations and migration files
     const applied = await getAppliedMigrations(pool);
     const files = await getMigrationFiles();
+    
+    // Find pending migrations
     const pending = files.filter((f) => {
       const version = f.replace('.sql', '');
       return !applied.includes(version);
     });
     
     if (pending.length === 0) {
-      console.log('All migrations already applied - skipping');
+      console.log('No pending migrations - skipping');
       return;
     }
     
-    // Acquire migration lock only if migrations are pending
+    console.log(`Found ${pending.length} pending migration(s)`);
+
+    // Acquire migration lock before running migrations
     const locked = await acquireMigrationLock(pool);
     if (!locked) {
-      // Check again if migrations are still pending
-      const stillApplied = await getAppliedMigrations(pool);
-      const stillPending = files.filter((f) => {
-        const version = f.replace('.sql', '');
-        return !stillApplied.includes(version);
-      });
-      
-      if (stillPending.length === 0) {
-        console.log('All migrations already applied - skipping');
-        return;
-      }
-      
       throw new Error('Could not acquire migration lock - another migration may be running');
     }
-
-    // Find pending migrations (already checked above, but re-check after lock)
-    const stillApplied = await getAppliedMigrations(pool);
-    const stillFiles = await getMigrationFiles();
-    const pending = stillFiles.filter((f) => {
-      const version = f.replace('.sql', '');
-      return !stillApplied.includes(version);
-    });
-    
-    if (pending.length === 0) {
-      console.log('All migrations already applied - skipping');
-      await releaseMigrationLock(pool);
-      await pool.end();
-      return;
-    }
-
-    if (pending.length === 0) {
-      console.log('No pending migrations');
-      return;
-    }
-
-    console.log(`Found ${pending.length} pending migration(s)`);
 
     // Apply migrations in order
     for (const file of pending) {
