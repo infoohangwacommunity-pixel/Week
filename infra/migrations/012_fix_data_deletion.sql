@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 011_fix_data_deletion.sql
+-- Migration: 012_fix_data_deletion.sql
 -- =============================================================================
 -- Fix CRITICAL-002: Data deletion now actually deletes sessions (not soft delete)
 -- 
@@ -22,7 +22,23 @@ RETURNS TABLE (
 ) AS $$
 DECLARE
   v_audit_id UUID;
+  v_messages_count BIGINT;
+  v_observations_count BIGINT;
+  v_facts_count BIGINT;
+  v_episodes_count BIGINT;
+  v_misconceptions_count BIGINT;
+  v_knowledge_states_count BIGINT;
+  v_sessions_count BIGINT;
 BEGIN
+  -- Count records BEFORE deletion
+  SELECT COUNT(*) INTO v_messages_count FROM messages WHERE wax_id = p_wax_id;
+  SELECT COUNT(*) INTO v_observations_count FROM learning_observations WHERE wax_id = p_wax_id;
+  SELECT COUNT(*) INTO v_facts_count FROM student_facts WHERE wax_id = p_wax_id;
+  SELECT COUNT(*) INTO v_episodes_count FROM student_episodes WHERE wax_id = p_wax_id;
+  SELECT COUNT(*) INTO v_misconceptions_count FROM misconceptions WHERE wax_id = p_wax_id;
+  SELECT COUNT(*) INTO v_knowledge_states_count FROM knowledge_states WHERE wax_id = p_wax_id;
+  SELECT COUNT(*) INTO v_sessions_count FROM sessions WHERE wax_id = p_wax_id;
+  
   -- Start a transaction for atomicity
   BEGIN
     -- Insert audit log entry first
@@ -57,7 +73,13 @@ BEGIN
     SET event_data = event_data || jsonb_build_object(
       'status', 'completed',
       'deletion_method', 'actual_deletion',
-      'sessions_deleted', (SELECT COUNT(*) FROM sessions WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL)
+      'messages_deleted', v_messages_count,
+      'observations_deleted', v_observations_count,
+      'facts_deleted', v_facts_count,
+      'episodes_deleted', v_episodes_count,
+      'misconceptions_deleted', v_misconceptions_count,
+      'knowledge_states_reset', v_knowledge_states_count,
+      'sessions_deleted', v_sessions_count
     )
     WHERE id = v_audit_id;
     
@@ -82,15 +104,9 @@ BEGIN
   
   -- Return counts for each deleted entity type
   RETURN QUERY
-  SELECT 
-    (SELECT COUNT(*) FROM messages WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    (SELECT COUNT(*) FROM learning_observations WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    (SELECT COUNT(*) FROM student_facts WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    (SELECT COUNT(*) FROM student_episodes WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    (SELECT COUNT(*) FROM misconceptions WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    (SELECT COUNT(*) FROM knowledge_states WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    (SELECT COUNT(*) FROM sessions WHERE wax_id = p_wax_id AND deleted_at IS NOT NULL),
-    v_audit_id;
+  SELECT v_messages_count, v_observations_count, v_facts_count,
+         v_episodes_count, v_misconceptions_count, v_knowledge_states_count,
+         v_sessions_count, v_audit_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -125,4 +141,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-INSERT INTO schema_migrations (version) VALUES (11) ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version) VALUES (12) ON CONFLICT (version) DO NOTHING;
