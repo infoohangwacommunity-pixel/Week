@@ -69,6 +69,8 @@ async function runMigration(pool, filename) {
 async function acquireMigrationLock(pool) {
   const lockId = 99999999;
   
+  console.log('Attempting to acquire migration lock...');
+  
   // Try to acquire lock with extended retry logic
   const maxRetries = 30; // Try for up to ~15 seconds
   const retryDelay = 500; // ms
@@ -99,6 +101,11 @@ async function acquireMigrationLock(pool) {
         return false; // Signal that we should skip
       }
       
+      // Log progress
+      if (attempt % 5 === 0) {
+        console.log(`Waiting for migration lock... (attempt ${attempt + 1}/${maxRetries})`);
+      }
+      
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, retryDelay));
     } catch (err) {
@@ -107,6 +114,7 @@ async function acquireMigrationLock(pool) {
     }
   }
   
+  console.error('Failed to acquire migration lock after all attempts');
   return false;
 }
 
@@ -117,8 +125,9 @@ async function releaseMigrationLock(pool) {
   const lockId = 99999999;
   try {
     await pool.query('SELECT pg_advisory_unlock($1)', [lockId]);
+    console.log('Released migration lock');
   } catch (err) {
-    // Lock might already be released, ignore
+    console.log('Note: Could not release migration lock (may already be released)');
   }
 }
 
@@ -130,6 +139,7 @@ async function runMigrations() {
   
   // Create pool for migration
   const pool = await createPool(config);
+  console.log('Database connection established for migrations');
   
   try {
     // Create schema_migrations table if it doesn't exist
@@ -139,10 +149,15 @@ async function runMigrations() {
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    console.log('schema_migrations table ready');
 
     // Check if all migrations are already applied (optimistic check)
     const applied = await getAppliedMigrations(pool);
+    console.log(`Applied migrations: ${applied.join(', ') || 'none'}`);
+    
     const files = await getMigrationFiles();
+    console.log(`Available migrations: ${files.join(', ')}`);
+    
     const pending = files.filter((f) => {
       const version = f.replace('.sql', '');
       return !applied.includes(version);
@@ -150,16 +165,19 @@ async function runMigrations() {
     
     if (pending.length === 0) {
       console.log('No pending migrations - skipping');
+      await pool.end();
       return;
     }
     
-    console.log(`Found ${pending.length} pending migration(s)`);
+    console.log(`Found ${pending.length} pending migration(s): ${pending.join(', ')}`);
     
     // Acquire migration lock with retry
     const locked = await acquireMigrationLock(pool);
     
     // If lock acquisition returned false, it means migrations completed by another process
     if (locked === false) {
+      console.log('Migrations already completed, exiting');
+      await pool.end();
       return;
     }
     
@@ -167,12 +185,17 @@ async function runMigrations() {
       throw new Error('Could not acquire migration lock after multiple attempts');
     }
 
+    console.log('Starting migration execution...');
+    
     // Apply migrations in order
     for (const file of pending) {
       await runMigration(pool, file);
     }
 
     console.log('Migrations complete');
+  } catch (err) {
+    console.error('Migration failed:', err);
+    throw err;
   } finally {
     // Release lock if we acquired it
     try {
@@ -180,6 +203,7 @@ async function runMigrations() {
     } catch (err) {
       // Lock might already be released, ignore
     }
+    console.log('Closing database connection');
     await pool.end();
   }
 }
@@ -187,7 +211,7 @@ async function runMigrations() {
 // Run if executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   runMigrations().catch((err) => {
-    console.error('Migration failed:', err);
+    console.error('Migration process failed:', err);
     process.exit(1);
   });
 }
