@@ -65,14 +65,19 @@ export async function setupEmbeddingWorker({ redis, pool }) {
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, err }, 'Embedding job failed');
+    logger.error({ jobId: job?.id, err: { name: err.name, message: err.message } }, 'Embedding job failed');
   });
 
+  let errorCount = 0;
   worker.on('error', (err) => {
-    logger.error({ err }, 'Embedding worker error');
+    errorCount++;
+    // Don't spam errors - only log first error and then every 10th error
+    if (errorCount === 1 || errorCount % 10 === 0) {
+      logger.error({ err: { name: err.name, message: err.message, stack: err.stack?.split('\n').slice(0, 5).join('\n') }, errorCount }, 'Embedding worker error (Redis connection issue - worker will retry automatically)');
+    }
   });
 
-  logger.info('Embedding worker setup complete');
+  logger.info('Embedding worker setup complete (will retry Redis connection automatically on failure)');
   return worker;
 }
 
