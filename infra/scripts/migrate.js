@@ -155,15 +155,20 @@ async function runMigrations() {
       throw new Error('Could not acquire migration lock - another migration may be running');
     }
 
-    // Get applied migrations and migration files
-    const applied = await getAppliedMigrations(pool);
-    const files = await getMigrationFiles();
-    
-    // Find pending migrations
-    const pending = files.filter((f) => {
+    // Find pending migrations (already checked above, but re-check after lock)
+    const stillApplied = await getAppliedMigrations(pool);
+    const stillFiles = await getMigrationFiles();
+    const pending = stillFiles.filter((f) => {
       const version = f.replace('.sql', '');
-      return !applied.includes(version);
+      return !stillApplied.includes(version);
     });
+    
+    if (pending.length === 0) {
+      console.log('All migrations already applied - skipping');
+      await releaseMigrationLock(pool);
+      await pool.end();
+      return;
+    }
 
     if (pending.length === 0) {
       console.log('No pending migrations');
