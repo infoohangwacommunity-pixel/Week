@@ -84,11 +84,12 @@ export class ContextAssembler {
       }
 
       // Build messages array
-      const messages = this.buildMessagesArray({
+      const messagesResult = this.buildMessagesArray({
         conversationHistory,
         currentMessage,
         memories,
       });
+      const messages = messagesResult.messages;
 
       // Validate context integrity
       this.validateContextIntegrity(messages);
@@ -97,7 +98,7 @@ export class ContextAssembler {
       const toolDefinitions = this.getToolDefinitions();
 
       // Calculate token usage and apply budget
-      const contextWithBudget = this.applyTokenBudget(messages);
+      const contextWithBudget = this.applyTokenBudget(messagesResult);
 
       // Log assembly metadata
       const assemblyTime = Date.now() - assemblyStart;
