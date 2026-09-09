@@ -44,8 +44,8 @@ export class SafetyEventLogger {
           classifier_model, educational_context_score, welfare_concern_score,
           inappropriate_response_score, adversarial_pattern_score,
           action_taken, crisis_resources_delivered, operator_notified,
-          requires_review, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          requires_review, reviewer_notes, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())`,
         [
           event.wax_id,
           event.session_id,
@@ -61,7 +61,7 @@ export class SafetyEventLogger {
           event.crisis_resources_delivered,
           event.operator_notified,
           event.requires_review,
-          event.created_at,
+          null, // reviewer_notes
         ]
       );
 
