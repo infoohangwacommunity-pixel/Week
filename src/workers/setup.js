@@ -104,8 +104,9 @@ export async function setupWorkers({ redis, pool }) {
             
             // Initialize providers
             log.info('Initializing providers...');
+            let providerRegistry;
             try {
-              const providerRegistry = await ProviderFactory.initializeProviders();
+              providerRegistry = await ProviderFactory.initializeProviders();
               log.info({ provider: providerRegistry.current }, 'AI providers initialized');
             } catch (providerInitError) {
               log.error({
