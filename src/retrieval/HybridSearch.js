@@ -181,10 +181,18 @@ export class HybridSearch {
     // Generate embedding for query (returns JS array [0.1, 0.2, ...])
     const queryEmbedding = await this.generateEmbedding(query);
 
+    // Debug: log embedding details
+    console.log('[HybridSearch] Semantic search starting');
+    console.log('[HybridSearch] Embedding length:', queryEmbedding.length);
+    console.log('[HybridSearch] Embedding sample (first 3):', queryEmbedding.slice(0, 3));
+    
     // Format embedding as pgvector expects: {val1,val2,...}
     // The pg driver does not automatically convert arrays to vector format
     const embeddingValue = queryEmbedding.join(',');
     const embeddingParam = `{${embeddingValue}}`;
+    
+    console.log('[HybridSearch] Embedding param length:', embeddingParam.length);
+    console.log('[HybridSearch] Embedding param sample (first 50 chars):', embeddingParam.substring(0, 50) + '...');
 
     const queryStr = `
       SELECT 
@@ -206,8 +214,15 @@ export class HybridSearch {
       LIMIT 20
     `;
 
-    const result = await this.db.query(queryStr, [embeddingParam, waxId]);
-    return result.rows;
+    try {
+      const result = await this.db.query(queryStr, [embeddingParam, waxId]);
+      console.log('[HybridSearch] Semantic search completed, got', result.rows.length, 'results');
+      return result.rows;
+    } catch (err) {
+      console.error('[HybridSearch] Semantic search error:', err.message);
+      console.error('[HybridSearch] Embedding param (first 100 chars):', embeddingParam.substring(0, 100));
+      throw err;
+    }
   }
 
   /**
