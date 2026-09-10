@@ -91,8 +91,12 @@ export const AIRequestSchema = z.object({
   systemPrompt: z.string().min(1, 'systemPrompt is required'),
   messages: z.array(AIMessageSchema).min(1, 'At least one message is required'),
 
-  // Model configuration
-  model: z.string().min(1, 'model is required'),
+  // Model configuration.
+  // Model is optional in the request schema: when omitted, each provider
+  // adapter uses its own defaultModel (e.g. AI_GROQ_MODEL for Groq,
+  // AI_CEREBRAS_MODEL for Cerebras). This prevents a Groq model name
+  // from being sent to Cerebras (which would cause a 404).
+  model: z.string().min(1).optional(),
   maxOutputTokens: z.coerce.number().int().min(100).default(1024),
   temperature: z.coerce.number().min(0).max(2).optional().default(0.7),
 

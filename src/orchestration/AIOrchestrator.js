@@ -231,10 +231,16 @@ export class AIOrchestrator {
         // Build AI request. Tools are passed natively — NOT concatenated into
         // the system prompt. The provider adapter translates `tools` to its
         // API-specific shape.
+        //
+        // Model: pass undefined so each provider adapter uses its OWN
+        // defaultModel (config.AI_GROQ_MODEL for Groq, config.AI_CEREBRAS_MODEL
+        // for Cerebras). The previous implementation hardcoded
+        // config.AI_PRIMARY_MODEL which sent a Groq model name to Cerebras,
+        // causing a 404 "Model not found" error.
         const request = createAIRequest({
           systemPrompt,
           messages: workingMessages,
-          model: config.AI_PRIMARY_MODEL,
+          model: undefined,
           maxOutputTokens: config.AI_MAX_TOKENS,
           temperature: config.AI_TEMPERATURE,
           tools: workingToolDefinitions || undefined,
@@ -327,7 +333,7 @@ export class AIOrchestrator {
     // Max turns reached. Return a schema-valid response so the worker doesn't
     // crash trying to read usage fields.
     return createErrorResponse({
-      model: config.AI_PRIMARY_MODEL,
+      model: config.AI_PRIMARY_MODEL || 'unknown',
       provider: config.AI_PRIMARY_PROVIDER,
       latencyMs: Date.now() - startTime,
     });
@@ -415,11 +421,13 @@ export class AIOrchestrator {
       });
       const systemPrompt = systemPromptResult.systemPrompt;
 
-      // Step 3: Create AI request
+      // Step 3: Create AI request.
+      // Model: pass undefined so each provider adapter uses its OWN
+      // defaultModel. See completeWithTools for the full explanation.
       const request = createAIRequest({
         systemPrompt,
         messages: contextResult.messages,
-        model: config.AI_PRIMARY_MODEL,
+        model: undefined,
         maxOutputTokens: config.AI_MAX_TOKENS,
         temperature: config.AI_TEMPERATURE,
         waxId,

@@ -35,7 +35,7 @@ export class CerebrasAIAdapter extends OpenAIAdapter {
       maxOutputTokens: 4096,
     };
 
-    this.defaultModel = config.AI_CEREBRAS_MODEL || config.AI_PRIMARY_MODEL || 'gpt-oss-120b';
+    this.defaultModel = config.AI_CEREBRAS_MODEL || config.AI_PRIMARY_MODEL || 'llama3.1-8b';
   }
 }
 
