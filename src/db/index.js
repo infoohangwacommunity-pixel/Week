@@ -34,9 +34,11 @@ export async function createPool(config) {
     prepare: false,
   });
 
-  // Handle pool errors - critical to prevent unhandled rejection crashes
+  // Handle pool errors - critical to prevent unhandled rejection crashes.
+  // Use console (not the structured logger) because this module loads
+  // before the logger is initialized.
   pool.on('error', (err) => {
-    console.error('Unexpected pool client error:', err);
+    console.error('[db] Unexpected pool client error:', err.message);
   });
 
   // Test the connection
@@ -44,33 +46,14 @@ export async function createPool(config) {
     const client = await pool.connect();
     await client.query('SELECT 1');
     client.release();
-    console.log('✓ Database connection successful');
+    // Only log success once at pool creation (not per-query).
+    console.log('[db] Database connection verified');
   } catch (err) {
-    console.error('✗ Database connection failed:', err.message);
+    console.error('[db] Database connection failed:', err.message);
     throw err;
   }
 
   return pool;
-}
-
-/**
- * Execute a query with the pool
- * @param {string} text - SQL query text
- * @param {any[]} params - Query parameters
- * @param {import('pg').Pool} pool - Database pool
- * @returns {Promise<any>}
- */
-export async function query(text, params, pool) {
-  const start = Date.now();
-  try {
-    const result = await pool.query(text, params);
-    const duration = Date.now() - start;
-    console.log('Query executed in %dms', duration);
-    return result;
-  } catch (err) {
-    console.error('Query error:', err.message);
-    throw err;
-  }
 }
 
 /**
@@ -94,4 +77,4 @@ export async function transaction(pool, callback) {
   }
 }
 
-export default { createPool, query, transaction };
+export default { createPool, getDefaultPool, transaction };

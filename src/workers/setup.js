@@ -17,6 +17,7 @@ import { sendResponse } from '../messaging/outbound.js';
 import { getOrCreateSession } from '../session/manager.js';
 import { setupDecayWorker } from './decayRecomputation.js';
 import { setupEmbeddingWorker } from './embeddingWorker.js';
+import { startStrandedMessageSweeper } from './strandedMessageSweeper.js';
 
 /**
  * Setup all workers
@@ -237,14 +238,28 @@ export async function setupWorkers({ redis, pool }) {
                 }, { pool });
                 log.info({ messageIds, contentLength: response.content.length }, 'Response sent successfully');
               } catch (err) {
+                // Outbound delivery failed. The AI response was generated and
+                // paid for but the student didn't receive it.
+                //
+                // Mark the message as 'delivery_failed' (NOT 'completed') so
+                // the audit trail reflects reality. Then re-throw so BullMQ
+                // retries the job. On retry, the outbound helper will check
+                // whether any chunks were already sent (via the outbound_chunk_id
+                // unique index) and skip them, preventing duplicate delivery.
                 log.error({ err: { name: err.name, message: err.message } }, 'Failed to send response to student');
-                // Mark the message as 'failed' delivery but the AI request itself succeeded.
                 try {
                   await pool.query(
-                    `UPDATE messages SET processing_status = 'completed' WHERE external_id = $1 AND wax_id = $2`,
+                    `UPDATE messages SET processing_status = 'failed'
+                     WHERE external_id = $1 AND wax_id = $2
+                     AND processing_status NOT IN ('completed', 'failed')`,
                     [trace.messageId, trace.waxId]
                   );
-                } catch { /* swallow */ }
+                } catch (markErr) {
+                  log.warn({ err: markErr.message }, 'Failed to mark message as delivery_failed');
+                }
+                // Re-throw so BullMQ retries. The inbound message is safely
+                // persisted in Postgres and will survive the retry cycle.
+                throw err;
               }
             } else {
               log.warn({ hasContent: !!response.content, hasPhoneNumber: !!trace.phoneNumber }, 'Skipping outbound delivery - missing content or phone number');
@@ -267,7 +282,6 @@ export async function setupWorkers({ redis, pool }) {
             };
 
             logger.error(errorInfo, 'AI request failed');
-            console.error('AI Request Failed - Full Error:', JSON.stringify(errorInfo, null, 2));
 
             // Mark the message as 'failed' so the audit trail reflects reality.
             // Use the trace data from job.data if available.
@@ -318,6 +332,19 @@ export async function setupWorkers({ redis, pool }) {
   // Setup mastery decay recomputation worker (Stage 29)
   const decayWorker = await setupDecayWorker({ redis, pool });
   workers.push(decayWorker);
+
+  // Start the stranded message recovery sweeper.
+  // This runs in the background and re-enqueues any inbound messages that
+  // were persisted to Postgres but never made it into the BullMQ queue
+  // (typically because Redis was temporarily unavailable when the webhook
+  // arrived). This is the DURABILITY GUARANTEE that no student message is
+  // permanently stranded.
+  try {
+    await startStrandedMessageSweeper({ pool, redis });
+    logger.info('Stranded message recovery sweeper started');
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Failed to start stranded message sweeper (non-fatal — messages will be retried by Meta)');
+  }
 
   return workers;
 }

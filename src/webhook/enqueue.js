@@ -131,6 +131,8 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
 
     // Persist message idempotently. The unique partial index on external_id
     // (migration 015) ensures duplicate webhooks don't create duplicate rows.
+    // This INSERT happens BEFORE the BullMQ enqueue so the message is
+    // durably persisted in Postgres even if Redis is down.
     await pool.query(
       `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, processing_status, created_at)
        VALUES ($1, $2, $3, $4, 'inbound', $5, $6, 'received', NOW())
@@ -152,6 +154,9 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
     }
 
     // Add to queue with debounce delay.
+    // If this fails (Redis down), the message is already persisted in Postgres
+    // with processing_status='received'. A recovery sweeper (setup in workers)
+    // will find 'received' messages older than 5 minutes and re-enqueue them.
     await queueInstance.add(
       'process-student-messages',
       {
@@ -183,6 +188,16 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
       },
       'Failed to enqueue message'
     );
+
+    // If the message was already persisted but the queue.add failed,
+    // mark the message as 'received' (it already is) so the recovery
+    // sweeper can find it. The message is NOT lost — it's in Postgres.
+    // The sweeper runs periodically and re-enqueues 'received' messages
+    // that are older than 5 minutes.
+    // (No compensating UPDATE needed here because the INSERT already set
+    // processing_status='received', which is exactly what the sweeper
+    // looks for.)
+
     throw err;
   } finally {
     // Only close pools we created. The webhook server's shared pool stays open.

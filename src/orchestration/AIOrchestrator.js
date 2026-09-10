@@ -99,7 +99,7 @@ export class AIOrchestrator {
    */
   async complete({ waxId, sessionId, currentMessage, context = {} }) {
     const startTime = Date.now();
-    const correlationId = context.correlationId || crypto.randomUUID();
+    const correlationId = context.correlationId || randomUUID();
     
     const requestLog = this.logger.child({ 
       waxId, 

@@ -193,19 +193,79 @@ export async function executeMemoryWrite({
 /**
  * Queue embedding generation. Best-effort — failures are logged but do not
  * block the memory write.
+ *
+ * This inserts a row into the `embedding_jobs` table AND enqueues a BullMQ
+ * job. The embedding worker (`embeddingWorker.js`) processes the BullMQ job
+ * directly — it does NOT poll the `embedding_jobs` table. So both the DB
+ * row (for audit) and the BullMQ job (for execution) are needed.
+ *
+ * If BullMQ is unavailable, the `embedding_jobs` row stays as 'pending'
+ * and can be picked up by a future sweeper or manual operator intervention.
  */
 async function queueEmbeddingGeneration({ db, targetType, targetId, waxId, text }) {
   try {
-    // Insert a pending row in embedding_jobs. The embedding worker polls
-    // this table for pending jobs (see src/workers/embeddingWorker.js).
-    // Schema (migration 008) has no wax_id/content columns — the worker reads
-    // the target's display_text from student_facts/student_episodes directly.
+    // 1. Insert a pending row in embedding_jobs (for audit + future sweeper).
     await db.query(
       `INSERT INTO embedding_jobs (target_type, target_id, status)
        VALUES ($1, $2, 'pending')
        ON CONFLICT DO NOTHING`,
       [targetType, targetId]
     );
+
+    // 2. Enqueue a BullMQ job for the embedding worker to process.
+    // The worker calls EmbeddingService.processEmbeddingJob() which generates
+    // the embedding and updates the student_facts/student_episodes row.
+    // This is best-effort — if Redis is unavailable, the embedding_jobs DB
+    // row stays as 'pending' and can be picked up by a future sweeper.
+    try {
+      const { Queue } = await import('bullmq');
+      const { Redis } = await import('ioredis');
+      const redis = new Redis(config.REDIS_URL, {
+        maxRetriesPerRequest: 1, // Fail fast in test/no-Redis environments
+        enableReadyCheck: true,
+        connectTimeout: 2000, // 2s timeout — don't block the memory write
+        retryStrategy: (times) => (times > 1 ? null : 100), // Only retry once
+      });
+
+      // Check if Redis is actually reachable before creating a Queue.
+      try {
+        await redis.ping();
+      } catch {
+        // Redis not available — skip BullMQ enqueue. The embedding_jobs
+        // DB row is already persisted as 'pending' and will be picked up
+        // by a future sweeper or manual operator intervention.
+        redis.disconnect();
+        return;
+      }
+
+      const queue = new Queue('generate-embedding', {
+        connection: redis,
+        defaultJobOptions: {
+          removeOnComplete: 100,
+          removeOnFail: 100,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 1000 },
+        },
+      });
+
+      await queue.add('generate-embedding', {
+        targetType,
+        targetId,
+        waxId,
+        text,
+      }, {
+        jobId: `embedding:${targetType}:${targetId}`,
+        removeOnComplete: 100,
+        removeOnFail: 100,
+      });
+
+      await queue.close();
+      redis.disconnect();
+    } catch (queueErr) {
+      // BullMQ enqueue failed (Redis down, import error, etc.).
+      // The embedding_jobs DB row is still in 'pending' status.
+      console.warn('Failed to enqueue embedding via BullMQ (non-fatal — DB row persisted):', queueErr.message);
+    }
   } catch (error) {
     // Non-fatal: the fact was already persisted.
     console.warn('Failed to queue embedding generation:', error.message);
