@@ -44,6 +44,13 @@ class HybridSearchResult {
     semanticScore,
     rrfScore,
     type,
+    // Real fact metadata from the DB row (no longer fabricated downstream).
+    factKey = null,
+    factCategory = null,
+    factValue = null,
+    provenance = null,
+    confidence = null,
+    createdAt = null,
   }) {
     this.id = id;
     this.waxId = waxId;
@@ -54,6 +61,12 @@ class HybridSearchResult {
     this.semanticScore = semanticScore;
     this.rrfScore = rrfScore;
     this.type = type;
+    this.factKey = factKey;
+    this.factCategory = factCategory;
+    this.factValue = factValue;
+    this.provenance = provenance;
+    this.confidence = confidence;
+    this.createdAt = createdAt;
   }
 
   static fromFact(fact, bm25Rank, semanticRank) {
@@ -67,6 +80,12 @@ class HybridSearchResult {
       semanticScore: fact.semantic_score || null,
       rrfScore: 0, // Calculated after fusion
       type: 'fact',
+      factKey: fact.fact_key || null,
+      factCategory: fact.fact_category || null,
+      factValue: fact.fact_value || null,
+      provenance: fact.provenance || null,
+      confidence: fact.confidence !== undefined ? Number(fact.confidence) : null,
+      createdAt: fact.created_at || null,
     });
   }
 
@@ -81,6 +100,7 @@ class HybridSearchResult {
       semanticScore: episode.semantic_score || null,
       rrfScore: 0,
       type: 'episode',
+      createdAt: episode.session_end || null,
     });
   }
 
@@ -92,6 +112,14 @@ class HybridSearchResult {
       rrf_score: this.rrfScore,
       bm25_score: this.bm25Score,
       semantic_score: this.semanticScore,
+      // Pass through the real fact metadata so downstream consumers
+      // (MemoryRetriever.formatFactsForContext) don't have to fabricate it.
+      fact_key: this.factKey,
+      fact_category: this.factCategory,
+      fact_value: this.factValue,
+      provenance: this.provenance,
+      confidence: this.confidence,
+      created_at: this.createdAt,
     };
   }
 }
@@ -181,13 +209,8 @@ export class HybridSearch {
     // Generate embedding for query (returns JS array [0.1, 0.2, ...])
     const queryEmbedding = await this.generateEmbedding(query);
 
-    // Debug: log embedding details
-    console.log('[HybridSearch] Semantic search starting');
-    console.log('[HybridSearch] Embedding length:', queryEmbedding.length);
-    console.log('[HybridSearch] Embedding sample (first 3):', queryEmbedding.slice(0, 3));
-    
     const queryStr = `
-      SELECT 
+      SELECT
         sf.id,
         sf.wax_id,
         sf.display_text,
@@ -207,17 +230,14 @@ export class HybridSearch {
     `;
 
     try {
-      // Build vector literal for pgvector: [0.1,0.2,0.3]
+      // Build vector literal for pgvector: [0.1,0.2,0.3] (NOT '{...}' Postgres
+      // array literal — pgvector requires square brackets).
       const vectorLiteral = '[' + queryEmbedding.join(',') + ']';
-      console.log('[HybridSearch] Passing embedding as vector literal with', queryEmbedding.length, 'dimensions');
       const result = await this.db.query(queryStr, [vectorLiteral, waxId]);
-      console.log('[HybridSearch] Semantic search completed, got', result.rows.length, 'results');
       return result.rows;
     } catch (err) {
-      console.error('[HybridSearch] Semantic search error:', err.message);
-      console.error('[HybridSearch] Embedding type:', typeof queryEmbedding, Array.isArray(queryEmbedding) ? 'array' : 'not array');
-      console.error('[HybridSearch] Embedding sample:', queryEmbedding.slice(0, 3));
-      throw err;
+      // Don't log the raw embedding values — could leak model internals.
+      throw new Error(`HybridSearch semantic search failed: ${err.message}`);
     }
   }
 
@@ -289,7 +309,7 @@ export class HybridSearch {
     // Convert to result objects
     const results = scoredResults
       .slice(0, maxResults)
-      .map(r => {
+      .map((r) => {
         const resultObj = new HybridSearchResult({
           id: r.data.id,
           waxId: r.data.wax_id,
@@ -300,6 +320,14 @@ export class HybridSearch {
           semanticScore: r.semanticScore,
           rrfScore: r.rrfScore,
           type: r.type,
+          // Pass through the real DB metadata so downstream consumers don't
+          // have to fabricate fact_key/confidence/provenance/etc.
+          factKey: r.data.fact_key || null,
+          factCategory: r.data.fact_category || null,
+          factValue: r.data.fact_value || null,
+          provenance: r.data.provenance || null,
+          confidence: r.data.confidence !== undefined ? Number(r.data.confidence) : null,
+          createdAt: r.data.created_at || null,
         });
 
         return resultObj.toObject();
@@ -331,19 +359,27 @@ export class HybridSearch {
    * Returns JavaScript array [0.1, 0.2, ...] which is converted to vector literal in queries
    */
   async generateEmbedding(text) {
-    // Try to use the injected embedding service
+    // Try to use the injected embedding service.
     if (this.embeddingService) {
       try {
         const embedding = await this.embeddingService.generateEmbedding(text);
         // EmbeddingService already returns a JavaScript array
         return embedding;
       } catch (error) {
-        // Log error but continue with mock embedding
-        console.warn('Embedding service failed, using mock embedding:', error.message);
+        // If the embedding service fails, fall back to a zero-vector.
+        // This will produce zero semantic matches (cosine distance is 1.0
+        // for any non-zero stored vector), so only BM25 results survive.
+        // The student still gets useful retrieval — just lexical-only.
+        // IMPORTANT: do NOT log the error message at warn level in production
+        // because it could leak API key info. Use debug level.
+        if (config.LOG_LEVEL === 'debug') {
+          console.warn('[HybridSearch] Embedding service failed, using zero vector:', error.message);
+        }
       }
     }
-    
-    // Fallback to mock embedding if service unavailable
+
+    // Zero-vector fallback. The semantic search query will return no rows
+    // (cosine distance from origin is undefined / 1.0).
     const dimensions = config.EMBEDDING_DIMENSIONS || 1536;
     return Array(dimensions).fill(0);
   }

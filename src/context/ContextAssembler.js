@@ -18,7 +18,7 @@ import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { MemoryRetriever } from '../memory/index.js';
 import { createLearningModule } from '../learning/index.js';
-import ToolRegistry from '../tools/ToolRegistry.js';
+import ToolRegistry, { ToolPermission } from '../tools/ToolRegistry.js';
 
 /**
  * Token budget slot constants (from research document)
@@ -85,11 +85,18 @@ export class ContextAssembler {
         log.warn({ error: error.message }, 'Failed to load student model context');
       }
 
-      // Build messages array
+      // Build messages array — passing memory + student model context for injection.
+      // The previous implementation accepted `memories` as a parameter but never
+      // read it, so retrieved memory and student model evidence were fetched,
+      // attached as metadata, and then silently dropped before the AI ever
+      // saw them. We now prepend a single system message containing both the
+      // memory facts and the student model formatted text so the AI receives
+      // them as contextual evidence (NOT as conversation turns).
       const messagesResult = this.buildMessagesArray({
         conversationHistory,
         currentMessage,
         memories,
+        studentModelContext,
       });
       const messages = messagesResult.messages;
 
@@ -104,10 +111,12 @@ export class ContextAssembler {
 
       // Log assembly metadata
       const assemblyTime = Date.now() - assemblyStart;
+      const memoryFactCount = (memories && Array.isArray(memories.facts)) ? memories.facts.length
+        : (Array.isArray(memories) ? memories.length : 0);
       const logData = {
         messages: messages.length,
         historyTurnCount: conversationHistory.length,
-        memoryCount: memories.length,
+        memoryCount: memoryFactCount,
         tokenCount: contextWithBudget.tokens,
         toolCount: toolDefinitions.length,
         assemblyTime,
@@ -118,7 +127,7 @@ export class ContextAssembler {
       return {
         messages: contextWithBudget.messages,
         historyTurnCount: conversationHistory.length,
-        memoryCount: memories.length,
+        memoryCount: memoryFactCount,
         tokenCount: contextWithBudget.tokens,
         memory: memories,
         studentModel: studentModelContext,
@@ -261,18 +270,41 @@ export class ContextAssembler {
   }
 
   /**
-   * Build messages array for AI request
-   * 
+   * Build messages array for AI request.
+   *
+   * Per the Newborn AI philosophy: the AI receives memory facts and student
+   * model evidence as EVIDENCE in a system-style context block at the front
+   * of the conversation. It decides what to do with that evidence — the
+   * infrastructure does not script pedagogical responses.
+   *
    * @param {Object} options - Build options
    * @param {Array} options.conversationHistory - Recent conversation messages
    * @param {string} options.currentMessage - Current user message
-   * @param {Array} options.memories - Retrieved memories (facts and episodes)
+   * @param {Object|Array} [options.memories] - Retrieved memories (object with
+   *   `facts` array, OR a flat array — both forms supported for backward compat)
+   * @param {Object} [options.studentModelContext] - { formattedText, ... }
    * @returns {Object} - Messages object with messages array and metadata
    */
-  buildMessagesArray({ conversationHistory, currentMessage, memories = [] }) {
+  buildMessagesArray({ conversationHistory, currentMessage, memories = null, studentModelContext = null }) {
     const messages = [];
     let historyTurnCount = 0;
     let currentMessageCount = 0;
+
+    // Inject memory + student-model evidence as a single user-role "context"
+    // message at the front. Per AGENTS.md §22 the AI may use this evidence
+    // but is free to reason about it (NOT forced to act on it).
+    //
+    // We use role: 'user' (not 'system') because OpenAI/Groq/Cerebras require
+    // the messages array to start with a user or system message — and the
+    // system message is already reserved for the WaxPrep identity prompt.
+    // The model treats this as context evidence, not as a system instruction.
+    const contextBlock = this._formatContextEvidence({ memories, studentModelContext });
+    if (contextBlock) {
+      messages.push({
+        role: 'user',
+        content: contextBlock,
+      });
+    }
 
     // Add conversation history (inbound → user, outbound → assistant).
     // Strip waxId/sessionId from the messages we send to the provider — those
@@ -310,6 +342,53 @@ export class ContextAssembler {
       currentMessageCount,
       memories,
     };
+  }
+
+  /**
+   * Format memory facts + student-model evidence into a single context block
+   * suitable for injection at the front of the messages array.
+   *
+   * Returns null if there's no evidence to inject (so no spurious empty
+   * messages get sent to the provider).
+   *
+   * Memory facts come from MemoryRetriever (which fetches via HybridSearch
+   * or recency). Student model context comes from
+   * StudentModelContextInterface.getStudentModelContext.
+   */
+  _formatContextEvidence({ memories = null, studentModelContext = null }) {
+    const parts = [];
+
+    // memories is typically { facts: [...], episodes: [...], ... } but the
+    // recency/hybrid path may also return a flat array — support both.
+    let facts = [];
+    if (Array.isArray(memories)) {
+      facts = memories;
+    } else if (memories && Array.isArray(memories.facts)) {
+      facts = memories.facts;
+    }
+
+    if (facts.length > 0) {
+      const factLines = facts.map((f) => {
+        const conf = typeof f.confidence === 'number'
+          ? ` (confidence: ${f.confidence.toFixed(2)})`
+          : '';
+        return `• ${f.display_text || '(empty fact)'}${conf}`;
+      });
+      parts.push(
+        `[Student memory evidence — use this to personalize the response, but reason about whether each fact is relevant to the current question.]\n` +
+        factLines.join('\n')
+      );
+    }
+
+    if (studentModelContext && studentModelContext.formattedText) {
+      parts.push(
+        `[Student model evidence — mastery estimates, misconceptions, and learning signals. Use these as evidence about the student's current state, NOT as instructions on what to teach.]\n` +
+        studentModelContext.formattedText
+      );
+    }
+
+    if (parts.length === 0) return null;
+    return parts.join('\n\n');
   }
 
   /**
@@ -530,21 +609,24 @@ export class ContextAssembler {
    * that AIRequestSchema.tools expects:
    *   { name, description, inputSchema, category? }
    *
-   * Tools come from the canonical ToolRegistry (single source of truth). The
-   * prior implementation hand-wrote a parallel list with different schemas
-   * that disagreed with what the ToolExecutor validated against, which meant
-   * every tool call would have been rejected.
+   * Tools come from the canonical ToolRegistry (single source of truth).
+   *
+   * Expose all tools EXCEPT internal-only ones (get_session_context,
+   * update_learning_signal). The previous implementation filtered to only
+   * STUDENT_READ + STUDENT_WRITE, which silently hid RETRIEVAL tools
+   * (web_search, document_fetch) and ASSESSMENT tools (generate_question,
+   * record_evidence) from the AI — meaning the model could never call them
+   * even when they were the right tool for the job.
    */
   getToolDefinitions() {
     try {
       const tools = ToolRegistry.getToolRegistry();
       return tools
-        .filter((t) => t.permission_level === 'STUDENT_READ' || t.permission_level === 'STUDENT_WRITE')
+        .filter((t) => t.permission_level !== ToolPermission.INTERNAL)
         .map((t) => ({
           name: t.name,
           description: t.description,
           inputSchema: t.input_schema,
-          category: t.category,
         }));
     } catch {
       // In test environments where the registry can't be loaded, return []
@@ -553,10 +635,3 @@ export class ContextAssembler {
     }
   }
 }
-
-
-  /**
-   * Get tool definitions for AI to use
-   * 
-   * @returns {Array} - Array of tool definitions
-   */

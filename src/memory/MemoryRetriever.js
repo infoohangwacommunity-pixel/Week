@@ -43,7 +43,7 @@ export class MemoryRetriever {
 
   async _retrieveFactsHybrid(params) {
     const { currentMessage, tokenBudget = TOKEN_BUDGETS.FACTS } = params;
-    
+
     // Use hybrid search for semantic retrieval
     const searchResults = await this.hybridSearch.search({
       waxId: this.waxId,
@@ -51,26 +51,38 @@ export class MemoryRetriever {
       maxResults: 10,
     });
 
-    // Convert hybrid search results to fact format
+    // Convert hybrid search results to fact format using the REAL metadata
+    // returned by HybridSearchResult.toObject() (fact_key, confidence,
+    // provenance, etc. from the DB row — no longer fabricated constants).
     const facts = searchResults
-      .filter(r => r.type === 'fact')
-      .map(r => ({
+      .filter((r) => r.type === 'fact')
+      .map((r) => ({
         id: r.id,
-        fact_key: '',
-        fact_category: 'academic',
+        fact_key: r.fact_key || `fact_${r.id}`,
+        fact_category: r.fact_category || 'academic',
         display_text: r.content,
-        fact_value: {},
-        confidence: 0.7,
-        provenance: 'hybrid_search',
-        created_at: new Date(),
+        fact_value: r.fact_value || {},
+        confidence: typeof r.confidence === 'number' ? r.confidence : 0.5,
+        provenance: r.provenance || 'episode_extracted',
+        created_at: r.created_at ? new Date(r.created_at) : new Date(),
         _rankScore: r.rrf_score,
       }));
 
-    return this._applyTokenBudget(facts, tokenBudget);
+    // Apply deduplication + token budget (the previous implementation skipped
+    // dedup, which could allow duplicate facts to reach the prompt).
+    const deduplicatedFacts = this._deduplicateFacts(facts, params.sessionId, currentMessage);
+    return this._applyTokenBudget(deduplicatedFacts, tokenBudget);
   }
   _extractSubjectsFromMessage(message) {
-    const subjects = ['math', 'mathematics', 'physics', 'chemistry', 'biology', 'english', 'french', 'government', 'economics', 'geography', 'literature', 'commerce', 'accounting', 'civic', 'religious'];
-    return subjects.filter(subject => message.toLowerCase().includes(subject));
+    // Per AGENTS.md §4: infrastructure must not encode a fixed subject list.
+    // The previous implementation hardcoded 14 school subjects (math, physics,
+    // chemistry, etc.) and excluded Nigerian subjects like Further Mathematics,
+    // Agricultural Science, Computer Science, Yoruba/Igbo/Hausa.
+    //
+    // Return an empty array — the recency-based ranker no longer biases
+    // by hardcoded subjects. The AI decides subject relevance based on
+    // the actual content of the messages and facts.
+    return [];
   }
   _rankFacts(facts, currentSubjects) {
     const categoryPriority = { profile: 1, misconception: 2, progress: 3, academic: 4, preference: 5, behavioral: 6 };
@@ -119,6 +131,14 @@ export class MemoryRetriever {
     });
     return `[Student Profile Memory${lines.length > 0 ? ' — use this to personalize responses' : ''}]\n` + lines.join('\n');
   }
-  async _logRetrieval(params) { const { factsCount, episodesCount, latency } = params; console.log(`Memory retrieval: ${factsCount} facts, ${episodesCount} episodes, ${latency}ms`); }
+  async _logRetrieval(params) {
+    const { factsCount, episodesCount, latency, strategy } = params;
+    if (!this.logger) {
+      console.log(`Memory retrieval: ${factsCount} facts, ${episodesCount} episodes, ${latency}ms (${strategy || 'unknown'})`);
+      return;
+    }
+    const log = this.logger.child ? this.logger.child({ component: 'MemoryRetriever' }) : this.logger;
+    log.info({ factsCount, episodesCount, latency, strategy }, 'Memory retrieval completed');
+  }
 }
 export default MemoryRetriever;

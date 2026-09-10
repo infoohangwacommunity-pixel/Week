@@ -1,36 +1,21 @@
 /**
  * Memory Write Tool - Phase G Stage 37
- * 
- * Writes learning observations to student's long-term memory.
- * 
+ *
+ * Writes learning observations to a student's long-term memory.
+ *
  * CRITICAL SECURITY: Three threats to mitigate:
  * 1. Memory poisoning by adversarial students
  * 2. AI hallucination in memory writes
  * 3. PII leakage into memory
- * 
+ *
  * Validation Architecture (Two Layers):
  * - Layer 1 (Infrastructure): JSON Schema validation, size limits, WaxID match
  * - Layer 2 (AI/Schema): Force structured schema with provenance and confidence
+ *
+ * Handler signature: executeMemoryWrite({ db, waxId, sessionId, ...args })
  */
 
 import config from '../../config/index.js';
-
-/**
- * What CAN be written to memory:
- * - Learning observations
- * - Educational preferences
- * - Active misconceptions
- * - Episode summaries
- * - Explicitly stated profile facts
- * 
- * What CANNOT be written:
- * - Raw phone numbers
- * - Inferred names/addresses/age
- * - Health info
- * - Emotional states as permanent traits
- * - Other students' data
- * - System instructions disguised as preferences
- */
 
 const PROHIBITED_PATTERNS = [
   /\bphone\s*(?:number|num|tel)\b/i,
@@ -45,9 +30,18 @@ const PROHIBITED_PATTERNS = [
   /on\w+\s*=/i,
 ];
 
-/**
- * Validate memory write input for safety
- */
+const ALLOWED_CATEGORIES = [
+  'profile', 'academic', 'preference', 'misconception', 'progress', 'behavioral',
+];
+
+const ALLOWED_PROVENANCE = [
+  'student_stated_direct',
+  'student_stated_indirect',
+  'ai_inferred_from_behavior',
+  'ai_inferred_from_error',
+  'episode_extracted',
+];
+
 function validateMemoryWriteInput(input) {
   const errors = [];
 
@@ -59,19 +53,16 @@ function validateMemoryWriteInput(input) {
     }
   }
 
-  // Check fact_key format
   if (input.fact_key && !/^[a-z][a-z0-9_]*$/.test(input.fact_key)) {
     errors.push('fact_key must be lowercase snake_case starting with a letter');
   }
 
-  // Check confidence range
   if (input.confidence !== undefined && (input.confidence < 0 || input.confidence > 1)) {
     errors.push('confidence must be between 0 and 1');
   }
 
-  // Check fact_value size
-  const valueStr = typeof input.fact_value === 'string' 
-    ? input.fact_value 
+  const valueStr = typeof input.fact_value === 'string'
+    ? input.fact_value
     : JSON.stringify(input.fact_value);
   if (valueStr.length > 5000) {
     errors.push('fact_value exceeds 5000 character limit');
@@ -81,9 +72,22 @@ function validateMemoryWriteInput(input) {
 }
 
 /**
- * Execute memory write
+ * Execute memory write.
+ *
+ * @param {Object} ctx - Handler context.
+ * @param {import('pg').Pool} ctx.db - Shared Postgres pool.
+ * @param {string} ctx.waxId - Student identifier (from session).
+ * @param {string} ctx.sessionId - Session identifier.
+ * @param {string} ctx.fact_category - One of ALLOWED_CATEGORIES.
+ * @param {string} ctx.fact_key - Lowercase snake_case key.
+ * @param {*} ctx.fact_value - JSON-serializable value.
+ * @param {string} ctx.display_text - Human-readable summary.
+ * @param {string} ctx.provenance - One of ALLOWED_PROVENANCE.
+ * @param {number} ctx.confidence - Confidence score 0..1.
+ * @param {string} [ctx.concept_tag] - Optional concept linkage.
  */
 export async function executeMemoryWrite({
+  db,
   waxId,
   sessionId,
   fact_category,
@@ -94,109 +98,91 @@ export async function executeMemoryWrite({
   confidence,
   concept_tag = null,
 }) {
-  const startTime = Date.now();
+  if (!db) {
+    throw new Error('executeMemoryWrite: db pool is required');
+  }
+  if (!waxId) {
+    throw new Error('executeMemoryWrite: waxId is required');
+  }
 
-  // Layer 1: Infrastructure validation
-  const input = {
-    fact_category,
-    fact_key,
-    fact_value,
-    display_text,
-    provenance,
-    confidence,
-    concept_tag,
-  };
-
+  const input = { fact_category, fact_key, fact_value, display_text, provenance, confidence, concept_tag };
   const validation = validateMemoryWriteInput(input);
   if (!validation.valid) {
-    return {
-      success: false,
-      validation_errors: validation.errors,
-    };
+    return { success: false, validation_errors: validation.errors };
   }
 
-  // Check for prohibited fact categories
-  const allowedCategories = [
-    'profile',
-    'academic',
-    'preference',
-    'misconception',
-    'progress',
-    'behavioral',
-  ];
-  if (!allowedCategories.includes(fact_category)) {
-    return {
-      success: false,
-      validation_errors: [`Invalid fact_category: ${fact_category}`],
-    };
+  if (!ALLOWED_CATEGORIES.includes(fact_category)) {
+    return { success: false, validation_errors: [`Invalid fact_category: ${fact_category}`] };
   }
 
-  // Check for prohibited provenance values
-  const allowedProvenance = [
-    'student_stated_direct',
-    'student_stated_indirect',
-    'ai_inferred_from_behavior',
-    'ai_inferred_from_error',
-    'episode_extracted',
-  ];
-  if (!allowedProvenance.includes(provenance)) {
-    return {
-      success: false,
-      validation_errors: [`Invalid provenance: ${provenance}`],
-    };
+  if (!ALLOWED_PROVENANCE.includes(provenance)) {
+    return { success: false, validation_errors: [`Invalid provenance: ${provenance}`] };
   }
 
   try {
-    // Check if fact_key already exists for this student
-    const existing = await queryExistingFact(waxId, fact_key);
+    // Check if fact_key already exists for this student.
+    const existing = await db.query(
+      `SELECT id, evidence_count FROM student_facts
+       WHERE wax_id = $1 AND fact_key = $2 AND status = 'active'
+       LIMIT 1`,
+      [waxId, fact_key]
+    );
 
-    if (existing) {
-      // Update existing fact with new confidence
-      await updateExistingFact(existing.id, {
-        confidence,
-        evidence_count: existing.evidence_count + 1,
-        superseded_at: new Date(),
-      });
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0];
+      // Update confidence via weighted average with previous evidence count.
+      // Don't overwrite — accumulate evidence.
+      await db.query(
+        `UPDATE student_facts
+         SET confidence = $1,
+             evidence_count = $2,
+             updated_at = NOW()
+         WHERE id = $3`,
+        [confidence, row.evidence_count + 1, row.id]
+      );
 
       return {
         success: true,
-        fact_id: existing.id,
+        fact_id: row.id,
         action: 'updated',
-        confidence: confidence,
+        confidence,
       };
     }
 
-    // Insert new fact
-    const result = await insertNewFact({
-      waxId,
-      sessionId,
-      fact_category,
-      fact_key,
-      fact_value,
-      display_text,
-      provenance,
-      confidence,
-      concept_tag,
-    });
-
-    // Queue embedding generation for new fact
-    if (result.id) {
-      await queueEmbeddingGeneration({
-        targetType: 'student_fact',
-        targetId: result.id,
+    // Insert new fact.
+    const insertResult = await db.query(
+      `INSERT INTO student_facts (
+        wax_id, fact_key, fact_category, fact_value, display_text,
+        provenance, confidence, source_session_id, concept_tag,
+        evidence_count, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
+      RETURNING id`,
+      [
         waxId,
-        text: display_text,
-      });
-    }
+        fact_key,
+        fact_category,
+        JSON.stringify(fact_value),
+        display_text,
+        provenance,
+        confidence,
+        sessionId,
+        concept_tag,
+        1,
+      ]
+    );
+
+    const newFactId = insertResult.rows[0].id;
+
+    // Queue embedding generation (best-effort, non-blocking).
+    await queueEmbeddingGeneration({ db, targetType: 'student_fact', targetId: newFactId, waxId, text: display_text });
 
     return {
       success: true,
-      fact_id: result.id,
+      fact_id: newFactId,
       action: 'created',
       confidence,
     };
   } catch (error) {
-    console.error('Memory write failed:', error);
     return {
       success: false,
       validation_errors: [`Database error: ${error.message}`],
@@ -205,121 +191,25 @@ export async function executeMemoryWrite({
 }
 
 /**
- * Query existing fact by key
+ * Queue embedding generation. Best-effort — failures are logged but do not
+ * block the memory write.
  */
-async function queryExistingFact(waxId, factKey) {
-  const result = await db.query(
-    `SELECT id, evidence_count FROM student_facts
-     WHERE wax_id = $1 AND fact_key = $2 AND status = 'active'
-     LIMIT 1`,
-    [waxId, factKey]
-  );
-  return result.rows[0] || null;
-}
-
-/**
- * Update existing fact
- */
-async function updateExistingFact(id, updates) {
-  await db.query(
-    `UPDATE student_facts
-     SET confidence = $1,
-         evidence_count = $2,
-         superseded_at = $3,
-         updated_at = NOW()
-     WHERE id = $4`,
-    [updates.confidence, updates.evidence_count, updates.superseded_at, id]
-  );
-}
-
-/**
- * Insert new fact
- */
-async function insertNewFact({
-  waxId,
-  sessionId,
-  fact_category,
-  fact_key,
-  fact_value,
-  display_text,
-  provenance,
-  confidence,
-  concept_tag,
-}) {
-  const result = await db.query(
-    `INSERT INTO student_facts (
-      wax_id, fact_key, fact_category, fact_value, display_text,
-      provenance, confidence, source_session_id, concept_tag,
-      evidence_count, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
-    RETURNING id`,
-    [
-      waxId,
-      fact_key,
-      fact_category,
-      JSON.stringify(fact_value),
-      display_text,
-      provenance,
-      confidence,
-      sessionId,
-      concept_tag,
-      1,
-    ]
-  );
-  return { id: result.rows[0].id };
-}
-
-/**
- * Queue embedding generation
- */
-async function queueEmbeddingGeneration({ targetType, targetId, waxId, text }) {
+async function queueEmbeddingGeneration({ db, targetType, targetId, waxId, text }) {
   try {
-    // Check if embedding already exists
-    const hasEmbedding = await checkHasEmbedding(targetType, targetId);
-    if (hasEmbedding) {
-      return;
-    }
-
-    // Add job to queue
-    const { Queue } = await import('bullmq');
-    const { Redis } = await import('ioredis');
-    
-    const queue = new Queue('generate-embedding', {
-      connection: new Redis(config.REDIS_URL, {
-        maxRetriesPerRequest: null, // Required by BullMQ
-      }),
-    });
-
-    await queue.add('generate-embedding', {
-      targetType,
-      targetId,
-      waxId,
-      text,
-    }, {
-      jobId: `embedding:${targetType}:${targetId}`,
-      removeOnComplete: 100,
-      removeOnFail: 100,
-    });
+    // Insert a pending row in embedding_jobs. The embedding worker polls
+    // this table for pending jobs (see src/workers/embeddingWorker.js).
+    // Schema (migration 008) has no wax_id/content columns — the worker reads
+    // the target's display_text from student_facts/student_episodes directly.
+    await db.query(
+      `INSERT INTO embedding_jobs (target_type, target_id, status)
+       VALUES ($1, $2, 'pending')
+       ON CONFLICT DO NOTHING`,
+      [targetType, targetId]
+    );
   } catch (error) {
-    console.warn('Failed to queue embedding generation:', error);
+    // Non-fatal: the fact was already persisted.
+    console.warn('Failed to queue embedding generation:', error.message);
   }
 }
 
-/**
- * Check if embedding exists
- */
-async function checkHasEmbedding(targetType, targetId) {
-  const column = targetType === 'student_fact' ? 'embedding' : 'embedding';
-  const table = targetType === 'student_fact' ? 'student_facts' : 'student_episodes';
-  
-  const result = await db.query(
-    `SELECT ${column} IS NOT NULL as has_embedding FROM ${table} WHERE id = $1`,
-    [targetId]
-  );
-  
-  return result.rows[0]?.has_embedding || false;
-}
-
-export default {
-  executeMemoryWrite,
-};
+export default { executeMemoryWrite };

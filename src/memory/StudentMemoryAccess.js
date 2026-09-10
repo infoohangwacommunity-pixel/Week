@@ -5,13 +5,36 @@ import { applyConfidenceTransition, createConfidenceHistoryRecord, isValidConfid
 import { StudentIsolationError, FactConflictError, ConfidenceBoundsError, FactNotFoundError, DatabaseError } from './MemoryErrors.js';
 
 export class StudentMemoryAccess {
-  constructor(waxId) {
-    if (!waxId || typeof waxId !== 'string') throw new Error('waxId is required and must be a string');
+  /**
+   * Create a student-scoped memory access instance.
+   *
+   * @param {string} waxId - Student identifier (bound for the lifetime of this instance).
+   * @param {import('pg').Pool} [db] - Optional pool. If omitted, falls back to
+   *   the global default pool. Passing `db` is preferred for testability and
+   *   for cases where the caller already has a shared pool.
+   */
+  constructor(waxId, db) {
+    if (!waxId || typeof waxId !== 'string') {
+      throw new Error('waxId is required and must be a string');
+    }
     this.waxId = waxId;
+    this._injectedPool = db || null;
+  }
+
+  /**
+   * Resolve the pool: use the injected pool if available, otherwise lazily
+   * fetch the global default pool. The previous implementation declared
+   * `pool` as a `const` inside writeFact only, leaving the other 5 methods
+   * referencing an undefined `pool` identifier — which threw ReferenceError
+   * at runtime.
+   */
+  async _getPool() {
+    if (this._injectedPool) return this._injectedPool;
+    return await getDefaultPool(config);
   }
 
   async writeFact(params) {
-    const pool = await getDefaultPool(config);
+    const pool = await this._getPool();
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -68,10 +91,24 @@ export class StudentMemoryAccess {
   }
 
   _isTemporalUpdate(factKey, oldValue, newValue) {
-    if (factKey === 'class_level') { const levels = ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3']; return levels.indexOf(oldValue) < levels.indexOf(newValue); }
-    if (factKey === 'exam_target') { const exams = ['WAEC', 'NECO', 'JAMB', 'BECE']; return exams.indexOf(oldValue) !== exams.indexOf(newValue); }
-    if (factKey === 'school_type' || factKey === 'school_name') return oldValue !== newValue;
-    return false;
+    // Per the Newborn AI philosophy (AGENTS.md §4): infrastructure must NOT
+    // enforce a fixed educational progression (e.g., "JSS1 → JSS2 → SS1 → SS3"
+    // or "WAEC before NECO before JAMB"). That's pedagogical intelligence
+    // encoded as a rule engine — exactly what the philosophy forbids.
+    //
+    // The previous implementation hardcoded class_level and exam_target
+    // ordering, which:
+    //   - Excluded students who don't follow that exact ladder (private
+    //     candidates, adult learners, transfer students).
+    //   - Treated exam_target changes as "temporal progression" when they
+    //     may be lateral (e.g., NECO → WAEC for a different subject set).
+    //
+    // We treat any change as a temporal update (supersede the old value)
+    // rather than a contradiction. The AI can decide whether the change
+    // reflects natural progression, a correction, or a new goal — based
+    // on context, not a hardcoded ladder.
+    if (oldValue === newValue) return false;
+    return true;
   }
 
   async _supersedeFact(client, params) {
@@ -108,6 +145,7 @@ export class StudentMemoryAccess {
     query += ` LIMIT $${paramsArray.length + 1}`;
     paramsArray.push(limit);
     try {
+      const pool = await this._getPool();
       const result = await pool.query(query, paramsArray);
       for (const row of result.rows) if (row.wax_id !== this.waxId) throw new StudentIsolationError(this.waxId, 'retrieve_facts');
       return result.rows.map(row => ({ id: row.id, wax_id: row.wax_id, fact_key: row.fact_key, fact_category: row.fact_category, fact_value: row.fact_value, display_text: row.display_text, provenance: row.provenance, confidence: parseFloat(row.confidence), evidence_count: row.evidence_count, contradicted_count: row.contradicted_count, status: row.status, valid_from: row.valid_from, valid_until: row.valid_until, created_at: row.created_at, updated_at: row.updated_at }));
@@ -120,6 +158,7 @@ export class StudentMemoryAccess {
   async getFactById(factId) {
     const query = 'SELECT id, wax_id, fact_key, fact_category, fact_value, display_text, provenance, confidence, evidence_count, contradicted_count, status, superseded_by, superseded_at, valid_from, valid_until, created_at, updated_at FROM student_facts WHERE id = $1';
     try {
+      const pool = await this._getPool();
       const result = await pool.query(query, [factId]);
       if (result.rows.length === 0) return null;
       const row = result.rows[0];
@@ -132,6 +171,7 @@ export class StudentMemoryAccess {
   }
 
   async archiveOldFacts(months = 12) {
+    const pool = await this._getPool();
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -150,6 +190,7 @@ export class StudentMemoryAccess {
   async getUnresolvedContradictions() {
     const query = `SELECT mc.*, fa.fact_key, fa.fact_value as fact_a_value, fa.display_text as fact_a_display, fa.confidence as fact_a_confidence, fb.fact_value as fact_b_value, fb.display_text as fact_b_display, fb.confidence as fact_b_confidence FROM memory_contradictions mc JOIN student_facts fa ON mc.fact_a_id = fa.id LEFT JOIN student_facts fb ON mc.fact_b_id = fb.id WHERE mc.wax_id = $1 AND mc.status = 'unresolved'`;
     try {
+      const pool = await this._getPool();
       const result = await pool.query(query, [this.waxId]);
       return result.rows.map(row => ({ id: row.id, wax_id: row.wax_id, fact_a_id: row.fact_a_id, fact_b_id: row.fact_b_id, conflict_type: row.conflict_type, conflict_description: row.conflict_description, fact_key: row.fact_key, status: row.status, resolved_at: row.resolved_at, resolution_notes: row.resolution_notes, detected_at: row.detected_at, detected_by: row.detected_by, fact_a_value: row.fact_a_value, fact_b_value: row.fact_b_value, fact_a_display: row.fact_a_display, fact_b_display: row.fact_b_display, fact_a_confidence: parseFloat(row.fact_a_confidence), fact_b_confidence: parseFloat(row.fact_b_confidence) }));
     } catch (err) { throw new DatabaseError(err.message, 'getUnresolvedContradictions', [this.waxId]); }
@@ -158,6 +199,7 @@ export class StudentMemoryAccess {
   async getConfidenceHistory(factId) {
     const query = 'SELECT id, wax_id, fact_id, previous_confidence, new_confidence, delta, change_reason, change_evidence, triggered_by_session_id, triggered_by_ai_request_id, triggered_by_job, created_at FROM memory_confidence_history WHERE fact_id = $1 ORDER BY created_at DESC';
     try {
+      const pool = await this._getPool();
       const result = await pool.query(query, [factId]);
       return result.rows.map(row => ({ id: row.id, wax_id: row.wax_id, fact_id: row.fact_id, previous_confidence: parseFloat(row.previous_confidence), new_confidence: parseFloat(row.new_confidence), delta: parseFloat(row.delta), change_reason: row.change_reason, change_evidence: row.change_evidence, triggered_by_session_id: row.triggered_by_session_id, triggered_by_ai_request_id: row.triggered_by_ai_request_id, triggered_by_job: row.triggered_by_job, created_at: row.created_at }));
     } catch (err) { throw new DatabaseError(err.message, 'getConfidenceHistory', [factId]); }

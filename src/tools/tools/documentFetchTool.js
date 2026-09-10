@@ -22,19 +22,26 @@ const APPROVED_DOMAINS = [
 ];
 
 /**
- * Execute document fetch
+ * Execute document fetch.
+ *
+ * @param {Object} ctx - Handler context.
+ * @param {string} ctx.waxId - Student identifier (unused, but required by handler protocol).
+ * @param {string} ctx.url - URL to fetch.
  */
 export async function executeDocumentFetch({
   waxId,
   url,
 }) {
+  if (!url || typeof url !== 'string') {
+    return { success: false, approved: false, error: 'url is required' };
+  }
+
   try {
-    // Parse URL
     const parsedUrl = new URL(url);
     const domain = parsedUrl.hostname;
 
     // Check if domain is approved
-    const isApproved = APPROVED_DOMAINS.some(approved => 
+    const isApproved = APPROVED_DOMAINS.some((approved) =>
       domain === approved || domain.endsWith(`.${approved}`)
     );
 
@@ -47,9 +54,9 @@ export async function executeDocumentFetch({
       };
     }
 
-    // Fetch content
+    // Fetch content. `signal: AbortSignal.timeout()` is the correct way to
+    // enforce a timeout on fetch (the `timeout` option is silently ignored).
     const response = await fetch(url, {
-      timeout: 10000,
       signal: AbortSignal.timeout(10000),
     });
 
@@ -62,7 +69,6 @@ export async function executeDocumentFetch({
       };
     }
 
-    // Get content
     const rawContent = await response.text();
     const sanitizedContent = sanitizeContent(rawContent);
 
@@ -75,7 +81,6 @@ export async function executeDocumentFetch({
       content_length: sanitizedContent.length,
     };
   } catch (error) {
-    console.error('Document fetch failed:', error);
     return {
       success: false,
       approved: false,
