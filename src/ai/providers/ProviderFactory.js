@@ -114,17 +114,37 @@ export async function initializeProviders() {
     // Optionally pre-warm the fallback provider too.
     const fallbackName = (config.AI_FALLBACK_PROVIDER || '').toLowerCase().trim();
     if (fallbackName && fallbackName !== providerName) {
-      try {
-        registry.fallback = await getProvider(fallbackName);
-        logger.info(
-          { component: 'ProviderFactory', fallback: fallbackName },
-          'Fallback provider pre-warmed'
+      // Validate that the fallback looks like a provider name, not an API key.
+      // API keys typically start with 'sk-', 'gsk_', 'csk_', etc. and are much
+      // longer than provider names. If the user accidentally puts an API key
+      // in AI_FALLBACK_PROVIDER, we give a clear error instead of the confusing
+      // "Unknown AI provider: csk-..." message.
+      const validProviders = getAvailableProviders();
+      if (!validProviders.includes(fallbackName)) {
+        logger.error(
+          {
+            component: 'ProviderFactory',
+            fallbackValue: fallbackName.slice(0, 6) + '...',
+            validProviders,
+          },
+          `AI_FALLBACK_PROVIDER is set to "${fallbackName.slice(0, 6)}..." which is not a recognized provider name. ` +
+          `Valid providers: ${validProviders.join(', ')}. ` +
+          `If this looks like an API key, it belongs in the provider-specific key variable (e.g. AI_CEREBRAS_API_KEY), not AI_FALLBACK_PROVIDER. ` +
+          `Fallback provider will not be available.`
         );
-      } catch (fallbackErr) {
-        logger.warn(
-          { component: 'ProviderFactory', fallback: fallbackName, err: fallbackErr.message },
-          'Fallback provider failed to initialize (non-fatal)'
-        );
+      } else {
+        try {
+          registry.fallback = await getProvider(fallbackName);
+          logger.info(
+            { component: 'ProviderFactory', fallback: fallbackName },
+            'Fallback provider pre-warmed'
+          );
+        } catch (fallbackErr) {
+          logger.warn(
+            { component: 'ProviderFactory', fallback: fallbackName, err: fallbackErr.message },
+            'Fallback provider failed to initialize (non-fatal)'
+          );
+        }
       }
     }
 

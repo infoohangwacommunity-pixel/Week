@@ -502,11 +502,28 @@ Message: ${this.sanitizeForPrompt(content)}`;
     const { randomUUID } = await import('crypto');
     const { createAIRequest } = await import('../ai/schemas/AIRequest.js');
 
+    // Use the safety classifier model if it's configured AND the primary
+    // provider supports it. The default 'claude-haiku-4-5' only works with
+    // the Anthropic provider — if the primary provider is Groq/OpenAI/Cerebras,
+    // using that model name causes the API to reject the request.
+    //
+    // Strategy: if SAFETY_CLASSIFIER_MODEL is explicitly set to a non-default
+    // value, use it. Otherwise, fall back to the primary provider's model
+    // (config.AI_PRIMARY_MODEL), which is guaranteed to work with the primary
+    // provider.
+    const classifierModel =
+      (config.SAFETY_CLASSIFIER_MODEL && config.SAFETY_CLASSIFIER_MODEL !== 'claude-haiku-4-5')
+        ? config.SAFETY_CLASSIFIER_MODEL
+        : config.AI_PRIMARY_MODEL || 'classifier';
+
     const request = createAIRequest({
       systemPrompt: 'You are a safety classifier. Respond with a single number between 0.0 and 1.0 only.',
       messages: [{ role: 'user', content: userPrompt }],
-      model: config.SAFETY_CLASSIFIER_MODEL || config.AI_PRIMARY_MODEL || 'classifier',
-      maxOutputTokens: 20,
+      model: classifierModel,
+      maxOutputTokens: 100, // AIRequestSchema requires min(100). The model
+                             // will return 1-3 tokens; the extra budget is
+                             // harmless and doesn't affect cost meaningfully
+                             // for a single-token classification call.
       temperature: 0.0,
       waxId: this.waxId || randomUUID(),
       sessionId: this.sessionId || randomUUID(),
