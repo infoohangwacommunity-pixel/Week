@@ -170,10 +170,7 @@ export class SafetyClassifier {
         latency_ms: latencyMs,
       };
     } catch (error) {
-      this.logger.error('Safety classification failed', {
-        error: error.message,
-        waxId,
-      });
+      this.logger.error({ error: error.message, errorType: error.errorType, waxId }, 'Safety classification failed');
 
       // On error, default to no action (don't block educational content)
       return {
@@ -238,9 +235,7 @@ Classify this message: ${this.sanitizeForPrompt(content)}`;
       const score = this.parseNumericResponse(response);
       return Math.max(0, Math.min(1, score));
     } catch (error) {
-      this.logger.warn('Educational context classification failed', {
-        error: error.message,
-      });
+      this.logger.warn({ error: error.message, errorType: error.errorType, providerStatusCode: error.providerStatusCode, providerMessage: error.providerMessage }, 'Educational context classification failed');
       return 0.5; // Default to neutral
     }
   }
@@ -276,9 +271,7 @@ Classify for welfare concern: ${this.sanitizeForPrompt(content)}`;
       const score = this.parseNumericResponse(response);
       return Math.max(0, Math.min(1, score));
     } catch (error) {
-      this.logger.warn('Welfare concern classification failed', {
-        error: error.message,
-      });
+      this.logger.warn({ error: error.message, errorType: error.errorType, providerStatusCode: error.providerStatusCode, providerMessage: error.providerMessage }, 'Welfare concern classification failed');
       return 0.0;
     }
   }
@@ -301,7 +294,7 @@ Student message: ${this.sanitizeForPrompt(content)}`;
       const score = this.parseNumericResponse(response);
       return Math.max(0, Math.min(1, score));
     } catch (error) {
-      this.logger.warn('Inappropriate response classification failed', { error: error.message });
+      this.logger.warn({ error: error.message, errorType: error.errorType, providerStatusCode: error.providerStatusCode, providerMessage: error.providerMessage }, 'Inappropriate response classification failed');
       return 0.0;
     }
   }
@@ -331,7 +324,7 @@ Message: ${this.sanitizeForPrompt(content)}`;
       const score = this.parseNumericResponse(response);
       return Math.max(0, Math.min(1, score));
     } catch (error) {
-      this.logger.warn('Adversarial pattern classification failed', { error: error.message });
+      this.logger.warn({ error: error.message, errorType: error.errorType, providerStatusCode: error.providerStatusCode, providerMessage: error.providerMessage }, 'Adversarial pattern classification failed');
       return 0.0;
     }
   }
@@ -406,12 +399,7 @@ Message: ${this.sanitizeForPrompt(content)}`;
         ]
       );
     } catch (error) {
-      this.logger.error('Failed to log safety event', {
-        error: error.message,
-        waxId,
-        eventType: event.event_type,
-        level: event.level,
-      });
+      this.logger.error({ error: error.message, waxId, eventType: event.event_type, level: event.level }, 'Failed to log safety event');
     }
   }
 
