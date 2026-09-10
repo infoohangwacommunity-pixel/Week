@@ -182,6 +182,15 @@ export class AIOrchestrator {
                   sessionId,
                   aiRequestId: context.aiRequestId,
                   level: 3,
+                  // Thread the student's phone number through so the crisis
+                  // protocol can actually deliver a message via WhatsApp.
+                  // The phone number is NEVER persisted (only its hash is)
+                  // — it lives in process memory for the duration of the
+                  // request, then is garbage-collected.
+                  phoneNumber: context.phoneNumber || null,
+                  // Also pass the current message so the crisis protocol can
+                  // log context (but never persist the raw content).
+                  triggerContent: currentMessage,
                 });
                 if (crisisResponse) {
                   return {

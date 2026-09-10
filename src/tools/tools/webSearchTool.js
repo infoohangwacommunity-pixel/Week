@@ -79,36 +79,52 @@ function getSourceTier(domain) {
 /**
  * Execute web search
  */
-export async function executeWebSearch({ waxId, query, maxResults = 3 }) {
+/**
+ * Execute web search.
+ *
+ * @param {Object} ctx - Handler context.
+ * @param {import('pg').Pool} ctx.db - Shared Postgres pool (for caching).
+ * @param {string} ctx.waxId - Student identifier (for rate-limit/perf tracking).
+ * @param {string} ctx.query - Search query.
+ * @param {number} [ctx.maxResults] - Max results.
+ */
+export async function executeWebSearch({ db, waxId, query, maxResults = 3 }) {
   const startTime = Date.now();
-  
-  // Check cache first
-  const cachedResult = await checkCache({ query, waxId });
+
+  // Check cache first.
+  const cachedResult = await checkCache({ db, query, waxId });
   if (cachedResult) {
     return {
       ...cachedResult,
+      success: true,
       from_cache: true,
       query_latency_ms: Date.now() - startTime,
     };
   }
-  
-  // Fetch from search provider
-  const searchResults = await fetchSearchResults(query);
-  
-  // Process and sanitize results
+
+  // Fetch from search provider.
+  let searchResults;
+  try {
+    searchResults = await fetchSearchResults(query);
+  } catch (err) {
+    return { success: false, error: `Web search failed: ${err.message}` };
+  }
+
+  // Process and sanitize results.
   const processedResults = await processSearchResults({
     results: searchResults,
     maxResults,
     waxId,
     query,
   });
-  
-  // Cache the results
-  await cacheResults({ query, results: processedResults });
-  
+
+  // Cache the results.
+  await cacheResults({ db, query, results: processedResults });
+
   const latencyMs = Date.now() - startTime;
-  
+
   return {
+    success: true,
     results: processedResults,
     total_found: searchResults.length,
     query_latency_ms: latencyMs,
@@ -328,20 +344,20 @@ function extractDomain(url) {
 /**
  * Check cache for existing results
  */
-async function checkCache({ query, waxId }) {
-  // Simple cache key based on query hash
+async function checkCache({ db, query, waxId }) {
+  if (!db) return null;
   const queryHash = await hashString(query);
-  
+
   try {
     const result = await db.query(
-      `SELECT cached_results 
-       FROM web_search_cache 
-       WHERE query_hash = $1 
-       AND provider = $2 
+      `SELECT cached_results
+       FROM web_search_cache
+       WHERE query_hash = $1
+       AND provider = $2
        AND expires_at > $3`,
       [queryHash, config.WEB_SEARCH_PROVIDER, new Date()]
     );
-    
+
     if (result.rows.length > 0) {
       return JSON.parse(result.rows[0].cached_results);
     }
@@ -349,22 +365,23 @@ async function checkCache({ query, waxId }) {
     // Cache miss or error - continue with fresh search
     console.warn('Cache lookup failed:', error.message);
   }
-  
+
   return null;
 }
 
 /**
  * Cache search results
  */
-async function cacheResults({ query, results }) {
+async function cacheResults({ db, query, results }) {
+  if (!db) return;
   const queryHash = await hashString(query);
   const expiresAt = new Date(Date.now() + config.WEB_SEARCH_CACHE_TTL_SECONDS * 1000);
-  
+
   try {
     await db.query(
       `INSERT INTO web_search_cache (query_hash, query, cached_results, provider, result_count, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (query_hash, provider) 
+       ON CONFLICT (query_hash, provider)
        DO UPDATE SET cached_results = $3, expires_at = $6`,
       [
         queryHash,
@@ -388,7 +405,7 @@ async function hashString(str) {
   const data = encoder.encode(str);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export default {

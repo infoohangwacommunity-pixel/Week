@@ -331,7 +331,7 @@ const TOOL_REGISTRY = [
   // Category D: Assessment Tools
   {
     name: 'generate_question',
-    description: 'Generate a formative assessment question for a specific concept.',
+    description: 'Persist a formative assessment question drafted by the AI for a specific concept. The AI drafts the question text, correct answer, and grading rubric; this tool stores them and returns a question ID for evidence tracking.',
     input_schema: {
       type: 'object',
       properties: {
@@ -351,13 +351,30 @@ const TOOL_REGISTRY = [
           enum: ['multiple_choice', 'short_answer', 'open_ended'],
           default: 'multiple_choice',
         },
+        question_text: {
+          type: 'string',
+          minLength: 10,
+          maxLength: 2000,
+          description: 'The full text of the question drafted by the AI.',
+        },
+        correct_answer: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 1000,
+          description: 'The correct answer (as a JSON string for structured answers).',
+        },
+        grading_rubric: {
+          type: 'string',
+          maxLength: 2000,
+          description: 'Optional grading rubric (as JSON string).',
+        },
         targeted_misconception: {
           type: 'string',
           maxLength: 200,
           description: 'Optional: specific misconception to assess',
         },
       },
-      required: ['concept_tag', 'format'],
+      required: ['concept_tag', 'format', 'question_text', 'correct_answer'],
       additionalProperties: false,
     },
     output_contract: {
@@ -367,8 +384,6 @@ const TOOL_REGISTRY = [
         question_text: { type: 'string' },
         question_type: { type: 'string' },
         difficulty: { type: 'string' },
-        correct_answer: { type: 'object' },
-        grading_rubric: { type: 'object' },
         concept_tag: { type: 'string' },
       },
     },
@@ -376,7 +391,7 @@ const TOOL_REGISTRY = [
     permission_level: ToolPermission.ASSESSMENT,
     execution_limits: {
       timeout_ms: 10000,
-      max_arguments_size_bytes: 2048,
+      max_arguments_size_bytes: 8192,
       max_calls_per_session: config.TOOL_ASSESSMENT_GENERATE_MAX_PER_SESSION,
     },
     requires_student_context: true,
@@ -622,7 +637,10 @@ export function validateToolArguments(toolName, toolArguments) {
   if (schema.properties) {
     for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
       if (fieldName in toolArguments) {
-        const value = arguments[fieldName];
+        // Use the user-supplied value, NOT the JS magic `arguments` object.
+        // (The previous code did `arguments[fieldName]` which always returned
+        // undefined because `arguments` is the function's own argument list.)
+        const value = toolArguments[fieldName];
         const fieldErrors = validateFieldValue(fieldName, value, fieldSchema);
         errors.push(...fieldErrors);
       }

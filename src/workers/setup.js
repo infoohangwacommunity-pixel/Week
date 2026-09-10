@@ -184,13 +184,20 @@ export async function setupWorkers({ redis, pool }) {
               log.warn({ err: markErr.message }, 'Failed to mark message as processing (non-fatal)');
             }
 
-            // Complete the AI request through orchestrator
+            // Complete the AI request through orchestrator.
+            // Pass phoneNumber in the context so the CrisisProtocol can
+            // actually deliver a crisis response via WhatsApp if needed.
+            // The phone number is in process memory only — never persisted.
             log.info({ waxId: trace.waxId, sessionId: trace.sessionId, hasMessage: !!currentMessage, correlationId: trace.correlationId }, 'Calling orchestrator.complete');
             const response = await orchestrator.complete({
               waxId: trace.waxId,
               sessionId: trace.sessionId,
               currentMessage,
-              context: { correlationId: trace.correlationId },
+              context: {
+                correlationId: trace.correlationId,
+                phoneNumber: trace.phoneNumber || null,
+                aiRequestId: trace.messageId,
+              },
             });
 
             // Mark the message as 'completed'.
@@ -215,8 +222,13 @@ export async function setupWorkers({ redis, pool }) {
             // Persist the outbound message BEFORE attempting delivery, so a
             // crash during fetch leaves an audit trail. The outbound.js helper
             // also writes its own 'pending' row, but only if a pool is passed.
-            // Send response to student via WhatsApp.
-            if (response.content && trace.phoneNumber) {
+            //
+            // If the orchestrator returned a crisis response, the
+            // CrisisProtocol has ALREADY delivered the message via WhatsApp
+            // (with the in-memory phone number). Don't double-send.
+            if (response.isCrisis) {
+              log.info({ waxId: trace.waxId, deliveryMethod: response.deliveryMethod }, 'Crisis response already delivered; skipping normal outbound');
+            } else if (response.content && trace.phoneNumber) {
               try {
                 const messageIds = await sendResponse(trace.phoneNumber, response.content, {
                   correlationId: trace.correlationId,

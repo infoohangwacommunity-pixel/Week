@@ -21,6 +21,8 @@ import {
   ToolPermission,
 } from './ToolRegistry.js';
 import { ToolError, ToolErrorCode } from './ToolErrors.js';
+import { getToolHandler } from './ToolHandlerRegistry.js';
+import { getDefaultPool } from '../db/index.js';
 
 /**
  * Tool execution result
@@ -107,9 +109,12 @@ export class ToolExecutor {
         );
       }
 
-      // Step 3: Check argument size limit
+      // Step 3: Check argument size limit.
+      // Use the global `config` (this.config is the per-instance override which is
+      // usually empty). The global config has the validated defaults.
       const argSize = JSON.stringify(args).length;
-      const maxArgSize = tool.execution_limits.max_arguments_size_bytes || config.TOOL_ARGUMENT_MAX_SIZE_BYTES;
+      const maxArgSize = tool.execution_limits?.max_arguments_size_bytes
+        || config.TOOL_ARGUMENT_MAX_SIZE_BYTES;
       if (argSize > maxArgSize) {
         throw new ToolError(
           ToolErrorCode.SIZE_EXCEEDED,
@@ -127,7 +132,7 @@ export class ToolExecutor {
       if (!rateLimitResult.allowed) {
         throw new ToolError(
           ToolErrorCode.RATE_LIMIT_EXCEEDED,
-          rateLimitReason
+          rateLimitResult.reason || 'Rate limit exceeded'
         );
       }
 
@@ -276,8 +281,10 @@ export class ToolExecutor {
    * Execute tool with timeout
    */
   async executeWithTimeout({ tool, waxId, sessionId, aiRequestId, args }) {
+    // Use the global config (validated) rather than the per-instance override.
     const timeoutMs =
-      tool.execution_limits.timeout_ms || config.TOOL_DEFAULT_TIMEOUT_MS;
+      tool.execution_limits?.timeout_ms || config.TOOL_DEFAULT_TIMEOUT_MS;
+    const toolName = tool.name;
 
     return Promise.race([
       this.performToolExecution({ tool, waxId, sessionId, aiRequestId, args }),
@@ -295,15 +302,68 @@ export class ToolExecutor {
   }
 
   /**
-   * Perform the actual tool execution (to be overridden by subclasses)
+   * Perform the actual tool execution.
+   *
+   * Dispatches to the handler registered in ToolHandlerRegistry. The handler
+   * receives the validated `args` plus contextual resources (waxId, sessionId,
+   * aiRequestId, db).
+   *
+   * Returns a ToolExecutionResult on success. On handler failure, throws a
+   * ToolError with a structured code.
    */
   async performToolExecution({ tool, waxId, sessionId, aiRequestId, args }) {
-    // This is a base implementation - specific handlers should be registered
-    // For now, return an error indicating no handler is registered
-    throw new ToolError(
-      ToolErrorCode.NO_HANDLER,
-      `No handler registered for tool: ${tool.name}`
-    );
+    const handlerEntry = getToolHandler(tool.name);
+    if (!handlerEntry) {
+      throw new ToolError(
+        ToolErrorCode.NO_HANDLER,
+        `No handler registered for tool: ${tool.name}`
+      );
+    }
+
+    // Resolve the database pool: prefer the injected this.db; fall back to the
+    // global default pool so tests don't have to construct one.
+    const db = this.db || (handlerEntry.requiresDb ? await getDefaultPool(config) : null);
+
+    if (handlerEntry.requiresDb && (!db || typeof db.query !== 'function')) {
+      throw new ToolError(
+        ToolErrorCode.HANDLER_FAILED,
+        `Tool ${tool.name} requires a database pool but none is available`
+      );
+    }
+
+    // Build the handler context. Spread the AI-supplied args (snake_case keys)
+    // so handlers can destructure them naturally.
+    const handlerContext = {
+      waxId,
+      sessionId,
+      aiRequestId,
+      ...args,
+      db,
+      config,
+    };
+
+    let handlerResult;
+    try {
+      handlerResult = await handlerEntry.handler(handlerContext);
+    } catch (err) {
+      // Wrap unexpected handler exceptions in a ToolError so the orchestrator
+      // sees a consistent error type.
+      throw new ToolError(
+        ToolErrorCode.HANDLER_FAILED,
+        `Tool ${tool.name} execution failed: ${err.message}`
+      );
+    }
+
+    // Handlers return { success: true, ...data } or { success: false, validation_errors }.
+    // Normalize into a ToolExecutionResult.
+    if (handlerResult && handlerResult.success === false) {
+      const errMsg = handlerResult.validation_errors
+        ? handlerResult.validation_errors.join('; ')
+        : (handlerResult.error || 'Tool execution failed');
+      return ToolExecutionResult.failure(new Error(errMsg), Date.now());
+    }
+
+    return ToolExecutionResult.success(handlerResult || {});
   }
 
   /**
