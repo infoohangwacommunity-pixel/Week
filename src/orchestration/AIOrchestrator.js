@@ -23,60 +23,32 @@ import { randomUUID } from 'crypto';
 import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { createAIRequest, estimateTokenUsage } from '../ai/schemas/AIRequest.js';
-import { createAIResponse, FinishReason } from '../ai/schemas/AIResponse.js';
-import { createAIError, AIErrorTypes } from '../ai/schemas/AIErrors.js';
+import { createAIResponse, createErrorResponse, FinishReason } from '../ai/schemas/AIResponse.js';
+import { createAIError, AIErrorTypes, RETRYABLE_ERROR_TYPES } from '../ai/schemas/AIErrors.js';
+import ProviderFactory from '../ai/providers/ProviderFactory.js';
 
 /**
- * Retryable error types that should trigger fallback
+ * Error types that should trigger fallback to the secondary provider.
+ * These match the AIErrorTypes enum exactly (lowercase underscore-separated).
  */
-const RETRYABLE_ERRORS = [
-  'PROVIDER_RATE_LIMITED',
-  'PROVIDER_SERVER_ERROR',
-  'PROVIDER_OVERLOADED',
-  'PROVIDER_TIMEOUT',
-  'NETWORK_ERROR',
-];
+const FALLBACK_ERROR_TYPES = new Set([
+  AIErrorTypes.RATE_LIMIT_ERROR,
+  AIErrorTypes.PROVIDER_SERVER_ERROR,
+  AIErrorTypes.TIMEOUT_ERROR,
+  AIErrorTypes.UNKNOWN_ERROR, // unknown errors may be transient network issues
+]);
 
 /**
- * Provider capability registry (research recommendation)
+ * Provider capability registry.
+ * Used by callers that want to inspect capabilities without instantiating the
+ * adapter. The adapter's own `capabilities` field is the authoritative source.
  */
 const PROVIDER_CAPABILITIES = {
-  anthropic: {
-    supportsText: true,
-    supportsImageInput: true,
-    supportsToolCalling: true,
-    supportsPromptCaching: true,
-    supportsStructuredOutput: true,
-    maxContextTokens: 1000000,
-    maxOutputTokens: 8192,
-  },
-  openai: {
-    supportsText: true,
-    supportsImageInput: true,
-    supportsToolCalling: true,
-    supportsPromptCaching: false,
-    supportsStructuredOutput: true,
-    maxContextTokens: 128000,
-    maxOutputTokens: 4096,
-  },
-  groq: {
-    supportsText: true,
-    supportsImageInput: false,
-    supportsToolCalling: false,
-    supportsPromptCaching: false,
-    supportsStructuredOutput: false,
-    maxContextTokens: 131072,
-    maxOutputTokens: 8192,
-  },
-  fake: {
-    supportsText: true,
-    supportsImageInput: false,
-    supportsToolCalling: false,
-    supportsPromptCaching: false,
-    supportsStructuredOutput: false,
-    maxContextTokens: 100000,
-    maxOutputTokens: 4096,
-  },
+  anthropic: { maxContextTokens: 200000, maxOutputTokens: 4096 },
+  openai:    { maxContextTokens: 128000, maxOutputTokens: 4096 },
+  groq:      { maxContextTokens: 131072, maxOutputTokens: 8192 },
+  cerebras:  { maxContextTokens: 256000, maxOutputTokens: 4096 },
+  fake:      { maxContextTokens: 100000, maxOutputTokens: 4096 },
 };
 
 /**
@@ -159,102 +131,136 @@ export class AIOrchestrator {
   }
 
   /**
-   * Complete with tool calling loop (Phase G)
+   * Complete with tool calling loop (Phase G).
+   *
+   * Tool definitions are passed to the provider via `request.tools` (native
+   * provider API) — never stuffed into the system prompt. The provider returns
+   * a structured `tool_calls` field when the model wants to use a tool, which
+   * we execute via ToolExecutor and feed back as proper tool-result messages
+   * on the next iteration.
    */
   async completeWithTools({ waxId, sessionId, currentMessage, context, startTime, requestLog }) {
     const maxTurns = 5;
     let turn = 0;
     let accumulatedToolCalls = 0;
+    // Working message list: seeded from the context assembler on turn 1, then
+    // mutated in-place to append assistant tool-call turns and tool-result turns.
+    // We bypass the DB-backed `assemble()` on subsequent turns so tool results
+    // survive to the next provider call.
+    let workingMessages = null;
+    let workingToolDefinitions = null;
+    let lastSystemPromptResult = null;
 
     while (turn < maxTurns) {
       turn++;
-      requestLog = requestLog.child({ turn, accumulatedToolCalls });
-      
+      const turnLog = requestLog.child({ turn, accumulatedToolCalls });
+
       try {
-        // Phase I: Safety classification before AI call
-        const safetyResult = await this.safetyClassifier?.classify({
-          waxId,
-          sessionId,
-          aiRequestId: context.aiRequestId,
-          content: currentMessage || (context.messages?.[context.messages.length - 1]?.content || ''),
-        });
+        // Phase I: Safety classification before AI call. Only classify student
+        // inbound messages (skip when currentMessage is null — i.e. tool-result
+        // continuation turns).
+        if (currentMessage && this.safetyClassifier) {
+          let safetyResult;
+          try {
+            safetyResult = await this.safetyClassifier.classify({
+              waxId,
+              sessionId,
+              aiRequestId: context.aiRequestId,
+              content: currentMessage,
+            });
+          } catch (safetyErr) {
+            turnLog.warn({ err: safetyErr.message }, 'Safety classifier threw; continuing with default classification');
+            safetyResult = null;
+          }
 
-        // Phase I: Check for crisis
-        if (safetyResult && safetyResult.level === 3) {
-          requestLog.warn('Crisis detected at Level 3');
-          const crisisResponse = await this.crisisProtocol?.handleCrisis({
-            waxId,
-            sessionId,
-            aiRequestId: context.aiRequestId,
-            level: 3,
-          });
-
-          if (crisisResponse) {
-            return {
-              ...crisisResponse,
-              safetyEvent: safetyResult,
-              isCrisis: true,
-            };
+          if (safetyResult && safetyResult.level === 3) {
+            turnLog.warn('Crisis detected at Level 3');
+            if (this.crisisProtocol) {
+              try {
+                const crisisResponse = await this.crisisProtocol.handleCrisis({
+                  waxId,
+                  sessionId,
+                  aiRequestId: context.aiRequestId,
+                  level: 3,
+                });
+                if (crisisResponse) {
+                  return {
+                    ...crisisResponse,
+                    safetyEvent: safetyResult,
+                    isCrisis: true,
+                  };
+                }
+              } catch (crisisErr) {
+                turnLog.error({ err: crisisErr.message }, 'Crisis protocol failed');
+              }
+            }
           }
         }
 
-        // Assemble context with tool definitions
-        requestLog.info('Assembling context with tool definitions');
-        const contextResult = await this.contextAssembler.assemble({
-          waxId,
-          sessionId,
-          currentMessage,
-          trace: { correlationId: context.correlationId },
-        });
-
-        // Build system prompt
-        const systemPromptResult = await this.buildSystemPrompt({ waxId, sessionId, context });
-        let systemPrompt = systemPromptResult.systemPrompt;
-
-        // Add tool definitions to system prompt if available
-        if (contextResult.toolDefinitions) {
-          systemPrompt += '\n\nTOOL CAPABILITIES\n' +
-            'You have access to the following tools. Use them when appropriate:\n' +
-            JSON.stringify(contextResult.toolDefinitions, null, 2);
+        // Assemble context (only on the first turn of the loop, or when the
+        // orchestrator was called without working messages).
+        if (!workingMessages) {
+          turnLog.info('Assembling context with tool definitions');
+          const contextResult = await this.contextAssembler.assemble({
+            waxId,
+            sessionId,
+            currentMessage,
+            trace: { correlationId: context.correlationId },
+          });
+          workingMessages = [...(contextResult.messages || [])];
+          workingToolDefinitions = contextResult.toolDefinitions || null;
         }
 
-        // Build AI request
+        // Build system prompt (once per request — not per turn).
+        if (!lastSystemPromptResult) {
+          lastSystemPromptResult = await this.buildSystemPrompt({ waxId, sessionId, context });
+        }
+        const systemPrompt = lastSystemPromptResult.systemPrompt;
+
+        // Build AI request. Tools are passed natively — NOT concatenated into
+        // the system prompt. The provider adapter translates `tools` to its
+        // API-specific shape.
         const request = createAIRequest({
           systemPrompt,
-          messages: contextResult.messages,
+          messages: workingMessages,
           model: config.AI_PRIMARY_MODEL,
           maxOutputTokens: config.AI_MAX_TOKENS,
           temperature: config.AI_TEMPERATURE,
+          tools: workingToolDefinitions || undefined,
+          toolChoice: workingToolDefinitions ? 'auto' : undefined,
           waxId,
           sessionId,
           correlationId: context.correlationId,
-          promptVersion: systemPromptResult.promptVersion || 'phase-g-tools',
+          promptVersion: lastSystemPromptResult.promptVersion || 'phase-g-tools',
         });
 
-        // Call AI provider
-        requestLog.info('Calling AI provider');
+        // Call AI provider.
+        turnLog.info('Calling AI provider');
         const providerResponse = await this.callProviderWithFallback(request, {
           waxId,
           sessionId,
           correlationId: context.correlationId,
-          contextResult,
+          contextResult: { messages: workingMessages, toolDefinitions: workingToolDefinitions },
         });
 
-        // Check for tool calls
-        if (providerResponse.finishReason === 'tool_call' && providerResponse.toolCalls) {
-          requestLog.info({ toolCalls: providerResponse.toolCalls.length }, 'AI requested tool calls');
+        // Check for tool calls. Compare against the lowercase enum value.
+        if (providerResponse.finishReason === FinishReason.TOOL_CALL && Array.isArray(providerResponse.toolCalls) && providerResponse.toolCalls.length > 0) {
+          turnLog.info({ toolCalls: providerResponse.toolCalls.length }, 'AI requested tool calls');
 
-          // Check rate limit
+          // Check rate limit.
           if (accumulatedToolCalls + providerResponse.toolCalls.length > config.TOOL_MAX_CALLS_PER_SESSION) {
-            requestLog.warn('Tool call limit would be exceeded');
-            return {
-              ...providerResponse,
+            turnLog.warn('Tool call limit would be exceeded');
+            return createAIResponse({
               content: 'I\'ve reached my limit for this conversation. Please start a new topic.',
-              finishReason: 'tool_limit_reached',
-            };
+              model: providerResponse.model,
+              provider: providerResponse.provider,
+              finishReason: FinishReason.TOOL_LIMIT_REACHED,
+              usage: providerResponse.usage,
+              latencyMs: Date.now() - startTime,
+            });
           }
 
-          // Execute tool calls
+          // Execute tool calls.
           const toolResults = await this.executeToolCalls({
             waxId,
             sessionId,
@@ -262,31 +268,58 @@ export class AIOrchestrator {
             aiRequestId: context.aiRequestId,
           });
 
-          // Build tool result message
-          const toolResultMessage = this.buildToolResultMessage(toolResults);
+          // Append the assistant turn (with tool_calls) and the tool-result
+          // messages to the working list so the provider sees the full
+          // conversation on the next iteration.
+          workingMessages.push({
+            role: 'assistant',
+            content: providerResponse.content || '',
+            toolCalls: providerResponse.toolCalls,
+          });
+          for (const tr of toolResults) {
+            workingMessages.push({
+              role: 'tool',
+              toolCallId: tr.toolId,
+              toolName: tr.toolName,
+              content: tr.success ? tr.data : { error: tr.error },
+              isError: !tr.success,
+            });
+          }
 
-          // Continue loop with tool results
-          currentMessage = null;
-          context.messages = [...(context.messages || []), toolResultMessage];
           accumulatedToolCalls += providerResponse.toolCalls.length;
-          
+          currentMessage = null;
           continue;
         }
 
-        // No tool calls, return response
+        // No tool calls, return response.
         return providerResponse;
-
       } catch (error) {
-        requestLog.error({ error: error.message }, 'Tool calling turn failed');
+        turnLog.error({ err: error.message, errorType: error.errorType }, 'Tool calling turn failed');
+        // Persist the failure so we have an audit trail.
+        try {
+          await this.persistFailure({
+            waxId,
+            sessionId,
+            correlationId: context.correlationId,
+            request: { promptVersion: lastSystemPromptResult?.promptVersion || 'phase-g-tools' },
+            error,
+            tokenEstimate: null,
+            startTime,
+          });
+        } catch (persistErr) {
+          turnLog.error({ err: persistErr.message }, 'Failed to persist failure metadata');
+        }
         throw error;
       }
     }
 
-    // Max turns reached
-    return {
-      content: 'I\'m having trouble completing this request. Could you please rephrase?',
-      finishReason: 'max_turns_reached',
-    };
+    // Max turns reached. Return a schema-valid response so the worker doesn't
+    // crash trying to read usage fields.
+    return createErrorResponse({
+      model: config.AI_PRIMARY_MODEL,
+      provider: config.AI_PRIMARY_PROVIDER,
+      latencyMs: Date.now() - startTime,
+    });
   }
 
   /**
@@ -327,20 +360,24 @@ export class AIOrchestrator {
   }
 
   /**
-   * Build tool result message
+   * Build tool result message.
+   * Returns a normalized message with role='tool' so the provider adapters can
+   * translate to the appropriate provider-native shape.
    */
   buildToolResultMessage(toolResults) {
-    const parts = toolResults.map((result, index) => {
-      if (result.success) {
-        return `[Tool ${index + 1} Result: ${result.toolName}]\n${JSON.stringify(result.data, null, 2)}`;
-      } else {
-        return `[Tool ${index + 1} Error: ${result.toolName}]\nError: ${result.error}`;
-      }
-    });
-
+    // Return the first tool result as a 'tool' role message.
+    // (Multiple tool results should be split into multiple 'tool' messages —
+    // see completeWithTools which does this correctly.)
+    const first = toolResults[0];
+    if (!first) {
+      return { role: 'tool', toolCallId: 'unknown', content: 'No tool result' };
+    }
     return {
-      role: 'user',
-      content: 'Tool Results:\n\n' + parts.join('\n\n'),
+      role: 'tool',
+      toolCallId: first.toolId,
+      toolName: first.toolName,
+      content: first.success ? first.data : { error: first.error },
+      isError: !first.success,
     };
   }
 
@@ -407,15 +444,16 @@ export class AIOrchestrator {
       if (!validation.valid) {
         requestLog.warn({ state: validation.state, message: validation.message }, 'Response validation failed');
 
-        if (validation.canRetry && context.retryCount < 2) {
-          requestLog.info('Retrying with validation failure');
+        const retryCount = context.retryCount || 0;
+        if (validation.canRetry && retryCount < 2) {
+          requestLog.info({ retryCount: retryCount + 1 }, 'Retrying with validation failure');
           return await this.completeLegacy({
             waxId,
             sessionId,
             currentMessage,
             context: {
               ...context,
-              retryCount: (context.retryCount || 0) + 1,
+              retryCount: retryCount + 1,
               previousResponse: providerResponse.content,
             },
             startTime,
@@ -425,7 +463,7 @@ export class AIOrchestrator {
 
         return {
           ...providerResponse,
-          content: config.AI_FAILURE_STUDENT_MESSAGE || 
+          content: config.AI_FAILURE_STUDENT_MESSAGE ||
             'Sorry, I\'m having a bit of trouble right now. Could you send your message again in a moment?',
           validationFailed: true,
           validationState: validation.state,
@@ -464,7 +502,7 @@ export class AIOrchestrator {
       return providerResponse;
     } catch (error) {
       const latencyMs = Date.now() - startTime;
-      
+
       this.logger.error({
         errorType: error.errorType || 'UNKNOWN',
         message: error.providerMessage || error.message || 'Unknown error',
@@ -476,6 +514,21 @@ export class AIOrchestrator {
         },
         latencyMs,
       }, 'AI request failed');
+
+      // Persist failure metadata so the operator has an audit trail.
+      try {
+        await this.persistFailure({
+          waxId,
+          sessionId,
+          correlationId: context.correlationId,
+          request: { promptVersion: 'v1' },
+          error,
+          tokenEstimate: null,
+          startTime,
+        });
+      } catch (persistErr) {
+        this.logger.error({ err: persistErr.message }, 'Failed to persist failure metadata');
+      }
 
       throw error;
     }
@@ -503,30 +556,21 @@ export class AIOrchestrator {
   }
 
   /**
-   * Call provider with fallback support
-   * 
-   * @param {Object} request - AI request
-   * @param {Object} options - Call options
-   * @param {string} options.waxId - Student identifier
-   * @param {string} options.sessionId - Session identifier
-   * @param {string} options.correlationId - Correlation ID
-   * @param {Object} options.contextResult - Context assembly result
-   * @returns {Promise<Object>} - AI response
+   * Call provider with fallback support.
+   * Honors the constructor-injected `providerFactory` (a provider instance)
+   * when available; otherwise resolves via ProviderFactory.getProvider().
    */
   async callProviderWithFallback(request, { waxId, sessionId, correlationId, contextResult }) {
     const primaryProvider = config.AI_PRIMARY_PROVIDER;
     const fallbackProvider = config.AI_FALLBACK_PROVIDER;
-    
-    let lastError;
-    let fallbackAttempted = false;
-    let fallbackProviderUsed = null;
-    let fallbackModelUsed = null;
 
-    // Try primary provider
+    let lastError;
+
+    // Try primary provider.
     try {
       const provider = await this.getProvider(primaryProvider);
       const response = await provider.complete(request);
-      
+
       return {
         ...response,
         fallbackUsed: false,
@@ -534,82 +578,79 @@ export class AIOrchestrator {
       };
     } catch (error) {
       lastError = error;
-      
+
       this.logger.warn({
         provider: primaryProvider,
-        error: error.message,
+        err: error.message,
+        errorType: error.errorType || 'UNKNOWN',
       }, 'Primary provider failed');
 
-      // Check if we should try fallback (only on availability errors)
+      // Check if we should try fallback (only on availability errors).
       const shouldRetry = this.shouldUseFallback(error) && fallbackProvider;
-      
+
       if (shouldRetry) {
-        // Try fallback provider
         try {
-          fallbackAttempted = true;
           this.logger.info({ fallbackProvider }, 'Attempting fallback provider');
-          
+
           const provider = await this.getProvider(fallbackProvider);
           const response = await provider.complete(request);
-          
-          fallbackProviderUsed = fallbackProvider;
-          fallbackModelUsed = config.AI_FALLBACK_MODEL || 'unknown';
-          
+
+          const fallbackModelUsed = config.AI_FALLBACK_MODEL || response.model || 'unknown';
+
           this.logger.info({
             primaryProvider,
             fallbackProvider,
             fallbackModel: fallbackModelUsed,
           }, 'Fallback provider succeeded');
-          
+
           return {
             ...response,
             fallbackUsed: true,
             fallbackAttempted: true,
             originalProvider: primaryProvider,
-            fallbackProvider: fallbackProviderUsed,
+            fallbackProvider,
             fallbackModel: fallbackModelUsed,
           };
         } catch (fallbackError) {
           this.logger.error({
             fallbackProvider,
-            error: fallbackError.message,
+            err: fallbackError.message,
+            errorType: fallbackError.errorType || 'UNKNOWN',
           }, 'Fallback provider also failed');
-          
+
           lastError = fallbackError;
         }
       }
     }
 
-    // Both providers failed
+    // Both providers failed (or no fallback configured).
     throw lastError || createAIError({
-      errorType: AIErrorTypes.PROVIDER_ERROR,
+      errorType: AIErrorTypes.UNKNOWN_ERROR,
       providerMessage: 'All AI providers failed',
     });
   }
 
   /**
-   * Determine if fallback should be used
-   * 
-   * Only fallback on availability errors, NOT on correctness errors
-   * 
-   * @param {Error} error - Error from primary provider
-   * @returns {boolean} - Whether to use fallback
+   * Determine if fallback should be used.
+   *
+   * Only fallback on availability/transient errors, NOT on correctness errors
+   * (a 400/422 means the request is malformed — retrying it elsewhere won't help).
    */
   shouldUseFallback(error) {
-    // Check error type
-    if (error.errorType && RETRYABLE_ERRORS.includes(error.errorType)) {
+    if (error?.errorType && FALLBACK_ERROR_TYPES.has(error.errorType)) {
       return true;
     }
 
-    // Check for network errors
-    if (error.code === 'ECONNREFUSED' || 
-        error.code === 'ETIMEDOUT' ||
-        error.code === 'ENOTFOUND') {
+    // Network-level errors (raw Error.code, not normalized by the SDK)
+    if (error?.code === 'ECONNREFUSED' ||
+        error?.code === 'ETIMEDOUT' ||
+        error?.code === 'ENOTFOUND' ||
+        error?.code === 'EAI_AGAIN') {
       return true;
     }
 
-    // Check for HTTP error status codes that are retryable
-    if (error.status && [429, 500, 502, 503, 504].includes(error.status)) {
+    // HTTP error status codes that are retryable.
+    if (error?.providerStatusCode && [429, 500, 502, 503, 504].includes(error.providerStatusCode)) {
       return true;
     }
 
@@ -617,19 +658,26 @@ export class AIOrchestrator {
   }
 
   /**
-   * Get provider instance
-   * 
-   * @param {string} providerName - Provider name
-   * @returns {Promise<Object>} - Provider instance
+   * Get provider instance.
+   * Honors constructor-injected provider (this.providerFactory) when set;
+   * otherwise resolves via the cached ProviderFactory.
    */
   async getProvider(providerName) {
-    const ProviderFactory = await import('../ai/providers/ProviderFactory.js').then(m => m.default);
-    
+    // If the constructor was handed a provider instance directly (this is the
+    // production wiring — see workers/setup.js), use it as long as the
+    // requested name matches the configured primary. If a different name is
+    // requested (fallback), fall through to ProviderFactory.
+    if (this.providerFactory && typeof this.providerFactory.complete === 'function') {
+      if (providerName?.toLowerCase() === (config.AI_PRIMARY_PROVIDER || '').toLowerCase()) {
+        return this.providerFactory;
+      }
+    }
+
     const provider = await ProviderFactory.getProvider(providerName);
-    
+
     if (!provider) {
       throw createAIError({
-        errorType: AIErrorTypes.PROVIDER_NOT_FOUND,
+        errorType: AIErrorTypes.MODEL_UNAVAILABLE_ERROR,
         providerMessage: `Provider not found: ${providerName}`,
       });
     }
@@ -638,12 +686,15 @@ export class AIOrchestrator {
   }
 
   /**
-   * Persist request metadata to database
-   * 
-   * @param {Object} options - Metadata options
+   * Persist request metadata to database.
+   * Uses the shared pool (this.db) rather than creating a new pool per call.
    */
   async persistMetadata({ waxId, sessionId, correlationId, request, response, tokenEstimate, startTime, validation, contextResult }) {
-    const pool = await this.db.createPool(config);
+    const pool = this.db?.pool || this.db;
+    if (!pool || typeof pool.query !== 'function') {
+      this.logger.warn('No pool available for persistMetadata');
+      return;
+    }
     const completedAt = Date.now();
     const latencyMs = completedAt - startTime;
 
@@ -671,11 +722,12 @@ export class AIOrchestrator {
           context_turn_count,
           context_was_truncated,
           validation_passed,
-          chunk_count
+          chunk_count,
+          response_json
         ) VALUES (
           $1, $2, $3, $4, $5, $6, 'success', $7, 0,
           $8, $9, $10, $11, $12, $13, $14, $15, $16,
-          $17, $18, $19, $20
+          $17, $18, $19, $20, $21
         )
         ON CONFLICT (correlation_id) DO UPDATE SET
           status = EXCLUDED.status,
@@ -691,7 +743,8 @@ export class AIOrchestrator {
           context_turn_count = EXCLUDED.context_turn_count,
           context_was_truncated = EXCLUDED.context_was_truncated,
           validation_passed = EXCLUDED.validation_passed,
-          chunk_count = EXCLUDED.chunk_count
+          chunk_count = EXCLUDED.chunk_count,
+          response_json = EXCLUDED.response_json
       `, [
         waxId,
         sessionId,
@@ -713,19 +766,23 @@ export class AIOrchestrator {
         contextResult.truncationOccurred || false,
         validation.valid,
         1, // chunk_count - will be updated after delivery
+        JSON.stringify({ content: response.content, toolCalls: response.toolCalls || null }),
       ]);
     } catch (error) {
-      this.logger.error({ error: error.message }, 'Failed to persist metadata');
+      this.logger.error({ err: error.message }, 'Failed to persist metadata');
     }
   }
 
   /**
-   * Persist failure metadata to database
-   * 
-   * @param {Object} options - Metadata options
+   * Persist failure metadata to database.
+   * Uses the shared pool (this.db) rather than creating a new pool per call.
    */
   async persistFailure({ waxId, sessionId, correlationId, request, error, tokenEstimate, startTime }) {
-    const pool = await this.db.createPool(config);
+    const pool = this.db?.pool || this.db;
+    if (!pool || typeof pool.query !== 'function') {
+      this.logger.warn('No pool available for persistFailure');
+      return;
+    }
     const completedAt = Date.now();
     const latencyMs = completedAt - startTime;
 
@@ -762,8 +819,8 @@ export class AIOrchestrator {
         correlationId,
         config.AI_PRIMARY_PROVIDER,
         config.AI_PRIMARY_MODEL,
-        'v1',
-        error.errorType || 'UNKNOWN_ERROR',
+        request?.promptVersion || 'v1',
+        error.errorType || AIErrorTypes.UNKNOWN_ERROR,
         tokenEstimate?.estimatedInputTokens || 0,
         0,
         0,
@@ -771,8 +828,8 @@ export class AIOrchestrator {
         new Date(completedAt),
         latencyMs,
       ]);
-    } catch (error) {
-      this.logger.error({ error: error.message }, 'Failed to persist failure metadata');
+    } catch (persistErr) {
+      this.logger.error({ err: persistErr.message }, 'Failed to persist failure metadata');
     }
   }
 }

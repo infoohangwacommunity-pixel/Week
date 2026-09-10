@@ -117,44 +117,20 @@ export class OnboardingHandler {
   }
 
   /**
-   * Get onboarding context for AI
-   * 
-   * Returns context flags that allow the AI to know it's onboarding.
-   * The AI decides what to say naturally through the system prompt.
-   * 
-   * @param {boolean} isNewStudent - Whether student is new
-   * @param {boolean} isOnboardingComplete - Whether onboarding is complete
-   * @returns {Object} - Onboarding context for AI
+   * Get onboarding context for the AI.
+   *
+   * Returns a single state flag that the AI can act on. Per AGENTS.md §5,
+   * onboarding must not become a fixed questionnaire — the AI conducts it as a
+   * natural conversation. The infrastructure's job is to expose STATE, not
+   * to script responses.
    */
   getOnboardingContext(isNewStudent, isOnboardingComplete) {
     const context = {};
 
-    // Only include onboarding context if needed
     if (isNewStudent && !isOnboardingComplete) {
       context.onboardingState = 'first_contact';
-      context.onboardingContext = `
-The student is contacting WaxPrep for the first time.
-This is their initial message to the tutor.
-
-You should:
-- Welcome them naturally and conversationally
-- Introduce yourself as their AI tutor
-- Ask open questions to understand their learning needs
-- Be friendly and encouraging
-- Let them guide the conversation about what they want to learn
-
-Do NOT:
-- Use a scripted welcome message
-- Ask a fixed questionnaire
-- Make assumptions about their goals
-- Be overly formal or robotic
-      `.trim();
     } else if (isNewStudent) {
-      context.onboardingState = 'completed';
-      context.onboardingContext = `
-The student is new but has already completed initial onboarding.
-Proceed with normal tutoring interaction.
-      `.trim();
+      context.onboardingState = 'post_onboarding';
     }
 
     return context;

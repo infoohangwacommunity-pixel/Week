@@ -56,13 +56,15 @@ export const AIErrorTypes = {
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 };
 
-// Export retryable error types for BullMQ worker usage
+// Export retryable error types for BullMQ worker usage.
+// MALFORMED_RESPONSE_ERROR and MODEL_UNAVAILABLE_ERROR are NOT retryable by default:
+// - A malformed response indicates a parsing or contract drift that will reproduce on retry.
+// - A model-unavailable error means the configured model name is wrong or deprecated;
+//   retrying with the same model burns queue budget until the operator fixes config.
 export const RETRYABLE_ERROR_TYPES = new Set([
   AIErrorTypes.RATE_LIMIT_ERROR,
   AIErrorTypes.PROVIDER_SERVER_ERROR,
   AIErrorTypes.TIMEOUT_ERROR,
-  AIErrorTypes.MALFORMED_RESPONSE_ERROR,
-  AIErrorTypes.MODEL_UNAVAILABLE_ERROR,
 ]);
 
 // Export non-retryable error types
@@ -71,15 +73,28 @@ export const NON_RETRYABLE_ERROR_TYPES = new Set([
   AIErrorTypes.CONTEXT_LENGTH_ERROR,
   AIErrorTypes.INVALID_REQUEST_ERROR,
   AIErrorTypes.CONTENT_SAFETY_ERROR,
+  AIErrorTypes.MALFORMED_RESPONSE_ERROR,
+  AIErrorTypes.MODEL_UNAVAILABLE_ERROR,
+  AIErrorTypes.UNKNOWN_ERROR,
 ]);
 
 /**
- * Creates a normalized AI provider error
+ * Creates a normalized AI provider error.
+ *
+ * `options.isRetryable` (when explicitly provided) overrides the default
+ * retryability derived from `errorType`. Use this only when the caller has
+ * out-of-band knowledge that a normally-retryable error type should NOT be
+ * retried (e.g., a 500 status code returned for a permanently malformed request).
  */
 export function createAIError(options) {
+  const computedRetryable =
+    typeof options.isRetryable === 'boolean'
+      ? options.isRetryable
+      : RETRYABLE_ERROR_TYPES.has(options.errorType);
+
   const normalized = AIProviderErrorSchema.parse({
     errorType: options.errorType,
-    isRetryable: RETRYABLE_ERROR_TYPES.has(options.errorType),
+    isRetryable: computedRetryable,
     providerStatusCode: options.providerStatusCode,
     providerMessage: options.providerMessage,
     retryAfter: options.retryAfter,
@@ -151,14 +166,16 @@ export function createContentSafetyError(message = 'Content was refused by safet
 }
 
 /**
- * Creates a provider server error
+ * Creates a provider server error.
+ * `statusCode` controls retryability: 5xx → retryable; everything else → not.
  */
 export function createProviderServerError(message = 'Provider server error', statusCode) {
+  const isRetryable = statusCode === 500 || statusCode === 503 || statusCode === 502 || statusCode === 504;
   return createAIError({
     errorType: AIErrorTypes.PROVIDER_SERVER_ERROR,
     providerMessage: message,
     providerStatusCode: statusCode,
-    isRetryable: statusCode === 500 || statusCode === 503,
+    isRetryable,
   });
 }
 

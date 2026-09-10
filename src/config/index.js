@@ -22,7 +22,9 @@ if (process.env.NODE_ENV !== 'production') {
 // Define the complete configuration schema
 const configSchema = z.object({
   // --- RUNTIME ---
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  // 'test' is accepted so that importing this module in a test harness does
+  // not crash the runner. Production deployments use development/staging/production.
+  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 
@@ -42,6 +44,7 @@ const configSchema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().min(1, 'WHATSAPP_PHONE_NUMBER_ID is required'),
   WHATSAPP_API_VERSION: z.string().min(1, 'WHATSAPP_API_VERSION is required').default('v21.0'),
   WHATSAPP_API_BASE_URL: z.string().url().default('https://graph.facebook.com'),
+  WHATSAPP_ACCESS_TOKEN: z.string().min(1, 'WHATSAPP_ACCESS_TOKEN is required'),
 
   // --- AI PROVIDER ---
   AI_PRIMARY_PROVIDER: z.string().min(1, 'AI_PRIMARY_PROVIDER is required'),
@@ -89,7 +92,8 @@ const configSchema = z.object({
   QUEUE_LOCK_DURATION_MS: z.coerce.number().int().min(1000).default(30000),
 
   // --- RESPONSE ---
-  RESPONSE_MAX_CHUNK_CHARS: z.coerce.number().int().min(100).default(1000),
+  RESPONSE_MAX_CHUNK_CHARS: z.coerce.number().int().min(100).max(4000).default(1000),
+  RESPONSE_CHUNK_DELAY_MS: z.coerce.number().int().min(0).default(500),
   RESPONSE_TYPING_INDICATOR_ENABLED: z.enum(['true', 'false']).transform(v => v === 'true').default('true'),
 
   // --- SESSION ---
@@ -194,8 +198,28 @@ const configSchema = z.object({
   // Maximum age of cached snapshot before forcing refresh.
 });
 
-// Parse and validate environment variables
-const parsed = configSchema.safeParse(process.env);
+// Parse and validate environment variables.
+// NOTE: In test environments we fall back to permissive defaults so that importing
+// production modules (which transitively import this file) does not crash the test
+// runner. Production deployments must still supply all required variables.
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+const parsed = isTest
+  ? configSchema.safeParse({
+      ...process.env,
+      // Provide safe placeholders so tests can exercise modules that import config
+      DATABASE_URL: process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/waxprep_test',
+      REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
+      WHATSAPP_VERIFY_TOKEN: process.env.WHATSAPP_VERIFY_TOKEN || 'test-verify-token',
+      WHATSAPP_APP_SECRET: process.env.WHATSAPP_APP_SECRET || 'test-app-secret-min-32-bytes-padding-padding',
+      WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID || 'test-phone-id',
+      WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION || 'v21.0',
+      WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN || 'test-access-token',
+      AI_PRIMARY_PROVIDER: process.env.AI_PRIMARY_PROVIDER || 'fake',
+      AI_PRIMARY_MODEL: process.env.AI_PRIMARY_MODEL || 'fake-model',
+      AI_PRIMARY_API_KEY: process.env.AI_PRIMARY_API_KEY || 'fake-api-key',
+      PHONE_HMAC_SECRET: process.env.PHONE_HMAC_SECRET || 'test-hmac-secret-min-32-bytes-padding-padding-padding',
+    })
+  : configSchema.safeParse(process.env);
 
 if (!parsed.success) {
   console.error('❌ Configuration validation failed:');
@@ -224,6 +248,7 @@ export function logSafeConfig() {
     WHATSAPP_APP_SECRET: '[REDACTED]',
     WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_API_VERSION: config.WHATSAPP_API_VERSION,
+    WHATSAPP_ACCESS_TOKEN: '[REDACTED]',
     AI_PRIMARY_PROVIDER: config.AI_PRIMARY_PROVIDER,
     AI_PRIMARY_MODEL: config.AI_PRIMARY_MODEL,
     AI_PRIMARY_API_KEY: '[REDACTED]',

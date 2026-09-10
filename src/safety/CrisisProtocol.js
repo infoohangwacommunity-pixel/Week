@@ -161,7 +161,7 @@ export class CrisisProtocol {
    */
   async deliverCrisisResponse({ waxId, sessionId, aiRequestId, text }) {
     try {
-      // Send via WhatsApp
+      // Send via WhatsApp.
       const result = await this.sendViaWhatsApp({
         waxId,
         message: text,
@@ -178,29 +178,9 @@ export class CrisisProtocol {
         waxId,
       });
 
-      // Try fallback methods
-      try {
-        if (this.emailService) {
-          await this.emailService.send({
-            to: studentProfile?.email || 'support@waxprep.local',
-            subject: 'WaxPrep Crisis Support',
-            text: text,
-          });
-
-          return { success: true, method: 'email' };
-        }
-      } catch (fallbackError) {
-        this.logger.error('Crisis email fallback failed', {
-          error: fallbackError.message,
-        });
-      }
-
-      // If all delivery methods fail, log as critical
-      this.logger.critical('All crisis response delivery methods failed', {
-        waxId,
-        sessionId,
-      });
-
+      // Fall back to recording the crisis response as an unsent outbound.
+      // Do NOT reference studentProfile.email — that field was never fetched,
+      // and email delivery is not part of the current architecture.
       return {
         success: false,
         method: 'failed',
@@ -298,14 +278,50 @@ export class CrisisProtocol {
   }
 
   /**
-   * Send message via WhatsApp
+   * Send a crisis-response message via WhatsApp Cloud API.
+   *
+   * Uses the same config as src/messaging/outbound.js (WHATSAPP_ACCESS_TOKEN,
+   * WHATSAPP_PHONE_NUMBER_ID). Looks up the student's phone from the DB.
    */
   async sendViaWhatsApp({ waxId, message }) {
-    // This would integrate with the WhatsApp messaging layer
-    // For now, return a mock result
+    if (!this.db) {
+      throw new Error('CrisisProtocol has no db pool; cannot look up phone number');
+    }
+
+    // Look up the student's phone number — but we only store the HASH,
+    // not the raw phone. So we cannot deliver directly; we must deliver via
+    // the original triggering message's webhook context, which we don't have
+    // here. The honest behavior is to mark this as 'failed' and let the
+    // operator intervene. (Future: store a waxId → lastPhone ephemeral map.)
+    //
+    // For now, persist the crisis response to outbound_messages with
+    // processing_status='failed' so it's auditable.
+    try {
+      await this.db.query(
+        `INSERT INTO outbound_messages
+           (outbound_chunk_id, wax_id, content, processing_status, delivery_attempts, error_message, created_at)
+         VALUES ($1, $2, $3, 'failed', 0, $4, NOW())
+         ON CONFLICT (outbound_chunk_id) DO NOTHING`,
+        [
+          `crisis:${waxId}:${Date.now()}`,
+          waxId,
+          message,
+          'Crisis response could not be delivered — phone hash is irreversible',
+        ]
+      );
+    } catch (persistErr) {
+      this.logger.error('Failed to persist crisis response audit record', { error: persistErr.message });
+    }
+
+    // The infrastructure preserves audit; the deterministic crisis response
+    // text is what the AI would have delivered to the student. If the upstream
+    // AIOrchestrator already returned the crisis text to the worker, the worker
+    // is responsible for outbound delivery. This method exists for the
+    // pre-AI crisis path where safety fires before the AI call completes.
     return {
-      success: true,
-      messageId: `crisis_${Date.now()}_${waxId}`,
+      success: false,
+      messageId: null,
+      reason: 'phone_hash_is_irreversible',
     };
   }
 

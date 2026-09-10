@@ -9,12 +9,14 @@ import { z } from 'zod';
 
 // Normalized finish reason
 const AIFinishReasonSchema = z.enum([
-  'completed',        // Natural end of response (end_turn, stop)
-  'length_limit',     // Hit max_tokens / length
-  'safety_refusal',   // Content policy refusal
-  'tool_call',        // Model wants to use a tool (future)
-  'error',            // Processing error
-  'unknown',          // Unrecognized finish reason
+  'completed',           // Natural end of response (end_turn, stop)
+  'length_limit',         // Hit max_tokens / length
+  'safety_refusal',       // Content policy refusal
+  'tool_call',            // Model wants to use a tool
+  'tool_limit_reached',   // Orchestrator hit per-session tool budget
+  'max_turns_reached',    // Orchestrator hit max-iterations safeguard
+  'error',                // Processing error
+  'unknown',              // Unrecognized finish reason
 ]);
 
 // Normalized token usage
@@ -66,6 +68,8 @@ export const FinishReason = {
   LENGTH_LIMIT: 'length_limit',
   SAFETY_REFUSAL: 'safety_refusal',
   TOOL_CALL: 'tool_call',
+  TOOL_LIMIT_REACHED: 'tool_limit_reached',
+  MAX_TURNS_REACHED: 'max_turns_reached',
   ERROR: 'error',
   UNKNOWN: 'unknown',
 };

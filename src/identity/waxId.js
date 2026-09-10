@@ -32,41 +32,39 @@ export function hashPhoneNumber(phoneNumber) {
 }
 
 /**
- * Create or resolve a WaxID for a phone number
- * 
+ * Create or resolve a WaxID for a phone number.
+ *
+ * Race-safe: uses `ON CONFLICT (phone_hash) WHERE deleted_at IS NULL`
+ * (matches the unique partial index from migration 013) so two concurrent
+ * first-time webhooks from the same number both resolve to the same WaxID
+ * instead of one of them failing with `duplicate key value`.
+ *
  * @param {import('pg').Pool} pool - Database pool
  * @param {string} phoneNumber - Student's phone number
  * @returns {Promise<string>} - WaxID (UUID)
  */
 export async function resolveWaxID(pool, phoneNumber) {
   const phoneHash = hashPhoneNumber(phoneNumber);
-  
-  // Try to find existing student with this phone hash
-  const existing = await pool.query(
-    `SELECT id, created_at 
-     FROM students 
-     WHERE phone_hash = $1 
-       AND deleted_at IS NULL
-     LIMIT 1`,
-    [phoneHash],
-  );
 
-  if (existing.rows.length > 0) {
-    logger.debug({ waxId: existing.rows[0].id }, 'Found existing WaxID');
-    return existing.rows[0].id;
-  }
-
-  // Create new WaxID for this phone number
-  const waxId = randomUUID();
-  
-  await pool.query(
+  // Atomic upsert on phone_hash. The unique partial index from migration 013
+  // covers (phone_hash) WHERE deleted_at IS NULL. If the INSERT conflicts
+  // we UPDATE updated_at and RETURN the existing id.
+  const result = await pool.query(
     `INSERT INTO students (id, phone_hash, created_at)
      VALUES ($1, $2, NOW())
-     ON CONFLICT (id) DO NOTHING`,
-    [waxId, phoneHash],
+     ON CONFLICT (phone_hash) WHERE deleted_at IS NULL
+     DO UPDATE SET updated_at = NOW()
+     RETURNING id`,
+    [randomUUID(), phoneHash],
   );
 
-  logger.info({ waxId, phoneHash: phoneHash.substring(0, 8) + '...' }, 'Created new WaxID');
+  const waxId = result.rows[0]?.id;
+  if (!waxId) {
+    // Should never happen, but be defensive.
+    throw new Error(`Failed to resolve WaxID for phone hash ${phoneHash.slice(0, 8)}…`);
+  }
+
+  logger.debug({ waxId, phoneHash: phoneHash.slice(0, 8) + '…' }, 'Resolved WaxID');
   return waxId;
 }
 

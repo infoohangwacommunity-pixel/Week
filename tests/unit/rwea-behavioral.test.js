@@ -150,15 +150,25 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
     expect(state.hint_dependency).toBeLessThan(1.0);
   });
 
-  it('should detect improving trend', async () => {
+  it('should detect improving trend (requires 5+ observations for trend window)', async () => {
     const now = new Date();
-    
+
     const mockPool = new MockPool();
     const mockEngine = new MasteryEngine(mockPool);
-    
+
     mockPool.query = async () => ({
       rows: [
-        // Older observations with lower correctness
+        // Older observations with lower correctness (previous3 window)
+        {
+          id: 'obs-0',
+          wax_id: 'test-wax-id',
+          concept_tag: 'test-concept',
+          evidence_type: 'direct_response',
+          correctness: 0.3,
+          hint_level: 0,
+          extraction_confidence: 0.8,
+          observed_at: new Date(now.getTime() - 6 * 86400000).toISOString(),
+        },
         {
           id: 'obs-1',
           wax_id: 'test-wax-id',
@@ -179,8 +189,19 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
           extraction_confidence: 0.8,
           observed_at: new Date(now.getTime() - 4 * 86400000).toISOString(),
         },
+        // Recent observations with higher correctness (recent3 window)
         {
           id: 'obs-3',
+          wax_id: 'test-wax-id',
+          concept_tag: 'test-concept',
+          evidence_type: 'direct_response',
+          correctness: 0.8,
+          hint_level: 0,
+          extraction_confidence: 0.9,
+          observed_at: new Date(now.getTime() - 3 * 86400000).toISOString(),
+        },
+        {
+          id: 'obs-4',
           wax_id: 'test-wax-id',
           concept_tag: 'test-concept',
           evidence_type: 'direct_response',
@@ -190,7 +211,7 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
           observed_at: new Date(now.getTime() - 2 * 86400000).toISOString(),
         },
         {
-          id: 'obs-4',
+          id: 'obs-5',
           wax_id: 'test-wax-id',
           concept_tag: 'test-concept',
           evidence_type: 'direct_response',
@@ -201,21 +222,31 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
         },
       ],
     });
-    
+
     const state = await mockEngine.computeState('test-wax-id', 'test-concept');
-    
+
     expect(state.recent_trend).toBe('improving');
   });
 
-  it('should detect declining trend', async () => {
+  it('should detect declining trend (requires 5+ observations for trend window)', async () => {
     const now = new Date();
-    
+
     const mockPool = new MockPool();
     const mockEngine = new MasteryEngine(mockPool);
-    
+
     mockPool.query = async () => ({
       rows: [
-        // Older observations with high correctness
+        // Older observations with high correctness (previous3 window)
+        {
+          id: 'obs-0',
+          wax_id: 'test-wax-id',
+          concept_tag: 'test-concept',
+          evidence_type: 'direct_response',
+          correctness: 1.0,
+          hint_level: 0,
+          extraction_confidence: 0.9,
+          observed_at: new Date(now.getTime() - 6 * 86400000).toISOString(),
+        },
         {
           id: 'obs-1',
           wax_id: 'test-wax-id',
@@ -231,11 +262,12 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
           wax_id: 'test-wax-id',
           concept_tag: 'test-concept',
           evidence_type: 'direct_response',
-          correctness: 1.0,
+          correctness: 0.9,
           hint_level: 0,
-          extraction_confidence: 0.95,
+          extraction_confidence: 0.85,
           observed_at: new Date(now.getTime() - 4 * 86400000).toISOString(),
         },
+        // Recent observations with low correctness (recent3 window)
         {
           id: 'obs-3',
           wax_id: 'test-wax-id',
@@ -244,10 +276,20 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
           correctness: 0.4,
           hint_level: 0,
           extraction_confidence: 0.7,
-          observed_at: new Date(now.getTime() - 2 * 86400000).toISOString(),
+          observed_at: new Date(now.getTime() - 3 * 86400000).toISOString(),
         },
         {
           id: 'obs-4',
+          wax_id: 'test-wax-id',
+          concept_tag: 'test-concept',
+          evidence_type: 'direct_response',
+          correctness: 0.3,
+          hint_level: 0,
+          extraction_confidence: 0.7,
+          observed_at: new Date(now.getTime() - 2 * 86400000).toISOString(),
+        },
+        {
+          id: 'obs-5',
           wax_id: 'test-wax-id',
           concept_tag: 'test-concept',
           evidence_type: 'direct_response',
@@ -258,13 +300,16 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
         },
       ],
     });
-    
+
     const state = await mockEngine.computeState('test-wax-id', 'test-concept');
-    
+
     expect(state.recent_trend).toBe('declining');
   });
 
-  it('should be deterministic - same inputs produce same outputs', async () => {
+  it('should be deterministic - same inputs produce same outputs (modulo decay clock)', async () => {
+    // Build observations with FIXED timestamps (not relative to Date.now())
+    // so two computeState calls see identical decay math.
+    const fixedNow = new Date('2025-01-15T12:00:00Z').getTime();
     const observations = Array(10).fill(null).map((_, i) => ({
       id: `obs-${i}`,
       wax_id: 'test-wax-id',
@@ -273,22 +318,30 @@ describe('RWEA Mastery Engine - Behavioral Tests', () => {
       correctness: i % 3 === 0 ? 0.8 : (i % 3 === 1 ? 1.0 : 0.6),
       hint_level: i % 4,
       extraction_confidence: 0.85,
-      observed_at: new Date(Date.now() - (9 - i) * 86400000).toISOString(),
+      observed_at: new Date(fixedNow - (9 - i) * 86400000).toISOString(),
     }));
-    
+
     const mockPool = new MockPool();
     const mockEngine = new MasteryEngine(mockPool);
-    
-    mockPool.query = async () => ({ rows: observations });
-    
-    const state1 = await mockEngine.computeState('test-wax-id', 'test-concept');
-    mockPool.query = async () => ({ rows: observations });
-    const state2 = await mockEngine.computeState('test-wax-id', 'test-concept');
-    
-    expect(state1.mastery_estimate).toBe(state2.mastery_estimate);
-    expect(state1.success_signal).toBe(state2.success_signal);
-    expect(state1.failure_signal).toBe(state2.failure_signal);
-    expect(state1.recent_trend).toBe(state2.recent_trend);
+
+    // Stub Date.now in MasteryEngine's temporalDecayFactor calc by stubbing
+    // the global Date constructor for the duration of this test.
+    const realDateNow = Date.now;
+    Date.now = () => fixedNow + 86400000; // "now" = day after last observation
+
+    try {
+      mockPool.query = async () => ({ rows: observations });
+      const state1 = await mockEngine.computeState('test-wax-id', 'test-concept');
+      mockPool.query = async () => ({ rows: observations });
+      const state2 = await mockEngine.computeState('test-wax-id', 'test-concept');
+
+      expect(state1.mastery_estimate).toBe(state2.mastery_estimate);
+      expect(state1.success_signal).toBe(state2.success_signal);
+      expect(state1.failure_signal).toBe(state2.failure_signal);
+      expect(state1.recent_trend).toBe(state2.recent_trend);
+    } finally {
+      Date.now = realDateNow;
+    }
   });
 
   it('should return default state when no observations exist', async () => {

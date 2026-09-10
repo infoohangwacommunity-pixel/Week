@@ -19,7 +19,9 @@ const pool = await createPool(config);
 logger.info({ max: config.DATABASE_POOL_MAX }, 'Database pool created');
 
 registerGlobalErrorHandlers(logger);
-registerGracefulShutdown({ logger, pool });
+// The shutdown handler is registered after the HTTP server is listening so
+// it can also close the server cleanly.
+let shutdownHandler = null;
 
 const app = express();
 app.set('dbPool', pool);
@@ -49,6 +51,9 @@ app.use(helmet({
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   xssFilter: true,
 }));
+
+// Trust proxy: Railway runs behind a proxy, so req.ip needs proxy support.
+app.set('trust proxy', 1);
 
 // Raw body middleware must come BEFORE json middleware for webhook
 // Raw body for all requests - webhook needs Buffer, JSON can be parsed manually
@@ -101,6 +106,14 @@ try {
 
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT, env: config.NODE_ENV }, 'Webhook server started');
+});
+
+// Register graceful shutdown now that `server` exists.
+registerGracefulShutdown({
+  logger,
+  pool,
+  server,
+  shutdownTimeoutMs: config.WORKER_SHUTDOWN_TIMEOUT_MS,
 });
 
 export default { app, server, pool };

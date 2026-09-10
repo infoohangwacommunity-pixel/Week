@@ -61,7 +61,7 @@ export class OpenAIAdapter extends AIProviderInterface {
 
   /**
    * Complete a request through OpenAI's Chat Completions API
-   * 
+   *
    * @param {import('../schemas/AIRequest.js').AIRequest} request - Normalized request
    * @returns {Promise<import('../schemas/AIResponse.js').AIResponse>} - Normalized response
    * @throws {import('../schemas/AIErrors.js').AIProviderError} - Normalized error
@@ -73,9 +73,11 @@ export class OpenAIAdapter extends AIProviderInterface {
       // Build OpenAI-specific request
       const openaiRequest = this.buildOpenAIRequest(request);
 
-      // Make the API call with timeout
+      // Make the API call with timeout. We pass the AbortSignal directly to
+      // the OpenAI SDK via the second-argument options object — the SDK respects
+      // it and aborts the underlying fetch on timeout.
       const response = await this.callWithTimeout(
-        () => this.client.chat.completions.create(openaiRequest),
+        (signal) => this.client.chat.completions.create(openaiRequest, { signal }),
         config.AI_TIMEOUT_MS
       );
 
@@ -90,10 +92,8 @@ export class OpenAIAdapter extends AIProviderInterface {
   }
 
   /**
-   * Build OpenAI-specific request from normalized request
-   * 
-   * @param {import('../schemas/AIRequest.js').AIRequest} request - Normalized request
-   * @returns {Object} - OpenAI API request
+   * Build OpenAI-specific request from normalized request.
+   * Includes tools when the request provides them.
    */
   buildOpenAIRequest(request) {
     // OpenAI puts system message inside messages array
@@ -117,20 +117,68 @@ export class OpenAIAdapter extends AIProviderInterface {
       openaiRequest.stop = request.stopSequences;
     }
 
+    // Pass tools when provided so the model can emit structured tool_calls.
+    if (Array.isArray(request.tools) && request.tools.length > 0) {
+      openaiRequest.tools = request.tools.map((t) => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }));
+      // Translate tool choice
+      if (request.toolChoice) {
+        if (request.toolChoice === 'auto' || request.toolChoice === 'none' || request.toolChoice === 'required') {
+          openaiRequest.tool_choice = request.toolChoice;
+        } else if (typeof request.toolChoice === 'object' && request.toolChoice.name) {
+          openaiRequest.tool_choice = {
+            type: 'function',
+            function: { name: request.toolChoice.name },
+          };
+        }
+      }
+    }
+
     return openaiRequest;
   }
 
   /**
-   * Build messages array from normalized messages
-   * 
-   * @param {Array} messages - Normalized messages
-   * @returns {Array} - OpenAI messages format
+   * Build messages array from normalized messages.
+   * Handles 'user', 'assistant' (with optional tool_calls), and 'tool' roles.
    */
   buildMessages(messages) {
-    return messages.map(msg => ({
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-    }));
+    const result = [];
+    for (const msg of messages) {
+      if (msg.role === 'tool') {
+        // Tool-result message: OpenAI expects role='tool' + tool_call_id + content
+        result.push({
+          role: 'tool',
+          tool_call_id: msg.toolCallId,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        });
+      } else if (msg.role === 'assistant' && Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) {
+        // Assistant message that requested tool calls: must include tool_calls
+        result.push({
+          role: 'assistant',
+          content: typeof msg.content === 'string' ? msg.content : (msg.content || null),
+          tool_calls: msg.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments),
+            },
+          })),
+        });
+      } else {
+        result.push({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        });
+      }
+    }
+    return result;
   }
 
   /**
@@ -160,13 +208,28 @@ export class OpenAIAdapter extends AIProviderInterface {
     // Extract tool calls if present
     let toolCalls = null;
     if (finishReason === FinishReason.TOOL_CALL && choice.message.tool_calls) {
-      toolCalls = choice.message.tool_calls.map(tc => ({
-        id: tc.id,
-        name: tc.function?.name || tc.name,
-        arguments: typeof tc.function?.arguments === 'object' 
-          ? tc.function.arguments 
-          : JSON.parse(tc.function?.arguments || '{}'),
-      }));
+      toolCalls = choice.message.tool_calls.map((tc) => {
+        const name = tc.function?.name || tc.name;
+        let args = {};
+        const rawArgs = tc.function?.arguments;
+        if (typeof rawArgs === 'object' && rawArgs !== null) {
+          args = rawArgs;
+        } else if (typeof rawArgs === 'string') {
+          try {
+            args = rawArgs.trim() ? JSON.parse(rawArgs) : {};
+          } catch {
+            // Malformed JSON arguments: surface as a structured error instead of
+            // crashing the whole request. Provider adapters should never throw
+            // from inside response parsing.
+            args = { _malformed_arguments: rawArgs };
+          }
+        }
+        return {
+          id: tc.id,
+          name,
+          arguments: args,
+        };
+      });
     }
 
     return createAIResponse({
@@ -220,8 +283,15 @@ export class OpenAIAdapter extends AIProviderInterface {
    * @returns {import('../schemas/AIErrors.js').AIProviderError} - Normalized error
    */
   normalizeError(error, latencyMs) {
-    // Handle timeout
-    if (error.name === 'AbortError' || error.message.includes('timeout')) {
+    // Handle timeout / abort first. The OpenAI SDK throws APIUserAbortError when
+    // an AbortController fires, which subclasses OpenAIError but has no HTTP
+    // status code, so we must check it before the status-code switch below.
+    if (
+      error?.name === 'AbortError' ||
+      error?.name === 'APIUserAbortError' ||
+      error instanceof OpenAI.APIUserAbortError ||
+      (typeof error?.message === 'string' && error.message.toLowerCase().includes('timeout'))
+    ) {
       return createTimeoutError(`${this.name} API request timed out`);
     }
 
@@ -238,14 +308,17 @@ export class OpenAIAdapter extends AIProviderInterface {
             providerMessage: `Model not found: ${error.message}`,
             providerStatusCode: statusCode,
           });
-        case 429:
-          const retryAfter = error.headers?.['retry-after'];
+        case 429: {
+          const retryAfterRaw = error.headers?.['retry-after'] ?? error.headers?.['Retry-After'];
+          const retryAfterNum = Number(retryAfterRaw);
+          const retryAfter = Number.isFinite(retryAfterNum) && retryAfterNum > 0 ? retryAfterNum : undefined;
           return createRateLimitError(
             `${this.name} rate limit exceeded`,
-            retryAfter ? parseInt(retryAfter, 10) : undefined
+            retryAfter
           );
+        }
         case 400:
-          if (error.message.includes('max_tokens')) {
+          if (error.message.includes('max_tokens') || error.message.includes('context length')) {
             return createContextLengthError('Request exceeds maximum context length');
           }
           return createAIError({
@@ -254,7 +327,7 @@ export class OpenAIAdapter extends AIProviderInterface {
             providerStatusCode: statusCode,
           });
         case 422:
-          if (error.message.includes('content policy')) {
+          if (error.message.includes('content policy') || error.message.includes('safety')) {
             return createContentSafetyError('Content was refused by safety filters');
           }
           return createAIError({
@@ -263,7 +336,9 @@ export class OpenAIAdapter extends AIProviderInterface {
             providerStatusCode: statusCode,
           });
         case 500:
+        case 502:
         case 503:
+        case 504:
           return createProviderServerError(`${this.name} server error`, statusCode);
         default:
           if (statusCode >= 500) {
@@ -273,24 +348,26 @@ export class OpenAIAdapter extends AIProviderInterface {
       }
     }
 
+    // Network / connection errors not wrapped by the SDK
+    if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND' || error?.code === 'EAI_AGAIN') {
+      return createProviderServerError(`${this.name} network error: ${error.code}`, 503);
+    }
+
     // Handle unknown errors
-    return createUnknownError(`${this.name} API error: ${error.message}`);
+    return createUnknownError(`${this.name} API error: ${error?.message || String(error)}`);
   }
 
   /**
-   * Call API with timeout
-   * 
-   * @param {Function} fn - Async function to call
-   * @param {number} timeoutMs - Timeout in milliseconds
-   * @returns {Promise<any>} - Function result
-   * @throws {Error} - Timeout error
+   * Call API with timeout.
+   * `fn` MUST accept an AbortSignal as its single argument so the underlying
+   * SDK can be notified when the timeout fires.
    */
   async callWithTimeout(fn, timeoutMs) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      return await fn({ signal: controller.signal });
+      return await fn(controller.signal);
     } finally {
       clearTimeout(timeoutId);
     }

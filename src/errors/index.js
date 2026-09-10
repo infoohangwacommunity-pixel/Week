@@ -8,29 +8,42 @@
 import { Policy, ExponentialBackoff } from 'cockatiel';
 
 /**
- * Register global error handlers
+ * Register global error handlers.
+ *
+ * Note: we use process.exitCode + logger.flush() rather than synchronous
+ * process.exit(1) so that pino transports (especially pino-pretty) get a
+ * chance to drain before the process dies.
  */
 export function registerGlobalErrorHandlers(logger) {
-  // Handle uncaught exceptions
-  process.on('uncaughtException', (err) => {
-    logger.fatal({ err }, 'UNCAUGHT EXCEPTION — crashing');
-    process.exit(1);
-  });
+  const handleFatal = (err, kind) => {
+    logger.fatal({ err }, `${kind} — crashing`);
+    process.exitCode = 1;
+    // Allow the log to flush before exiting.
+    setTimeout(() => process.exit(1), 250);
+  };
 
-  // Handle unhandled rejections
-  process.on('unhandledRejection', (reason, promise) => {
-    logger.fatal({ reason }, 'UNHANDLED REJECTION — crashing');
-    process.exit(1);
-  });
+  process.on('uncaughtException', (err) => handleFatal(err, 'UNCAUGHT EXCEPTION'));
+  process.on('unhandledRejection', (reason) => handleFatal(reason, 'UNHANDLED REJECTION'));
 
   console.log('✓ Global error handlers registered');
 }
 
 /**
- * Register graceful shutdown handler
+ * Register graceful shutdown handler.
+ *
+ * Accepts an options object with:
+ *   { logger, pool, redis?, workers?, server?, shutdownTimeoutMs? }
+ *
+ * Order of operations on shutdown:
+ *   1. Stop accepting new HTTP connections (server.close()).
+ *   2. Stop accepting new BullMQ jobs (worker.close()) and wait for in-flight
+ *      jobs to complete (subject to lockDuration).
+ *   3. Close the Redis connection.
+ *   4. Close the Postgres pool.
  */
-export function registerGracefulShutdown({ logger, pool, redis }) {
+export function registerGracefulShutdown({ logger, pool, redis, workers, server, shutdownTimeoutMs }) {
   let shutdownInProgress = false;
+  const timeoutMs = shutdownTimeoutMs || 30000;
 
   async function gracefulShutdown(signal) {
     if (shutdownInProgress) {
@@ -39,33 +52,62 @@ export function registerGracefulShutdown({ logger, pool, redis }) {
     }
 
     shutdownInProgress = true;
-    logger.info(`Received ${signal}, beginning graceful shutdown`);
+    logger.info({ signal }, 'Beginning graceful shutdown');
+
+    // Hard-fail timer: if anything below hangs, force-exit.
+    const forceTimer = setTimeout(() => {
+      logger.error({ timeoutMs }, 'Graceful shutdown exceeded timeout — forcing exit');
+      process.exit(1);
+    }, timeoutMs);
 
     try {
-      // Close database pool
-      if (pool) {
-        await pool.end();
-        logger.info('Database pool closed');
+      // 1. Stop accepting new HTTP requests.
+      if (server && typeof server.close === 'function') {
+        await new Promise((resolve) => server.close(resolve));
+        logger.info('HTTP server closed');
       }
 
-      // Close Redis connection
+      // 2. Close workers (stops accepting new jobs; waits for in-flight to finish).
+      if (Array.isArray(workers) && workers.length > 0) {
+        await Promise.all(
+          workers
+            .filter((w) => w && typeof w.close === 'function')
+            .map((w) => w.close())
+        );
+        logger.info({ count: workers.length }, 'BullMQ workers closed');
+      }
+
+      // 3. Close Redis.
       if (redis) {
-        await redis.quit();
-        logger.info('Redis connection closed');
+        try {
+          await redis.quit();
+          logger.info('Redis connection closed');
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Redis close error (non-fatal)');
+        }
+      }
+
+      // 4. Close Postgres pool.
+      if (pool && typeof pool.end === 'function') {
+        try {
+          await pool.end();
+          logger.info('Database pool closed');
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Pool end error (non-fatal)');
+        }
       }
 
       logger.info('Graceful shutdown complete');
+      clearTimeout(forceTimer);
       process.exit(0);
     } catch (err) {
       logger.fatal({ err }, 'Error during graceful shutdown');
+      clearTimeout(forceTimer);
       process.exit(1);
     }
   }
 
-  // Handle SIGTERM (used by Railway for deployments)
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-
-  // Handle SIGINT (Ctrl+C)
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   console.log('✓ Graceful shutdown handler registered');

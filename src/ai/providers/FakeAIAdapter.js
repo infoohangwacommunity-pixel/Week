@@ -77,21 +77,27 @@ export class FakeAIAdapter extends AIProviderInterface {
     }
 
     // Return deterministic fake response
+    // Token math: rough 4-chars-per-token estimate, integer-rounded per term so
+    // the result satisfies the AIUsageSchema's `.int()` constraint.
+    const systemPromptTokens = Math.ceil((request.systemPrompt || '').length / 4);
+    const messagesChars = (request.messages || []).reduce((sum, msg) => {
+      if (typeof msg.content === 'string') {
+        return sum + msg.content.length;
+      }
+      return sum + JSON.stringify(msg.content ?? {}).length;
+    }, 0);
+    const messagesTokens = Math.ceil(messagesChars / 4);
+    const outputTokens = Math.ceil(this.fakeResponse.length / 4);
+
     const response = createAIResponse({
       content: this.fakeResponse,
       model: request.model || 'fake-model',
       provider: 'fake',
       finishReason: FinishReason.COMPLETED,
       usage: {
-        inputTokens: Math.ceil(request.systemPrompt.length / 4) + 
-                     request.messages.reduce((sum, msg) => {
-                       if (typeof msg.content === 'string') {
-                         return sum + msg.content.length;
-                       }
-                       return sum + JSON.stringify(msg.content).length;
-                     }, 0) / 4,
-        outputTokens: Math.ceil(this.fakeResponse.length / 4),
-        totalTokens: Math.ceil((this.fakeResponse.length + request.systemPrompt.length) / 4),
+        inputTokens: systemPromptTokens + messagesTokens,
+        outputTokens,
+        totalTokens: systemPromptTokens + messagesTokens + outputTokens,
       },
       providerRequestId: `fake-${request.correlationId}`,
       latencyMs: this.fakeLatencyMs,

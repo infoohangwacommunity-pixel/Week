@@ -86,11 +86,11 @@ describe('Learning Intelligence Module', () => {
     const migrationsDir = path.join(process.cwd(), 'infra', 'migrations');
     const files = fs.readdirSync(migrationsDir);
     
-    expect(files).toContain('006_learning_intelligence_foundation.sql');
+    expect(files).toContain('007_learning_intelligence_foundation.sql');
   });
 
   it('should have all required tables in migration 006', async () => {
-    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '006_learning_intelligence_foundation.sql');
+    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '007_learning_intelligence_foundation.sql');
     const content = fs.readFileSync(migrationFile, 'utf-8');
     
     expect(content).toContain('CREATE TABLE IF NOT EXISTS concepts');
@@ -134,7 +134,7 @@ describe('Learning Intelligence Module', () => {
   });
 
   it('should have idempotency constraint in migration', async () => {
-    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '006_learning_intelligence_foundation.sql');
+    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '007_learning_intelligence_foundation.sql');
     const content = fs.readFileSync(migrationFile, 'utf-8');
     
     // Check for idempotency constraint on observations
@@ -142,7 +142,7 @@ describe('Learning Intelligence Module', () => {
   });
 
   it('should have soft deletion support in all learning tables', async () => {
-    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '006_learning_intelligence_foundation.sql');
+    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '007_learning_intelligence_foundation.sql');
     const content = fs.readFileSync(migrationFile, 'utf-8');
     
     expect(content).toContain('deleted_at TIMESTAMPTZ');
@@ -150,7 +150,7 @@ describe('Learning Intelligence Module', () => {
   });
 
   it('should have proper foreign key constraints for student isolation', async () => {
-    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '006_learning_intelligence_foundation.sql');
+    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '007_learning_intelligence_foundation.sql');
     const content = fs.readFileSync(migrationFile, 'utf-8');
     
     // Check that all tables reference students with RESTRICT (preferred for learning data)
@@ -158,7 +158,7 @@ describe('Learning Intelligence Module', () => {
   });
 
   it('should have knowledge_states table with RWEA fields', async () => {
-    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '006_learning_intelligence_foundation.sql');
+    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '007_learning_intelligence_foundation.sql');
     const content = fs.readFileSync(migrationFile, 'utf-8');
     
     expect(content).toContain('mastery_estimate NUMERIC(4,3)');
@@ -171,7 +171,7 @@ describe('Learning Intelligence Module', () => {
   });
 
   it('should have learning_observations table with evidence fields', async () => {
-    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '006_learning_intelligence_foundation.sql');
+    const migrationFile = path.join(process.cwd(), 'infra', 'migrations', '007_learning_intelligence_foundation.sql');
     const content = fs.readFileSync(migrationFile, 'utf-8');
     
     expect(content).toContain('correctness NUMERIC(4,3)');
