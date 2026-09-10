@@ -15,7 +15,7 @@ import { randomUUID } from 'crypto';
 import config from '../config/index.js';
 import { logger, runWithContext } from '../observability/index.js';
 import { enqueueStudentMessage } from './enqueue.js';
-import { verifyWebhookSignature, isDuplicateMessage, validateWebhookPayload } from './security.js';
+import { verifyWebhookSignature, isDuplicateMessage, markMessageSeen, validateWebhookPayload } from './security.js';
 
 const router = express.Router();
 
@@ -129,7 +129,13 @@ router.post('/', async (req, res) => {
             { correlationId, pool: req.app.get('dbPool') }
           );
 
-          if (!result.success) {
+          if (result.success) {
+            // Only mark as seen AFTER successful enqueue. If the enqueue
+            // fails, we do NOT mark it as seen, so Meta's retry will
+            // attempt to process it again. The DB-level ON CONFLICT on
+            // external_id is the durable idempotency guard.
+            markMessageSeen(messageId);
+          } else {
             // The message was NOT enqueued (rate-limited, or some other
             // soft failure). Log it clearly so the operator has visibility.
             // Return 200 to Meta so it doesn't retry — rate-limited messages
@@ -144,6 +150,7 @@ router.post('/', async (req, res) => {
         } catch (enqueueErr) {
           // enqueue threw — the message may or may not be persisted.
           // Re-throw to the outer catch which returns 500 so Meta retries.
+          // Do NOT mark as seen — Meta's retry should attempt to enqueue again.
           log.error(
             { err: enqueueErr.message, code: enqueueErr.code, messageId },
             'enqueueStudentMessage threw'

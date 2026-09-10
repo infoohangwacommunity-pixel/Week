@@ -451,8 +451,8 @@ describe('Webhook Router: Enqueue Return Value Checked', () => {
     // The router must capture the return value.
     expect(routerSource).toContain('const result = await enqueueStudentMessage');
 
-    // The router must check result.success.
-    expect(routerSource).toContain('if (!result.success)');
+    // The router must check result.success and only mark as seen after success.
+    expect(routerSource).toContain('if (result.success)');
 
     // The router must log when enqueue fails.
     expect(routerSource).toContain('Message not enqueued');
