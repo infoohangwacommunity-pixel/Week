@@ -47,12 +47,17 @@ export async function resolveWaxID(pool, phoneNumber) {
   const phoneHash = hashPhoneNumber(phoneNumber);
 
   // Atomic upsert on phone_hash. The unique partial index from migration 013
-  // covers (phone_hash) WHERE deleted_at IS NULL. If the INSERT conflicts
-  // we UPDATE updated_at and RETURN the existing id.
+  // has the predicate `WHERE phone_hash IS NOT NULL AND deleted_at IS NULL`.
+  // PostgreSQL requires the ON CONFLICT's WHERE clause to EXACTLY match the
+  // index's predicate. The previous implementation used only
+  // `WHERE deleted_at IS NULL` (missing `phone_hash IS NOT NULL`), which
+  // caused PostgreSQL to reject the query with
+  // "there is no unique or exclusion constraint matching the ON CONFLICT
+  // specification" because it couldn't find a matching partial unique index.
   const result = await pool.query(
     `INSERT INTO students (id, phone_hash, created_at)
      VALUES ($1, $2, NOW())
-     ON CONFLICT (phone_hash) WHERE deleted_at IS NULL
+     ON CONFLICT (phone_hash) WHERE phone_hash IS NOT NULL AND deleted_at IS NULL
      DO UPDATE SET updated_at = NOW()
      RETURNING id`,
     [randomUUID(), phoneHash],

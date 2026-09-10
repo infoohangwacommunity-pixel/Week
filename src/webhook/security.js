@@ -86,17 +86,34 @@ export function verifyWebhookSignature(rawBody, signatureHeader, appSecret) {
 }
 
 /**
- * Check if message ID has been seen (replay protection)
- * 
+ * Check if message ID has been seen (replay protection).
+ *
+ * IMPORTANT: This function ONLY checks — it does NOT add to the cache.
+ * The caller must call `markMessageSeen(messageId)` AFTER the message
+ * has been successfully enqueued. If the enqueue fails, the messageId
+ * should NOT be marked as seen, so Meta's retry can attempt it again.
+ *
+ * The DB-level unique index on messages(external_id) is the durable
+ * idempotency guard. This in-memory check is just an optimization to
+ * avoid unnecessary DB work for duplicate webhooks that arrive within
+ * the TTL window.
+ *
  * @param {string} messageId - WhatsApp message ID
- * @returns {boolean} - true if duplicate (replay detected)
+ * @returns {boolean} - true if duplicate (already seen)
  */
 export function isDuplicateMessage(messageId) {
-  if (seenMessageIds.has(messageId)) {
-    return true;
-  }
+  return seenMessageIds.has(messageId);
+}
+
+/**
+ * Mark a message ID as seen (after successful enqueue).
+ * Call this ONLY after the message has been successfully persisted
+ * and enqueued — never before.
+ *
+ * @param {string} messageId - WhatsApp message ID
+ */
+export function markMessageSeen(messageId) {
   seenMessageIds.set(messageId, true);
-  return false;
 }
 
 /**
