@@ -23,16 +23,37 @@
 -- This migration rewrites all three functions correctly:
 --
 -- * delete_student_data: deletes in reverse FK-dependency order, never
---   UPDATEs audit_log (uses INSERT for status changes).
--- * queue_data_deletion: never UPDATEs audit_log.
--- * export_student_data: adds `RETURN NEXT` so the function actually
---   returns the row it builds.
+--   UPDATEs audit_log (uses INSERT for status changes). The return column
+--   `sessions_archived` is renamed to `sessions_deleted` to reflect the
+--   actual behavior (hard delete, not archive). Since PostgreSQL's
+--   CREATE OR REPLACE FUNCTION does not allow changing return column names,
+--   we DROP the existing function first (with its exact signature) and
+--   then CREATE it with the new definition. This is safe because:
+--   - No application code references the column name `sessions_archived`
+--     (verified via grep — callers use queue_data_deletion which returns UUID).
+--   - The function has no dependent indexes or views.
+--   - The function is SECURITY DEFINER but has no special grants beyond
+--     what the schema already provides.
+--
+-- * queue_data_deletion: return type is UUID (unchanged from migration 010/012),
+--   so CREATE OR REPLACE works without dropping.
+--
+-- * export_student_data: return type is TABLE (export_id UUID, data_size_bytes
+--   BIGINT, export_url TEXT, export_data JSONB) — unchanged from migration 010.
+--   So CREATE OR REPLACE works. The fix is adding RETURN NEXT so the function
+--   actually returns the row it builds.
 -- =============================================================================
 
 -- ============================================================
 -- FUNCTION: delete_student_data (REWRITTEN)
 -- ============================================================
-CREATE OR REPLACE FUNCTION delete_student_data(p_wax_id UUID, p_operator_id TEXT DEFAULT 'system')
+-- DROP first because the 7th return column changed from `sessions_archived`
+-- to `sessions_deleted`. PostgreSQL's CREATE OR REPLACE FUNCTION does not
+-- allow changing return column names. The DROP is safe because no
+-- application code, views, or indexes reference the column name.
+DROP FUNCTION IF EXISTS delete_student_data(UUID, TEXT) CASCADE;
+
+CREATE FUNCTION delete_student_data(p_wax_id UUID, p_operator_id TEXT DEFAULT 'system')
 RETURNS TABLE (
   messages_deleted BIGINT, observations_deleted BIGINT, facts_deleted BIGINT,
   episodes_deleted BIGINT, misconceptions_deleted BIGINT, knowledge_states_reset BIGINT,
@@ -83,9 +104,6 @@ BEGIN
     DELETE FROM outbound_messages WHERE wax_id = p_wax_id;
     DELETE FROM response_deliveries WHERE wax_id = p_wax_id;
     DELETE FROM web_search_results WHERE wax_id = p_wax_id;
-    DELETE FROM web_search_cache WHERE query_hash IN (
-      SELECT query_hash FROM web_search_cache WHERE 1=0  -- web_search_cache has no wax_id; skip
-    );
     DELETE FROM memory_retrieval_log WHERE wax_id = p_wax_id;
     DELETE FROM memory_confidence_history WHERE wax_id = p_wax_id;
     DELETE FROM memory_contradictions WHERE wax_id = p_wax_id;
@@ -93,7 +111,7 @@ BEGIN
     DELETE FROM learning_signals WHERE wax_id = p_wax_id;
     DELETE FROM misconceptions WHERE wax_id = p_wax_id;
     DELETE FROM knowledge_states WHERE wax_id = p_wax_id;
-    -- 2. learning_observations (FK message_id → messages; delete BEFORE messages).
+    -- 2. learning_observations (FK message_id -> messages; delete BEFORE messages).
     DELETE FROM learning_observations WHERE wax_id = p_wax_id;
     DELETE FROM embedding_jobs WHERE target_id IN (
       SELECT id FROM student_facts WHERE wax_id = p_wax_id
@@ -150,6 +168,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- FUNCTION: queue_data_deletion (REWRITTEN — no audit_log UPDATE)
 -- ============================================================
+-- Return type is UUID (unchanged from migration 010/012), so CREATE OR REPLACE
+-- works without dropping.
 CREATE OR REPLACE FUNCTION queue_data_deletion(p_wax_id UUID, p_requester_id TEXT DEFAULT 'student')
 RETURNS UUID AS $$
 DECLARE
@@ -182,6 +202,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- FUNCTION: export_student_data (REWRITTEN — adds RETURN NEXT)
 -- ============================================================
+-- Return type is TABLE (export_id UUID, data_size_bytes BIGINT, export_url TEXT,
+-- export_data JSONB) — unchanged from migration 010. So CREATE OR REPLACE works.
 CREATE OR REPLACE FUNCTION export_student_data(p_wax_id UUID, p_format TEXT DEFAULT 'json')
 RETURNS TABLE (
   export_id UUID,
