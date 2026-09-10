@@ -243,66 +243,66 @@ describe('Idempotency', () => {
   });
   
   describe('Rate Limiting', () => {
-    it('should allow requests within limits', () => {
+    it('should allow requests within limits', async () => {
       const { getRateLimiter } = await import('../../src/infrastructure/idempotency.js');
       const rateLimiter = getRateLimiter({
         messagesPerMinute: 10,
         messagesPerDay: 200,
       });
-      
+
       const result = rateLimiter.checkLimit('wax-123');
       expect(result.allowed).toBe(true);
     });
-    
-    it('should reject requests exceeding per-minute limit', () => {
+
+    it('should reject requests exceeding per-minute limit', async () => {
       const { getRateLimiter } = await import('../../src/infrastructure/idempotency.js');
       const rateLimiter = getRateLimiter({
         messagesPerMinute: 2,
         messagesPerDay: 200,
       });
-      
+
       // Send 2 messages (at limit)
       rateLimiter.checkLimit('wax-123');
       rateLimiter.checkLimit('wax-123');
-      
+
       // Third should be rejected
       const result = rateLimiter.checkLimit('wax-123');
       expect(result.allowed).toBe(false);
       expect(result.reason).toBe('minute_limit_exceeded');
     });
-    
-    it('should reject requests exceeding per-day limit', () => {
+
+    it('should reject requests exceeding per-day limit', async () => {
       const { getRateLimiter } = await import('../../src/infrastructure/idempotency.js');
       const rateLimiter = getRateLimiter({
         messagesPerMinute: 10,
         messagesPerDay: 3,
       });
-      
+
       // Send 3 messages (at daily limit)
       rateLimiter.checkLimit('wax-123');
       rateLimiter.checkLimit('wax-123');
       rateLimiter.checkLimit('wax-123');
-      
+
       // Fourth should be rejected
       const result = rateLimiter.checkLimit('wax-123');
       expect(result.allowed).toBe(false);
       expect(result.reason).toBe('daily_limit_exceeded');
     });
-    
-    it('should track separate limits per student', () => {
+
+    it('should track separate limits per student', async () => {
       const { getRateLimiter } = await import('../../src/infrastructure/idempotency.js');
       const rateLimiter = getRateLimiter({
         messagesPerMinute: 2,
         messagesPerDay: 200,
       });
-      
+
       // Student A sends 2 messages (at limit)
       rateLimiter.checkLimit('wax-A');
       rateLimiter.checkLimit('wax-A');
-      
+
       // Student A should be rate limited
       expect(rateLimiter.checkLimit('wax-A').allowed).toBe(false);
-      
+
       // Student B should NOT be rate limited
       expect(rateLimiter.checkLimit('wax-B').allowed).toBe(true);
     });

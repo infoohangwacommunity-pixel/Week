@@ -29,10 +29,7 @@ logger.info('Redis client created');
 // Register global error handlers
 registerGlobalErrorHandlers(logger);
 
-// Register graceful shutdown handler
-registerGracefulShutdown({ logger, pool, redis });
-
-// Setup workers
+// Setup workers (BEFORE registering graceful shutdown so we can pass them in)
 const workers = await setupWorkers({ redis, pool, logger });
 
 logger.info({ concurrency: config.QUEUE_WORKER_CONCURRENCY }, 'Worker setup complete');
@@ -51,6 +48,17 @@ const healthServer = http.createServer((req, res) => {
 const healthPort = config.WORKER_HEALTH_PORT || 3001;
 healthServer.listen(healthPort, () => {
   logger.info({ port: healthPort }, 'Worker health server started');
+});
+
+// Register graceful shutdown handler now that workers and healthServer exist.
+// Order: stop HTTP → close workers → close redis → close pool.
+registerGracefulShutdown({
+  logger,
+  pool,
+  redis,
+  workers,
+  server: healthServer,
+  shutdownTimeoutMs: config.WORKER_SHUTDOWN_TIMEOUT_MS,
 });
 
 export default { workers, redis, pool, healthServer };

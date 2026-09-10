@@ -18,6 +18,7 @@ import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 import { MemoryRetriever } from '../memory/index.js';
 import { createLearningModule } from '../learning/index.js';
+import ToolRegistry from '../tools/ToolRegistry.js';
 
 /**
  * Token budget slot constants (from research document)
@@ -70,7 +71,8 @@ export class ContextAssembler {
       });
 
       // Get student model context (Stage 34)
-      const learningModule = createLearningModule(this.db.pool);
+      // this.db IS the pool (per workers/setup.js wiring); we don't need .pool.
+      const learningModule = createLearningModule(this.db);
       let studentModelContext = null;
       try {
         const modelContext = await learningModule.contextInterface.getStudentModelContext(waxId, {
@@ -217,10 +219,13 @@ export class ContextAssembler {
     const maxHistoryMessages = config.CONTEXT_MAX_HISTORY_MESSAGES || 20;
 
     // Fetch recent messages for this student and session
-    // Order: oldest first (for context building)
+    // Order: oldest first (for context building). Fetch BOTH inbound and
+    // outbound so the AI sees its own prior responses, not just the student's.
+    // Filter 'received' out of inbound (that's the current message which we
+    // re-add explicitly) and 'failed' (don't surface failed AI turns).
     const result = await this.db.query(
       `
-      SELECT 
+      SELECT
         id,
         wax_id,
         session_id,
@@ -231,10 +236,13 @@ export class ContextAssembler {
       FROM messages
       WHERE wax_id = $1
         AND session_id = $2
-        AND direction = 'inbound'
         AND deleted_at IS NULL
-        AND processing_status NOT IN ('failed', 'received')
         AND message_type = 'text'
+        AND (
+          (direction = 'inbound' AND processing_status NOT IN ('failed', 'received'))
+          OR
+          (direction = 'outbound' AND processing_status NOT IN ('failed'))
+        )
       ORDER BY created_at ASC
       LIMIT $3
       `,
@@ -266,13 +274,13 @@ export class ContextAssembler {
     let historyTurnCount = 0;
     let currentMessageCount = 0;
 
-    // Add conversation history
+    // Add conversation history (inbound → user, outbound → assistant).
+    // Strip waxId/sessionId from the messages we send to the provider — those
+    // are internal metadata and must NOT leak into the LLM prompt.
     for (const msg of conversationHistory) {
       if (msg.direction === 'inbound') {
         messages.push({
           role: 'user',
-          waxId: msg.waxId,
-          sessionId: msg.sessionId,
           content: msg.content,
         });
         historyTurnCount++;
@@ -285,26 +293,15 @@ export class ContextAssembler {
       }
     }
 
-    // Add current message as the last user message
-    if (currentMessage && currentMessage.trim()) {
+    // Append (not replace) the current user message as the final turn.
+    // The previous implementation overwrote the last user message, which
+    // destroyed prior context when a student sent multiple messages in a burst.
+    if (currentMessage && String(currentMessage).trim()) {
+      messages.push({
+        role: 'user',
+        content: String(currentMessage),
+      });
       currentMessageCount = 1;
-      // Replace the last user message if exists, or append
-      const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
-      if (lastUserMessageIndex >= 0) {
-        messages[lastUserMessageIndex] = {
-          role: 'user',
-          waxId: messages[lastUserMessageIndex].waxId,
-          sessionId: messages[lastUserMessageIndex].sessionId,
-          content: currentMessage,
-        };
-      } else {
-        messages.push({
-          role: 'user',
-          waxId: null,
-          sessionId: null,
-          content: currentMessage,
-        });
-      }
     }
 
     return {
@@ -528,129 +525,32 @@ export class ContextAssembler {
 
     return { messages: truncated, tokens: finalTokens, removedTurns };
   }
+  /**
+   * Return tool definitions for the AI in the provider-agnostic normalized form
+   * that AIRequestSchema.tools expects:
+   *   { name, description, inputSchema, category? }
+   *
+   * Tools come from the canonical ToolRegistry (single source of truth). The
+   * prior implementation hand-wrote a parallel list with different schemas
+   * that disagreed with what the ToolExecutor validated against, which meant
+   * every tool call would have been rejected.
+   */
   getToolDefinitions() {
-    // Define tools that AI can use
-    // These are infrastructure capabilities, not hardcoded educational logic
-    return [
-      {
-        name: 'memory_write',
-        description: 'Write a memory or fact about the student to help with future tutoring',
-        parameters: {
-          type: 'object',
-          properties: {
-            content: {
-              type: 'string',
-              description: 'The memory or fact to remember',
-            },
-            category: {
-              type: 'string',
-              enum: ['student_preference', 'learning_style', 'knowledge_gap', 'progress', 'other'],
-              description: 'Category of the memory',
-            },
-            confidence: {
-              type: 'number',
-              minimum: 0,
-              maximum: 1,
-              description: 'Confidence in this memory (0-1)',
-            },
-          },
-          required: ['content', 'category'],
-        },
-      },
-      {
-        name: 'memory_search',
-        description: 'Search for relevant memories about the student',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'What to search for in memories',
-            },
-            maxResults: {
-              type: 'integer',
-              minimum: 1,
-              maximum: 10,
-              default: 5,
-              description: 'Maximum number of results to return',
-            },
-          },
-          required: ['query'],
-        },
-      },
-      {
-        name: 'record_evidence',
-        description: 'Record evidence of student learning (correct/incorrect answers, hints used, etc.)',
-        parameters: {
-          type: 'object',
-          properties: {
-            conceptTag: {
-              type: 'string',
-              description: 'The concept or skill being assessed',
-            },
-            evidenceType: {
-              type: 'string',
-              enum: ['correct_answer', 'incorrect_answer', 'hint_used', 'worked_example', 'attempted_problem'],
-              description: 'Type of evidence',
-            },
-            correctness: {
-              type: 'boolean',
-              description: 'Whether the response was correct',
-            },
-            context: {
-              type: 'string',
-              description: 'Additional context about the evidence',
-            },
-          },
-          required: ['conceptTag', 'evidenceType', 'correctness'],
-        },
-      },
-      {
-        name: 'web_search',
-        description: 'Search the web for current information to help answer student questions',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Search query',
-            },
-            maxResults: {
-              type: 'integer',
-              minimum: 1,
-              maximum: 10,
-              default: 3,
-              description: 'Maximum number of results to retrieve',
-            },
-          },
-          required: ['query'],
-        },
-      },
-      {
-        name: 'generate_question',
-        description: 'Generate a practice question for the student to test their understanding',
-        parameters: {
-          type: 'object',
-          properties: {
-            concept: {
-              type: 'string',
-              description: 'The concept to base the question on',
-            },
-            difficulty: {
-              type: 'string',
-              enum: ['easy', 'medium', 'hard'],
-              description: 'Difficulty level of the question',
-            },
-            questionType: {
-              type: 'string',
-              enum: ['multiple_choice', 'short_answer', 'problem_solving'],
-              description: 'Type of question to generate',
-            },
-          },
-          required: ['concept'],
-        },
-      },
-    ];
+    try {
+      const tools = ToolRegistry.getToolRegistry();
+      return tools
+        .filter((t) => t.permission_level === 'STUDENT_READ' || t.permission_level === 'STUDENT_WRITE')
+        .map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.input_schema,
+          category: t.category,
+        }));
+    } catch {
+      // In test environments where the registry can't be loaded, return []
+      // so the AI runs without tools rather than crashing.
+      return [];
+    }
   }
 }
 

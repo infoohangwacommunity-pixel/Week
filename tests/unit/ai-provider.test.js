@@ -219,7 +219,10 @@ describe('AI Provider Abstraction (Stage 15-17)', () => {
       expect(providers).toContain('openai');
       expect(providers).toContain('groq');
       expect(providers).toContain('cerebras');
-      expect(providers).toContain('gemini');
+      // Gemini is intentionally NOT advertised — no Gemini chat adapter is
+      // implemented. The Gemini EMBEDDING adapter exists, but it does not
+      // satisfy the AIProviderInterface.
+      expect(providers).not.toContain('gemini');
     });
   });
 });

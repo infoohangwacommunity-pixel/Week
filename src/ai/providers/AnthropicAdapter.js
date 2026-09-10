@@ -52,27 +52,20 @@ export class AnthropicAdapter extends AIProviderInterface {
 
   /**
    * Complete a request through Anthropic's Messages API
-   * 
-   * @param {import('../schemas/AIRequest.js').AIRequest} request - Normalized request
-   * @returns {Promise<import('../schemas/AIResponse.js').AIResponse>} - Normalized response
-   * @throws {import('../schemas/AIErrors.js').AIProviderError} - Normalized error
    */
   async complete(request) {
     const startTime = Date.now();
 
     try {
-      // Build Anthropic-specific request
       const anthropicRequest = this.buildAnthropicRequest(request);
 
-      // Make the API call with timeout
+      // Pass AbortSignal directly to the Anthropic SDK via the options arg.
       const response = await this.callWithTimeout(
-        () => this.client.messages.create(anthropicRequest),
+        (signal) => this.client.messages.create(anthropicRequest, { signal }),
         config.AI_TIMEOUT_MS
       );
 
       const latencyMs = Date.now() - startTime;
-
-      // Parse and normalize the response
       return this.normalizeResponse(response, request.model, latencyMs);
     } catch (error) {
       const latencyMs = Date.now() - startTime;
@@ -81,10 +74,8 @@ export class AnthropicAdapter extends AIProviderInterface {
   }
 
   /**
-   * Build Anthropic-specific request from normalized request
-   * 
-   * @param {import('../schemas/AIRequest.js').AIRequest} request - Normalized request
-   * @returns {Object} - Anthropic API request
+   * Build Anthropic-specific request from normalized request.
+   * Includes tools when provided.
    */
   buildAnthropicRequest(request) {
     // Anthropic requires max_tokens (not maxOutputTokens)
@@ -99,6 +90,25 @@ export class AnthropicAdapter extends AIProviderInterface {
     // Add stop sequences if provided
     if (request.stopSequences && request.stopSequences.length > 0) {
       anthropicRequest.stop_sequences = request.stopSequences;
+    }
+
+    // Pass tools when provided so the model can emit tool_use blocks.
+    if (Array.isArray(request.tools) && request.tools.length > 0) {
+      anthropicRequest.tools = request.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema,
+      }));
+      // Translate tool choice
+      if (request.toolChoice) {
+        if (request.toolChoice === 'auto' || request.toolChoice === 'none') {
+          anthropicRequest.tool_choice = { type: request.toolChoice };
+        } else if (request.toolChoice === 'required') {
+          anthropicRequest.tool_choice = { type: 'any' };
+        } else if (typeof request.toolChoice === 'object' && request.toolChoice.name) {
+          anthropicRequest.tool_choice = { type: 'tool', name: request.toolChoice.name };
+        }
+      }
     }
 
     return anthropicRequest;
@@ -128,16 +138,52 @@ export class AnthropicAdapter extends AIProviderInterface {
   }
 
   /**
-   * Build messages array from normalized messages
-   * 
-   * @param {Array} messages - Normalized messages
-   * @returns {Array} - Anthropic messages format
+   * Build messages array from normalized messages.
+   * Maps normalized roles to Anthropic roles:
+   *   user → user
+   *   assistant → assistant (with tool_calls rendered as tool_use blocks)
+   *   tool → user with tool_result content block (Anthropic has no 'tool' role)
    */
   buildMessages(messages) {
-    return messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: this.buildContent(msg.content),
-    }));
+    const out = [];
+    for (const msg of messages) {
+      if (msg.role === 'tool') {
+        // Anthropic represents tool results as user messages containing tool_result blocks
+        out.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: msg.toolCallId,
+              content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+              is_error: msg.isError === true,
+            },
+          ],
+        });
+      } else if (msg.role === 'assistant' && Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) {
+        // Assistant turn that requested tool calls. Anthropic expects an assistant message
+        // containing tool_use content blocks.
+        const content = [];
+        if (typeof msg.content === 'string' && msg.content.length > 0) {
+          content.push({ type: 'text', text: msg.content });
+        }
+        for (const tc of msg.toolCalls) {
+          content.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.arguments || {},
+          });
+        }
+        out.push({ role: 'assistant', content });
+      } else {
+        out.push({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: this.buildContent(msg.content),
+        });
+      }
+    }
+    return out;
   }
 
   /**
@@ -206,7 +252,7 @@ export class AnthropicAdapter extends AIProviderInterface {
     return createAIResponse({
       content,
       model: response.model || model,
-      provider: 'anthropic',
+      provider: this.name,
       finishReason,
       usage,
       toolCalls,
@@ -248,6 +294,8 @@ export class AnthropicAdapter extends AIProviderInterface {
         return FinishReason.LENGTH_LIMIT;
       case 'refusal':
         return FinishReason.SAFETY_REFUSAL;
+      case 'tool_use':
+        return FinishReason.TOOL_CALL;
       default:
         return FinishReason.UNKNOWN;
     }
@@ -261,8 +309,13 @@ export class AnthropicAdapter extends AIProviderInterface {
    * @returns {import('../schemas/AIErrors.js').AIProviderError} - Normalized error
    */
   normalizeError(error, latencyMs) {
-    // Handle timeout
-    if (error.name === 'AbortError' || error.message.includes('timeout')) {
+    // Handle timeout / abort first.
+    if (
+      error?.name === 'AbortError' ||
+      error?.name === 'APIUserAbortError' ||
+      (typeof Anthropic?.APIUserAbortError === 'function' && error instanceof Anthropic.APIUserAbortError) ||
+      (typeof error?.message === 'string' && error.message.toLowerCase().includes('timeout'))
+    ) {
       return createTimeoutError('Anthropic API request timed out');
     }
 
@@ -279,14 +332,14 @@ export class AnthropicAdapter extends AIProviderInterface {
             providerMessage: `Model not found: ${error.message}`,
             providerStatusCode: statusCode,
           });
-        case 429:
-          const retryAfter = error.headers?.['retry-after'];
-          return createRateLimitError(
-            'Anthropic rate limit exceeded',
-            retryAfter ? parseInt(retryAfter, 10) : undefined
-          );
+        case 429: {
+          const retryAfterRaw = error.headers?.['retry-after'] ?? error.headers?.['Retry-After'];
+          const retryAfterNum = Number(retryAfterRaw);
+          const retryAfter = Number.isFinite(retryAfterNum) && retryAfterNum > 0 ? retryAfterNum : undefined;
+          return createRateLimitError('Anthropic rate limit exceeded', retryAfter);
+        }
         case 400:
-          if (error.message.includes('maximum context length')) {
+          if (error.message.includes('maximum context length') || error.message.includes('context length')) {
             return createContextLengthError('Request exceeds maximum context length');
           }
           return createAIError({
@@ -304,7 +357,9 @@ export class AnthropicAdapter extends AIProviderInterface {
             providerStatusCode: statusCode,
           });
         case 500:
+        case 502:
         case 503:
+        case 504:
           return createProviderServerError('Anthropic server error', statusCode);
         default:
           if (statusCode >= 500) {
@@ -314,24 +369,23 @@ export class AnthropicAdapter extends AIProviderInterface {
       }
     }
 
-    // Handle unknown errors
-    return createUnknownError(`Anthropic API error: ${error.message}`);
+    // Network / connection errors
+    if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND' || error?.code === 'EAI_AGAIN') {
+      return createProviderServerError(`Anthropic network error: ${error.code}`, 503);
+    }
+
+    return createUnknownError(`Anthropic API error: ${error?.message || String(error)}`);
   }
 
   /**
-   * Call API with timeout
-   * 
-   * @param {Function} fn - Async function to call
-   * @param {number} timeoutMs - Timeout in milliseconds
-   * @returns {Promise<any>} - Function result
-   * @throws {Error} - Timeout error
+   * Call API with timeout. `fn` MUST accept an AbortSignal.
    */
   async callWithTimeout(fn, timeoutMs) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      return await fn();
+      return await fn(controller.signal);
     } finally {
       clearTimeout(timeoutId);
     }

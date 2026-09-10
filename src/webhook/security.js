@@ -23,44 +23,65 @@ const seenMessageIds = new LRUCache({
 });
 
 /**
- * Verify WhatsApp webhook signature
- * 
- * @param {string} rawBody - Raw request body bytes
- * @param {string} signatureHeader - X-Hub-Signature-256 header value
+ * Verify WhatsApp webhook signature.
+ *
+ * Uses HMAC-SHA256 over the raw request body bytes and a timing-safe
+ * comparison so signature length mismatches (which would otherwise throw
+ * RangeError out of `timingSafeEqual`) are rejected cleanly.
+ *
+ * @param {Buffer|string} rawBody - Raw request body bytes
+ * @param {string} signatureHeader - X-Hub-Signature-256 header value (`sha256=...`)
  * @param {string} appSecret - Meta app secret
  * @returns {boolean}
  */
 export function verifyWebhookSignature(rawBody, signatureHeader, appSecret) {
   const log = logger.child({ func: 'verifyWebhookSignature' });
-  
-  log.info({
-    'rawBody.type': typeof rawBody,
-    'rawBody.isBuffer': Buffer.isBuffer(rawBody),
-    'rawBody.constructor': rawBody?.constructor?.name,
-    'signatureHeader.exists': !!signatureHeader,
-    'signatureHeader.startsWith': signatureHeader?.startsWith?.('sha256='),
-    'appSecret.length': appSecret?.length,
-  }, 'Signature verification - input types');
-  
-  if (!signatureHeader?.startsWith('sha256=')) {
+
+  if (!signatureHeader || typeof signatureHeader !== 'string' || !signatureHeader.startsWith('sha256=')) {
     log.warn('Signature header missing or invalid format');
     return false;
   }
 
+  if (!appSecret || typeof appSecret !== 'string' || appSecret.length < 8) {
+    log.error('App secret missing or too short');
+    return false;
+  }
+
+  if (!rawBody) {
+    log.warn('Empty raw body');
+    return false;
+  }
+
+  const bodyBuffer = Buffer.isBuffer(rawBody)
+    ? rawBody
+    : Buffer.from(String(rawBody), 'utf-8');
+
   const expectedSignature = signatureHeader.slice('sha256='.length);
-  
-  // Compute HMAC-SHA256 on raw body bytes
+
+  // Compute HMAC-SHA256 over raw body bytes.
   const hmac = createHmac('sha256', appSecret);
-  hmac.update(rawBody);
+  hmac.update(bodyBuffer);
   const computedSignature = hmac.digest('hex');
 
-  // Timing-safe comparison to prevent timing attacks
+  // Timing-safe comparison. timingSafeEqual throws RangeError if buffers
+  // differ in length — we must guard against that explicitly so a malformed
+  // signature header doesn't crash the webhook.
   const computedBuffer = Buffer.from(computedSignature, 'hex');
   const expectedBuffer = Buffer.from(expectedSignature, 'hex');
 
+  if (computedBuffer.length !== expectedBuffer.length) {
+    log.warn(
+      { computedLen: computedBuffer.length, expectedLen: expectedBuffer.length },
+      'Signature length mismatch (expected 32 bytes for SHA-256)'
+    );
+    return false;
+  }
+
   const result = timingSafeEqual(computedBuffer, expectedBuffer);
-  
-  log.info({ result }, 'Signature verification - result');
+
+  if (!result) {
+    log.warn('Signature mismatch');
+  }
   return result;
 }
 

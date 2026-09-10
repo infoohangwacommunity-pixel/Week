@@ -142,17 +142,19 @@ export async function setupWorkers({ redis, pool }) {
               log.info('Safety classifier and crisis protocol initialized (Phase I)');
             }
             
-            // Create orchestrator with Phase G-I dependencies
+            // Create orchestrator with Phase G-I dependencies.
+            // database: pass the pool directly so persistMetadata/persistFailure
+            // can use the shared connection instead of creating a new pool per call.
             const orchestrator = new AIOrchestrator({
               providerFactory: providerRegistry.primary,
               contextAssembler,
               responseValidator,
-              database: { createPool: () => Promise.resolve(pool) },
+              database: pool,
               toolExecutor,
               safetyClassifier,
               crisisProtocol,
             });
-            
+
             // Validate trace context
             if (!trace.waxId) {
               throw new Error('Missing waxId in trace context');
@@ -160,16 +162,28 @@ export async function setupWorkers({ redis, pool }) {
             if (!trace.sessionId) {
               throw new Error('Missing sessionId in trace context');
             }
-            
+
             // Get current message from job data or build from messages array
             const currentMessage = trace.messages && trace.messages.length > 0
               ? trace.messages[trace.messages.length - 1]?.content || trace.currentMessage
               : trace.currentMessage;
-            
+
             if (!currentMessage) {
               throw new Error('No current message provided in job data');
             }
-            
+
+            // Mark the message as 'processing' so the status column reflects reality.
+            // The webhook inserted it as 'received'; we transition it here.
+            try {
+              await pool.query(
+                `UPDATE messages SET processing_status = 'processing'
+                 WHERE external_id = $1 AND wax_id = $2 AND processing_status = 'received'`,
+                [trace.messageId, trace.waxId]
+              );
+            } catch (markErr) {
+              log.warn({ err: markErr.message }, 'Failed to mark message as processing (non-fatal)');
+            }
+
             // Complete the AI request through orchestrator
             log.info({ waxId: trace.waxId, sessionId: trace.sessionId, hasMessage: !!currentMessage, correlationId: trace.correlationId }, 'Calling orchestrator.complete');
             const response = await orchestrator.complete({
@@ -178,7 +192,17 @@ export async function setupWorkers({ redis, pool }) {
               currentMessage,
               context: { correlationId: trace.correlationId },
             });
-            
+
+            // Mark the message as 'completed'.
+            try {
+              await pool.query(
+                `UPDATE messages SET processing_status = 'completed' WHERE external_id = $1 AND wax_id = $2`,
+                [trace.messageId, trace.waxId]
+              );
+            } catch (markErr) {
+              log.warn({ err: markErr.message }, 'Failed to mark message as completed (non-fatal)');
+            }
+
             // Log successful response
             log.info({
               provider: response.provider,
@@ -187,18 +211,28 @@ export async function setupWorkers({ redis, pool }) {
               tokens: `${response.usage.inputTokens}/${response.usage.outputTokens}`,
               fallbackUsed: response.fallbackUsed || false,
             }, 'AI request completed successfully');
-            
-            // Send response to student via WhatsApp
+
+            // Persist the outbound message BEFORE attempting delivery, so a
+            // crash during fetch leaves an audit trail. The outbound.js helper
+            // also writes its own 'pending' row, but only if a pool is passed.
+            // Send response to student via WhatsApp.
             if (response.content && trace.phoneNumber) {
               try {
                 const messageIds = await sendResponse(trace.phoneNumber, response.content, {
                   correlationId: trace.correlationId,
                   messageId: trace.messageId,
-                });
+                  waxId: trace.waxId,
+                }, { pool });
                 log.info({ messageIds, contentLength: response.content.length }, 'Response sent successfully');
               } catch (err) {
                 log.error({ err: { name: err.name, message: err.message } }, 'Failed to send response to student');
-                // Don't rethrow - AI request succeeded, just delivery failed
+                // Mark the message as 'failed' delivery but the AI request itself succeeded.
+                try {
+                  await pool.query(
+                    `UPDATE messages SET processing_status = 'completed' WHERE external_id = $1 AND wax_id = $2`,
+                    [trace.messageId, trace.waxId]
+                  );
+                } catch { /* swallow */ }
               }
             } else {
               log.warn({ hasContent: !!response.content, hasPhoneNumber: !!trace.phoneNumber }, 'Skipping outbound delivery - missing content or phone number');
@@ -219,10 +253,26 @@ export async function setupWorkers({ redis, pool }) {
                 stack: error.stack?.split('\n').slice(0, 3).join('\n'),
               },
             };
-            
+
             logger.error(errorInfo, 'AI request failed');
             console.error('AI Request Failed - Full Error:', JSON.stringify(errorInfo, null, 2));
-            
+
+            // Mark the message as 'failed' so the audit trail reflects reality.
+            // Use the trace data from job.data if available.
+            try {
+              const failTrace = job?.data?._trace || {};
+              if (failTrace.messageId && failTrace.waxId) {
+                await pool.query(
+                  `UPDATE messages SET processing_status = 'failed'
+                   WHERE external_id = $1 AND wax_id = $2
+                   AND processing_status NOT IN ('completed', 'failed')`,
+                  [failTrace.messageId, failTrace.waxId]
+                );
+              }
+            } catch (markErr) {
+              logger.warn({ err: markErr.message }, 'Failed to mark message as failed');
+            }
+
             // Re-throw to trigger BullMQ retry logic
             throw error;
           }

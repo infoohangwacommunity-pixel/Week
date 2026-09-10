@@ -44,13 +44,22 @@ export async function checkAiCallIdempotency(pool, triggeringMessageId) {
 }
 
 /**
- * Record AI call for idempotency
+ * Record AI call for idempotency.
+ *
+ * Uses a single ON CONFLICT clause (PostgreSQL forbids two ON CONFLICT clauses
+ * per INSERT). We rely on the partial unique index `idx_ai_requests_triggering_success`
+ * (created in migration 011) for the `triggering_message_id` dedup, but since
+ * that index is partial (`WHERE status = 'success' AND triggering_message_id IS NOT NULL`)
+ * the simplest correct approach is:
+ *   1. INSERT ... ON CONFLICT (correlation_id) DO UPDATE — primary upsert.
+ *   2. If a separate conflict on triggering_message_id occurs, the catch
+ *      block treats it as a duplicate (success, not an error).
  */
 export async function recordAiCall(pool, waxId, sessionId, correlationId, triggeringMessageId, provider, model, promptVersion, response) {
   try {
     const completedAt = Date.now();
     const latencyMs = completedAt - response.startTime;
-    
+
     await pool.query(
       `INSERT INTO ai_requests (
         wax_id, session_id, correlation_id, triggering_message_id,
@@ -66,8 +75,7 @@ export async function recordAiCall(pool, waxId, sessionId, correlationId, trigge
         status = EXCLUDED.status,
         completed_at = EXCLUDED.completed_at,
         latency_ms = EXCLUDED.latency_ms,
-        response_json = EXCLUDED.response_json
-      ON CONFLICT (triggering_message_id) DO NOTHING`,
+        response_json = EXCLUDED.response_json`,
       [
         waxId,
         sessionId,
@@ -85,9 +93,13 @@ export async function recordAiCall(pool, waxId, sessionId, correlationId, trigge
         JSON.stringify(response),
       ]
     );
-    
+
     return { success: true };
   } catch (error) {
+    // 23505 = unique_violation. Could come from either the correlation_id
+    // unique constraint (unlikely since we just upserted) or the partial
+    // unique index on triggering_message_id. Either way, a duplicate write
+    // is the desired idempotent outcome.
     if (error.code === '23505') {
       return { success: true, duplicate: true };
     }
@@ -159,15 +171,42 @@ export async function markOutboundMessageAsSent(pool, outboundChunkId, waxId, tr
 
 let rateLimiterInstance = null;
 
+/**
+ * Get a rate limiter instance.
+ *
+ * If called with options, ALWAYS returns a fresh instance scoped to those
+ * options. If called without options (or with an empty object), returns a
+ * shared singleton with the default limits — useful for the production
+ * webhook path which wants a single global limiter.
+ *
+ * The previous implementation was a true singleton even when called with
+ * different options, which made the second test of any rate-limit suite
+ * silently reuse the first test's limits.
+ */
 export function getRateLimiter(options = {}) {
-  if (!rateLimiterInstance) {
-    rateLimiterInstance = new InMemoryRateLimiter({
-      messagesPerMinute: options.messagesPerMinute || 10,
-      messagesPerDay: options.messagesPerDay || 200,
-      burstAllowance: options.burstAllowance || 3,
-    });
+  const hasOpts = Object.keys(options).length > 0;
+  if (!hasOpts) {
+    if (!rateLimiterInstance) {
+      rateLimiterInstance = new InMemoryRateLimiter({
+        messagesPerMinute: 10,
+        messagesPerDay: 200,
+        burstAllowance: 3,
+      });
+    }
+    return rateLimiterInstance;
   }
-  return rateLimiterInstance;
+  return new InMemoryRateLimiter({
+    messagesPerMinute: options.messagesPerMinute ?? 10,
+    messagesPerDay: options.messagesPerDay ?? 200,
+    burstAllowance: options.burstAllowance ?? 3,
+  });
+}
+
+/**
+ * Reset the shared rate-limiter singleton. Tests only.
+ */
+export function _resetRateLimiterForTests() {
+  rateLimiterInstance = null;
 }
 
 class InMemoryRateLimiter {
