@@ -36,6 +36,8 @@ const FALLBACK_ERROR_TYPES = new Set([
   AIErrorTypes.PROVIDER_SERVER_ERROR,
   AIErrorTypes.TIMEOUT_ERROR,
   AIErrorTypes.UNKNOWN_ERROR, // unknown errors may be transient network issues
+  AIErrorTypes.INVALID_REQUEST_ERROR, // different providers may accept different request formats
+  AIErrorTypes.MODEL_UNAVAILABLE_ERROR, // model may be unavailable on one provider but available on another
 ]);
 
 /**
@@ -588,10 +590,16 @@ export class AIOrchestrator {
     } catch (error) {
       lastError = error;
 
+      // Log safe diagnostic details: provider name, model, HTTP status,
+      // error type, and sanitized message. NEVER log API keys or headers.
       this.logger.warn({
         provider: primaryProvider,
+        model: request.model,
         err: error.message,
         errorType: error.errorType || 'UNKNOWN',
+        providerStatusCode: error.providerStatusCode,
+        providerMessage: error.providerMessage,
+        isRetryable: error.isRetryable,
       }, 'Primary provider failed');
 
       // Check if we should try fallback (only on availability errors).
@@ -604,12 +612,10 @@ export class AIOrchestrator {
           const provider = await this.getProvider(fallbackProvider);
           const response = await provider.complete(request);
 
-          const fallbackModelUsed = config.AI_FALLBACK_MODEL || response.model || 'unknown';
-
           this.logger.info({
             primaryProvider,
             fallbackProvider,
-            fallbackModel: fallbackModelUsed,
+            fallbackModel: response.model,
           }, 'Fallback provider succeeded');
 
           return {
@@ -618,13 +624,17 @@ export class AIOrchestrator {
             fallbackAttempted: true,
             originalProvider: primaryProvider,
             fallbackProvider,
-            fallbackModel: fallbackModelUsed,
+            fallbackModel: response.model,
           };
         } catch (fallbackError) {
           this.logger.error({
             fallbackProvider,
+            model: request.model,
             err: fallbackError.message,
             errorType: fallbackError.errorType || 'UNKNOWN',
+            providerStatusCode: fallbackError.providerStatusCode,
+            providerMessage: fallbackError.providerMessage,
+            isRetryable: fallbackError.isRetryable,
           }, 'Fallback provider also failed');
 
           lastError = fallbackError;
