@@ -158,6 +158,9 @@ export function splitResponseIntoChunks(content) {
 /**
  * Send a single WhatsApp message chunk.
  * Persists the outbound record BEFORE the fetch so a crash leaves an audit trail.
+ * If the chunk was already sent on a previous attempt (processing_status='sent'),
+ * skips the HTTP call and returns the stored external_message_id. This prevents
+ * duplicate delivery on BullMQ retry.
  */
 async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
   const url = `${config.WHATSAPP_API_BASE_URL}/${config.WHATSAPP_API_VERSION}/${config.WHATSAPP_PHONE_NUMBER_ID}/messages`;
@@ -166,7 +169,8 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
     : `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 
   // Persist the outbound record as 'pending' before sending.
-  // This is best-effort; if no pool is wired up the send proceeds without audit.
+  // ON CONFLICT DO NOTHING so if this chunk was already persisted (by a
+  // previous attempt that crashed before sending), we don't duplicate the row.
   if (trace.pool && typeof trace.pool.query === 'function') {
     try {
       await trace.pool.query(
@@ -176,8 +180,26 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
          ON CONFLICT (outbound_chunk_id) DO NOTHING`,
         [chunkId, trace.waxId, trace.messageId, content]
       );
+
+      // Check if this chunk was ALREADY sent on a previous attempt.
+      // If so, skip the HTTP call entirely — the student already received it.
+      // This prevents duplicate delivery on BullMQ retry.
+      const existing = await trace.pool.query(
+        `SELECT processing_status, external_message_id
+         FROM outbound_messages
+         WHERE outbound_chunk_id = $1`,
+        [chunkId]
+      );
+
+      if (existing.rows.length > 0 && existing.rows[0].processing_status === 'sent') {
+        logger.info({ chunkId, externalMessageId: existing.rows[0].external_message_id }, 'Chunk already sent on previous attempt — skipping send');
+        return existing.rows[0].external_message_id;
+      }
     } catch (persistErr) {
-      logger.warn({ err: persistErr.message, chunkId }, 'Failed to persist outbound pending record');
+      logger.warn({ err: persistErr.message, chunkId }, 'Failed to persist/check outbound record');
+      // Proceed with send even if audit persistence fails — the student
+      // should still get their response. Duplicate risk is acceptable
+      // compared to response loss.
     }
   }
 
@@ -208,7 +230,8 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
          SET processing_status = 'sent',
              sent_at = NOW(),
              external_message_id = $1
-         WHERE outbound_chunk_id = $2`,
+         WHERE outbound_chunk_id = $2
+           AND processing_status != 'sent'`,
         [messageId, chunkId]
       );
     } catch (persistErr) {

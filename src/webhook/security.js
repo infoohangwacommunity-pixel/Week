@@ -131,19 +131,9 @@ export function validateWebhookPayload(payload) {
   return { valid: true };
 }
 
-/**
- * Check for rate limiting (basic implementation)
- * Track requests per IP in production
- * 
- * @param {string} ip - Client IP address
- * @param {object} rateLimiter - Rate limit configuration
- * @returns {boolean} - true if rate limited
- */
-export function checkRateLimit(ip, rateLimiter) {
-  // Placeholder for production rate limiting
-  // In production, use Redis or similar for distributed rate limiting
-  return false;
-}
+// NOTE: `checkRateLimit` was deleted in audit3. It was a dead stub that
+// always returned false. Per-student rate limiting is handled by
+// `webhook/rateLimiter.js` (invoked from `enqueue.js`).
 
 /**
  * Generate a random nonce for replay protection

@@ -43,17 +43,9 @@ router.get('/', (req, res) => {
  */
 router.post('/', async (req, res) => {
   const start = Date.now();
-  
-  // DEBUG: Log raw body state
+
   const log = logger.child({ stage: 'middleware' });
-  log.info({
-    'req.body.type': typeof req.body,
-    'req.body.constructor': req.body?.constructor?.name,
-    'req.body.isBuffer': Buffer.isBuffer(req.body),
-    'req.body.keys': req.body && typeof req.body === 'object' ? Object.keys(req.body).slice(0, 5) : null,
-    'req.body.length': req.body?.length,
-  }, 'POST handler - raw body state after middleware');
-  
+
   const rawBody = req.body instanceof Buffer ? req.body : req.body;
   
   let correlationId;
@@ -109,10 +101,11 @@ router.post('/', async (req, res) => {
         const messageId = message.id;
         const from = message.from;
         const messageType = message.type;
-        
-        log = log.child({ messageId, from, messageType });
-        
-        // Check for duplicate/replay
+
+        log = log.child({ messageId, from: from?.slice(0, 6) + '****', messageType });
+
+        // Check for duplicate/replay (in-memory only; DB-level idempotency
+        // is the durable guard via the external_id unique index).
         if (isDuplicateMessage(messageId)) {
           log.debug({ messageId }, 'Duplicate message - already processed');
           continue;
@@ -124,8 +117,39 @@ router.post('/', async (req, res) => {
           continue;
         }
 
-        // Enqueue for processing
-        await enqueueStudentMessage(from, messageId, message, config.DATABASE_URL, config.REDIS_URL, config.QUEUE_DEBOUNCE_WINDOW_MS, logger);
+        // Enqueue for processing. Pass correlationId + shared pool via opts
+        // so the trace context is preserved end-to-end and no new pool is
+        // created per webhook.
+        try {
+          const result = await enqueueStudentMessage(
+            from, messageId, message,
+            config.DATABASE_URL, config.REDIS_URL,
+            config.QUEUE_DEBOUNCE_WINDOW_MS,
+            log,
+            { correlationId, pool: req.app.get('dbPool') }
+          );
+
+          if (!result.success) {
+            // The message was NOT enqueued (rate-limited, or some other
+            // soft failure). Log it clearly so the operator has visibility.
+            // Return 200 to Meta so it doesn't retry — rate-limited messages
+            // should not be retried. But the message IS persisted in the DB
+            // (enqueue persists BEFORE checking queue success), so a recovery
+            // sweeper can re-enqueue later if appropriate.
+            log.warn(
+              { reason: result.reason, retryAfter: result.retryAfter, messageId },
+              'Message not enqueued for AI processing'
+            );
+          }
+        } catch (enqueueErr) {
+          // enqueue threw — the message may or may not be persisted.
+          // Re-throw to the outer catch which returns 500 so Meta retries.
+          log.error(
+            { err: enqueueErr.message, code: enqueueErr.code, messageId },
+            'enqueueStudentMessage threw'
+          );
+          throw enqueueErr;
+        }
       }
 
       const duration = Date.now() - start;

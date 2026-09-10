@@ -166,38 +166,6 @@ export async function getLastResponseTimestamp(pool, waxId, sessionId) {
   return result.rows.length > 0 ? new Date(result.rows[0].created_at) : null;
 }
 
-/**
- * Update message as processed
- * 
- * @param {import('pg').Pool} pool - Database pool
- * @param {string} messageId - Message ID
- * @param {string} sessionId - Session ID
- */
-export async function markMessageAsProcessed(pool, messageId, sessionId) {
-  await pool.query(
-    `UPDATE messages
-     SET wax_id = (SELECT id FROM students WHERE id = $2),
-         session_id = $2
-     WHERE id = $1
-       AND wax_id IS NULL`,
-    [messageId, sessionId],
-  );
-}
-
-/**
- * Get message by WhatsApp ID
- * 
- * @param {import('pg').Pool} pool - Database pool
- * @param {string} whatsappMessageId - WhatsApp message ID
- * @returns {Promise<object|null>}
- */
-export async function getMessageByWhatsAppId(pool, whatsappMessageId) {
-  const result = await pool.query(
-    `SELECT * FROM messages
-     WHERE id = $1
-       AND deleted_at IS NULL`,
-    [whatsappMessageId],
-  );
-
-  return result.rows.length > 0 ? result.rows[0] : null;
-}
+// NOTE: markMessageAsProcessed and getMessageByWhatsAppId were deleted in audit3.
+// Both were dead code (zero callers) with broken SQL.
+// See audit3 commit message for details.
