@@ -348,10 +348,17 @@ Message: ${this.sanitizeForPrompt(content)}`;
     const event_type = this.getEventType(classification) || 'benign';
     const level = classification.level ?? SafetyLevel.LEVEL_1_ACADEMIC;
 
+    // ai_request_id is a UUID column. The caller may pass trace.messageId
+    // (a WhatsApp wamid like 'wamid.HBgM...') which is NOT a UUID.
+    // If the value is not a valid UUID, pass NULL instead of causing a
+    // PostgreSQL type error.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeAiRequestId = (aiRequestId && UUID_RE.test(aiRequestId)) ? aiRequestId : null;
+
     const event = {
       wax_id: waxId,
       session_id: sessionId,
-      ai_request_id: aiRequestId,
+      ai_request_id: safeAiRequestId,
       event_type,
       level,
       classifier_model: config.SAFETY_CLASSIFIER_MODEL,
@@ -399,7 +406,12 @@ Message: ${this.sanitizeForPrompt(content)}`;
         ]
       );
     } catch (error) {
-      this.logger.error('Failed to log safety event', { error: error.message });
+      this.logger.error('Failed to log safety event', {
+        error: error.message,
+        waxId,
+        eventType: event.event_type,
+        level: event.level,
+      });
     }
   }
 
