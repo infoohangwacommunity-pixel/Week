@@ -204,7 +204,7 @@ export class EvidenceWriter {
   async _conceptExists(concept_tag) {
     const result = await this.pool.query(
       'SELECT id FROM concepts WHERE canonical_tag = $1 AND archived_at IS NULL',
-      [concept_tag]
+      [concept_tag],
     );
     return result.rows.length > 0;
   }
@@ -241,7 +241,7 @@ export class EvidenceWriter {
     // Update last_computed_at to trigger recomputation on next snapshot generation
     await this.pool.query(
       'UPDATE knowledge_states SET last_computed_at = NOW() WHERE wax_id = $1 AND concept_tag = $2',
-      [wax_id, concept_tag]
+      [wax_id, concept_tag],
     );
   }
 }

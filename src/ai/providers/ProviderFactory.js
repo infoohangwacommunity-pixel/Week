@@ -79,7 +79,7 @@ export async function getProvider(providerName) {
         errorMessage: error?.message || String(error),
         errorType: error?.errorType || 'UNKNOWN',
       },
-      'Failed to load provider'
+      'Failed to load provider',
     );
     throw error;
   }
@@ -129,20 +129,20 @@ export async function initializeProviders() {
           },
           `AI_FALLBACK_PROVIDER is set to "${fallbackName.slice(0, 6)}..." which is not a recognized provider name. ` +
           `Valid providers: ${validProviders.join(', ')}. ` +
-          `If this looks like an API key, it belongs in the provider-specific key variable (e.g. AI_CEREBRAS_API_KEY), not AI_FALLBACK_PROVIDER. ` +
-          `Fallback provider will not be available.`
+          'If this looks like an API key, it belongs in the provider-specific key variable (e.g. AI_CEREBRAS_API_KEY), not AI_FALLBACK_PROVIDER. ' +
+          'Fallback provider will not be available.',
         );
       } else {
         try {
           registry.fallback = await getProvider(fallbackName);
           logger.info(
             { component: 'ProviderFactory', fallback: fallbackName },
-            'Fallback provider pre-warmed'
+            'Fallback provider pre-warmed',
           );
         } catch (fallbackErr) {
           logger.warn(
             { component: 'ProviderFactory', fallback: fallbackName, err: fallbackErr.message },
-            'Fallback provider failed to initialize (non-fatal)'
+            'Fallback provider failed to initialize (non-fatal)',
           );
         }
       }
@@ -157,12 +157,12 @@ export async function initializeProviders() {
         errorMessage: error?.message || String(error),
         errorType: error?.errorType || 'UNKNOWN',
       },
-      'Failed to initialize AI provider'
+      'Failed to initialize AI provider',
     );
     logger.error(
       { component: 'ProviderFactory' },
       'Please check your AI_PRIMARY_PROVIDER configuration. ' +
-        `Supported providers: ${getAvailableProviders().join(', ')}`
+        `Supported providers: ${getAvailableProviders().join(', ')}`,
     );
     throw error;
   }

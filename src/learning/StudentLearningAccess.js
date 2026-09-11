@@ -100,7 +100,7 @@ export class StudentLearningAccess {
       'SELECT ks.*, c.display_name, c.subject FROM knowledge_states ks ' +
       'LEFT JOIN concepts c ON ks.concept_tag = c.canonical_tag ' +
       'WHERE ks.wax_id = $1 AND ks.concept_tag = $2',
-      [wax_id, concept_tag]
+      [wax_id, concept_tag],
     );
     return result.rows[0] || null;
   }
@@ -199,7 +199,7 @@ export class StudentLearningAccess {
        AND m.status IN ('suspected', 'confirmed')
        AND m.deleted_at IS NULL
        ORDER BY m.confidence DESC, m.first_detected_at DESC`,
-      [wax_id]
+      [wax_id],
     );
     return result.rows;
   }
@@ -212,7 +212,7 @@ export class StudentLearningAccess {
   async getMisconception(misconception_id) {
     const result = await this.pool.query(
       'SELECT * FROM misconceptions WHERE id = $1',
-      [misconception_id]
+      [misconception_id],
     );
     return result.rows[0] || null;
   }
@@ -389,7 +389,7 @@ export class StudentLearningAccess {
        WHERE wax_id = $1 AND is_stale = FALSE
        ORDER BY generated_at DESC
        LIMIT 1`,
-      [wax_id]
+      [wax_id],
     );
     return result.rows[0] || null;
   }
@@ -443,7 +443,7 @@ export class StudentLearningAccess {
   async markSnapshotStale(wax_id) {
     await this.pool.query(
       'UPDATE student_model_snapshots SET is_stale = TRUE WHERE wax_id = $1',
-      [wax_id]
+      [wax_id],
     );
   }
 
@@ -517,7 +517,7 @@ export class StudentLearningAccess {
     // Get all concept tags for this student
     const conceptsResult = await this.pool.query(
       'SELECT DISTINCT concept_tag FROM learning_observations WHERE wax_id = $1 AND deleted_at IS NULL',
-      [wax_id]
+      [wax_id],
     );
 
     const results = {

@@ -126,7 +126,7 @@ router.post('/', async (req, res) => {
             config.DATABASE_URL, config.REDIS_URL,
             config.QUEUE_DEBOUNCE_WINDOW_MS,
             log,
-            { correlationId, pool: req.app.get('dbPool') }
+            { correlationId, pool: req.app.get('dbPool') },
           );
 
           if (result.success) {
@@ -144,7 +144,7 @@ router.post('/', async (req, res) => {
             // sweeper can re-enqueue later if appropriate.
             log.warn(
               { reason: result.reason, retryAfter: result.retryAfter, messageId },
-              'Message not enqueued for AI processing'
+              'Message not enqueued for AI processing',
             );
           }
         } catch (enqueueErr) {
@@ -153,7 +153,7 @@ router.post('/', async (req, res) => {
           // Do NOT mark as seen — Meta's retry should attempt to enqueue again.
           log.error(
             { err: enqueueErr.message, code: enqueueErr.code, messageId },
-            'enqueueStudentMessage threw'
+            'enqueueStudentMessage threw',
           );
           throw enqueueErr;
         }
@@ -170,7 +170,7 @@ router.post('/', async (req, res) => {
     // Primitive-only error logging (no complex objects)
     log.error(
       'ERROR: ' + (err.name || 'Error') + ' - ' + (err.message || 'Unknown error'),
-      'Webhook POST handler error - simple'
+      'Webhook POST handler error - simple',
     );
     
     // Also log execution state

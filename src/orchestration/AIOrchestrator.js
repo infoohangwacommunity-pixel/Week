@@ -145,6 +145,9 @@ export class AIOrchestrator {
     const maxTurns = 5;
     let turn = 0;
     let accumulatedToolCalls = 0;
+    // Capture the ORIGINAL student message: `currentMessage` is mutated to
+    // null after tool-call turns, but validation retries need the real one.
+    const originalMessage = currentMessage;
     // Working message list: seeded from the context assembler on turn 1, then
     // mutated in-place to append assistant tool-call turns and tool-result turns.
     // We bypass the DB-backed `assemble()` on subsequent turns so tool results
@@ -267,14 +270,18 @@ export class AIOrchestrator {
           // Check rate limit.
           if (accumulatedToolCalls + providerResponse.toolCalls.length > config.TOOL_MAX_CALLS_PER_SESSION) {
             turnLog.warn('Tool call limit would be exceeded');
-            return createAIResponse({
-              content: 'I\'ve reached my limit for this conversation. Please start a new topic.',
-              model: providerResponse.model,
-              provider: providerResponse.provider,
-              finishReason: FinishReason.TOOL_LIMIT_REACHED,
-              usage: providerResponse.usage,
-              latencyMs: Date.now() - startTime,
-            });
+            return this.normalizeResponseFormatting(
+              createAIResponse({
+                // Infrastructure fallback wording (error handling, not
+                // tutoring): honest about the limit, no fake capabilities.
+                content: 'I can\'t run any more tools in this conversation, but I\'m still here — ask me anything and I\'ll answer directly.',
+                model: providerResponse.model,
+                provider: providerResponse.provider,
+                finishReason: FinishReason.TOOL_LIMIT_REACHED,
+                usage: providerResponse.usage,
+                latencyMs: Date.now() - startTime,
+              }),
+            );
           }
 
           // Execute tool calls.
@@ -308,8 +315,61 @@ export class AIOrchestrator {
           continue;
         }
 
-        // No tool calls, return response.
-        return providerResponse;
+        // No tool calls — this is the final response for this request.
+        // The production path previously returned the raw provider response
+        // WITHOUT validation, formatting normalization, or metadata
+        // persistence (all of which only the legacy path did). That meant
+        // empty, repeated, or markdown-laden responses could reach students,
+        // and ai_requests rows were never written for tool-enabled traffic.
+        const validated = await this.validateFinalResponse({
+          providerResponse,
+          context: { ...context, currentMessage: originalMessage },
+          waxId,
+          sessionId,
+          requestLog: turnLog,
+        });
+
+        if (validated.returned) {
+          // Validation failed terminally — a safe fallback response is returned.
+          return validated.returned;
+        }
+
+        const finalResponse = validated.response;
+
+        // Persist request metadata (audit trail for observability).
+        try {
+          await this.persistMetadata({
+            waxId,
+            sessionId,
+            correlationId: context.correlationId,
+            request: {
+              promptVersion: lastSystemPromptResult.promptVersion || 'phase-g-tools',
+            },
+            response: finalResponse,
+            tokenEstimate: null,
+            startTime,
+            validation: { valid: true },
+            contextResult: {
+              historyTurnCount: Math.max(0, workingMessages.length - 1),
+              truncationOccurred: false,
+            },
+          });
+        } catch (persistErr) {
+          turnLog.warn({ err: persistErr.message }, 'Failed to persist metadata (non-fatal)');
+        }
+
+        try {
+          await this.responseValidator.createDeliveryRecord({
+            waxId,
+            sessionId,
+            correlationId: context.correlationId,
+            state: 'queued',
+          });
+        } catch (deliveryErr) {
+          turnLog.warn({ err: deliveryErr.message }, 'Failed to create delivery record (non-fatal)');
+        }
+
+        return finalResponse;
       } catch (error) {
         turnLog.error({ err: error.message, errorType: error.errorType }, 'Tool calling turn failed');
         // Persist the failure so we have an audit trail.
@@ -337,6 +397,95 @@ export class AIOrchestrator {
       provider: config.AI_PRIMARY_PROVIDER,
       latencyMs: Date.now() - startTime,
     });
+  }
+
+  /**
+   * Normalize a response's formatting for WhatsApp delivery.
+   *
+   * Delegates to ResponseValidator.normalizeFormatting (markdown → WhatsApp
+   * conversion). This is presentation infrastructure — it never changes what
+   * the AI said, only how it renders in WhatsApp.
+   *
+   * Exported as a module-level function so both the orchestrator and tests
+   * can use it without constructing a full orchestrator.
+   */
+  normalizeResponseFormatting(content) {
+    if (!this.responseValidator || typeof this.responseValidator.normalizeFormatting !== 'function') {
+      return content;
+    }
+    try {
+      return this.responseValidator.normalizeFormatting(content);
+    } catch {
+      return content;
+    }
+  }
+
+  /**
+   * Validate the final response of the tool-calling path.
+   *
+   * Mirrors the legacy path's validation semantics:
+   * - invalid + retryable + retries remaining → regenerate once (recursion
+   *   with retryCount so the validator's repetition check can see the
+   *   rejected response)
+   * - invalid + no retries left → return the safe student fallback message
+   * - valid → return the response with WhatsApp formatting applied
+   *
+   * @returns {Promise<{response?: Object, returned?: Object}>}
+   *   response — the validated, normalized response (continue normal flow)
+   *   returned — a terminal fallback response (return it immediately)
+   */
+  async validateFinalResponse({ providerResponse, context, waxId, sessionId, requestLog }) {
+    // Normalize formatting FIRST so leakage/error checks see what the
+    // student will actually see.
+    const normalizedContent = this.normalizeResponseFormatting(providerResponse.content);
+    providerResponse.content = normalizedContent;
+
+    const validation = await this.responseValidator.validate({
+      response: providerResponse.content,
+      finishReason: providerResponse.finishReason,
+      trace: {
+        correlationId: context.correlationId,
+        previousResponse: context.previousResponse || null,
+      },
+    });
+
+    if (validation.valid) {
+      return { response: providerResponse };
+    }
+
+    requestLog.warn({ state: validation.state, message: validation.message }, 'Final response validation failed (tool path)');
+
+    const retryCount = context.retryCount || 0;
+    if (validation.canRetry && retryCount < 2) {
+      requestLog.info({ retryCount: retryCount + 1 }, 'Retrying with validation failure (tool path)');
+      // Recurse: a fresh full run (safety re-check is idempotent; context is
+      // reassembled from the DB, which is unchanged). previousResponse flows
+      // into the validator's repetition check on the next attempt.
+      const retried = await this.completeWithTools({
+        waxId,
+        sessionId,
+        currentMessage: context.currentMessage || null,
+        context: {
+          ...context,
+          retryCount: retryCount + 1,
+          previousResponse: providerResponse.content,
+        },
+        startTime: Date.now(),
+        requestLog,
+      });
+      return { response: retried };
+    }
+
+    // Terminal failure — return the safe fallback.
+    return {
+      returned: {
+        ...providerResponse,
+        content: config.AI_FAILURE_STUDENT_MESSAGE ||
+          'Sorry, I\'m having a bit of trouble right now. Could you send your message again in a moment?',
+        validationFailed: true,
+        validationState: validation.state,
+      },
+    };
   }
 
   /**

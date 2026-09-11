@@ -109,6 +109,14 @@ const configSchema = z.object({
   // --- SHUTDOWN ---
   WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(5000).default(30000),
 
+  // --- WORKER HEALTH SERVER ---
+  WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+
+  // --- RATE LIMITING (per-student, enforced in webhook/enqueue) ---
+  RATE_LIMIT_MESSAGES_PER_MINUTE: z.coerce.number().int().min(1).default(10),
+  RATE_LIMIT_MESSAGES_PER_DAY: z.coerce.number().int().min(1).default(200),
+  RATE_LIMIT_BURST_ALLOWANCE: z.coerce.number().int().min(0).default(3),
+
   // --- ERROR MESSAGES ---
   AI_FAILURE_STUDENT_MESSAGE: z.string().min(1).default('Sorry, I\'m having a bit of trouble right now. Could you send your message again in a moment?'),
 
@@ -159,7 +167,7 @@ const configSchema = z.object({
   
   // Crisis response text (deterministic, not AI-generated)
   SAFETY_CRISIS_RESPONSE_TEXT: z.string().min(1).default(
-    'Please know you are not alone. If you are going through a difficult time, please reach out for help. Nigeria crisis support: Nigerian Suicide Prevention Initiative +234 909 000 4673 or Mentally Aware Nigeria Initiative mentallyaware.org. Please talk to a trusted adult, teacher, or counselor. You matter.'
+    'Please know you are not alone. If you are going through a difficult time, please reach out for help. Nigeria crisis support: Nigerian Suicide Prevention Initiative +234 909 000 4673 or Mentally Aware Nigeria Initiative mentallyaware.org. Please talk to a trusted adult, teacher, or counselor. You matter.',
   ),
   
   // Operator alerting

@@ -103,7 +103,7 @@ export async function executeGenerateQuestion({
         JSON.stringify(correctAnswerJson),
         gradingRubricJson ? JSON.stringify(gradingRubricJson) : null,
         targeted_misconception,
-      ]
+      ],
     );
 
     return {

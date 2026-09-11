@@ -75,7 +75,7 @@ export async function sendResponse(phoneNumber, content, trace, opts = {}) {
     } catch (err) {
       log.error(
         { err: err.message, status: err.status, chunkIndex: index },
-        'Failed to send chunk after retry'
+        'Failed to send chunk after retry',
       );
       // Re-throw so the worker can mark the job failed — but don't lose the
       // IDs of chunks that already succeeded.
@@ -102,7 +102,7 @@ export function splitResponseIntoChunks(content) {
   if (typeof content !== 'string' || content.length === 0) return [];
   const maxChars = Math.min(
     config.RESPONSE_MAX_CHUNK_CHARS ?? 1000,
-    WHATSAPP_TEXT_HARD_LIMIT
+    WHATSAPP_TEXT_HARD_LIMIT,
   );
 
   const chunks = [];
@@ -184,8 +184,8 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
       let triggeringMessageId = null;
       if (trace.messageId) {
         const msgResult = await trace.pool.query(
-          `SELECT id FROM messages WHERE external_id = $1 AND wax_id = $2 AND deleted_at IS NULL LIMIT 1`,
-          [trace.messageId, trace.waxId]
+          'SELECT id FROM messages WHERE external_id = $1 AND wax_id = $2 AND deleted_at IS NULL LIMIT 1',
+          [trace.messageId, trace.waxId],
         );
         if (msgResult.rows.length > 0) {
           triggeringMessageId = msgResult.rows[0].id;
@@ -197,7 +197,7 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
            (outbound_chunk_id, wax_id, triggering_message_id, content, processing_status, created_at)
          VALUES ($1, $2, $3, $4, 'pending', NOW())
          ON CONFLICT (outbound_chunk_id) DO NOTHING`,
-        [chunkId, trace.waxId, triggeringMessageId, content]
+        [chunkId, trace.waxId, triggeringMessageId, content],
       );
 
       // Check if this chunk was ALREADY sent on a previous attempt.
@@ -207,7 +207,7 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
         `SELECT processing_status, external_message_id
          FROM outbound_messages
          WHERE outbound_chunk_id = $1`,
-        [chunkId]
+        [chunkId],
       );
 
       if (existing.rows.length > 0 && existing.rows[0].processing_status === 'sent') {
@@ -251,7 +251,7 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
              external_message_id = $1
          WHERE outbound_chunk_id = $2
            AND processing_status != 'sent'`,
-        [messageId, chunkId]
+        [messageId, chunkId],
       );
     } catch (persistErr) {
       logger.warn({ err: persistErr.message, chunkId }, 'Failed to update outbound sent record');

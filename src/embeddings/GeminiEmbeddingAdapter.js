@@ -51,7 +51,7 @@ export class GeminiEmbeddingAdapter {
             outputDimensionality: this.dimensions,
           }),
           signal: AbortSignal.timeout(30000),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -59,7 +59,7 @@ export class GeminiEmbeddingAdapter {
         throw new Error(
           `Gemini API error: ${response.status} ${response.statusText} - ${
             errorData.error?.message || 'Unknown error'
-          }`
+          }`,
         );
       }
 
@@ -125,7 +125,7 @@ export class GeminiEmbeddingAdapter {
             })),
           }),
           signal: AbortSignal.timeout(60000),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -133,7 +133,7 @@ export class GeminiEmbeddingAdapter {
         throw new Error(
           `Gemini API error: ${response.status} ${response.statusText} - ${
             errorData.error?.message || 'Unknown error'
-          }`
+          }`,
         );
       }
 

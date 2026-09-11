@@ -61,7 +61,7 @@ export async function executeKnowledgeQuery({
       // (no per-concept filter). Filter in JS to honor the concept_tag.
       const allMisconceptions = await learningAccess.getActiveMisconceptions(waxId);
       const misconceptions = (allMisconceptions || []).filter(
-        (m) => !m.concept_tag || m.concept_tag === concept_tag
+        (m) => !m.concept_tag || m.concept_tag === concept_tag,
       );
 
       result.misconceptions = misconceptions.map((m) => ({
@@ -78,7 +78,7 @@ export async function executeKnowledgeQuery({
       });
       // Filter to concept_tag if signal record has one.
       const filtered = (signals || []).filter(
-        (s) => !s.concept_tag || s.concept_tag === concept_tag
+        (s) => !s.concept_tag || s.concept_tag === concept_tag,
       );
 
       result.learning_signals = filtered.map((s) => ({

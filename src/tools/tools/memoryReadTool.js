@@ -40,7 +40,7 @@ export async function executeMemoryRead({ db, waxId, memory_id }) {
        FROM student_facts
        WHERE id = $1 AND wax_id = $2 AND status = 'active'
        LIMIT 1`,
-      [memory_id, waxId]
+      [memory_id, waxId],
     );
 
     if (factResult.rows.length > 0) {
@@ -67,7 +67,7 @@ export async function executeMemoryRead({ db, waxId, memory_id }) {
        FROM student_episodes
        WHERE id = $1 AND wax_id = $2
        LIMIT 1`,
-      [memory_id, waxId]
+      [memory_id, waxId],
     );
 
     if (episodeResult.rows.length > 0) {

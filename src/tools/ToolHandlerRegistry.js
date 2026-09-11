@@ -23,6 +23,11 @@ import { executeWebSearch } from './tools/webSearchTool.js';
 import { executeDocumentFetch } from './tools/documentFetchTool.js';
 import { executeGenerateQuestion } from './tools/generateQuestionTool.js';
 import { executeRecordEvidence } from './tools/recordEvidenceTool.js';
+import {
+  executeRecordConsent,
+  executeRequestDataExport,
+  executeRequestDataDeletion,
+} from './tools/privacyTool.js';
 
 /**
  * Tool handler dispatch table.
@@ -40,6 +45,9 @@ export const TOOL_HANDLERS = Object.freeze({
   document_fetch:     { handler: executeDocumentFetch,     requiresDb: false },
   generate_question:  { handler: executeGenerateQuestion,  requiresDb: true  },
   record_evidence:    { handler: executeRecordEvidence,    requiresDb: true  },
+  record_consent:     { handler: executeRecordConsent,     requiresDb: true  },
+  request_data_export:   { handler: executeRequestDataExport,   requiresDb: true },
+  request_data_deletion: { handler: executeRequestDataDeletion, requiresDb: true },
 });
 
 /**

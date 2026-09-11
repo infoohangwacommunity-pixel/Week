@@ -184,7 +184,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
     pool.query(
       `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, processing_status, created_at)
        VALUES ($1, $2, $3, $4, 'inbound', $5, 'text', 'received', NOW())`,
-      ['msg-uuid-1', WAX_ID, SESSION_ID, 'wamid-test-1', 'Hello, help me with math']
+      ['msg-uuid-1', WAX_ID, SESSION_ID, 'wamid-test-1', 'Hello, help me with math'],
     );
   });
 
@@ -200,8 +200,8 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
     // The webhook already persisted the message with status='received'.
     // The worker would mark it as 'processing' before calling the orchestrator.
     await pool.query(
-      `UPDATE messages SET processing_status = 'processing' WHERE external_id = $1 AND wax_id = $2`,
-      ['wamid-test-1', WAX_ID]
+      'UPDATE messages SET processing_status = \'processing\' WHERE external_id = $1 AND wax_id = $2',
+      ['wamid-test-1', WAX_ID],
     );
 
     // The orchestrator should throw because the provider fails.
@@ -211,7 +211,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
         sessionId: SESSION_ID,
         currentMessage: 'Hello, help me with math',
         context: { correlationId: CORRELATION_ID },
-      })
+      }),
     ).rejects.toThrow();
 
     // The message must still be in the DB. Verify the INSERT was never rolled back.
@@ -224,7 +224,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
 
     // Verify that persistFailure was called (ai_requests INSERT with status='failed').
     const failureInserts = pool._calls.filter(
-      (c) => c.text.includes('INSERT INTO ai_requests') && c.text.includes("'failed'")
+      (c) => c.text.includes('INSERT INTO ai_requests') && c.text.includes('\'failed\''),
     );
     expect(failureInserts.length).toBeGreaterThan(0);
     expect(failureInserts[0].params).toContain(AIErrorTypes.PROVIDER_SERVER_ERROR);
@@ -245,7 +245,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
         sessionId: SESSION_ID,
         currentMessage: 'Hello',
         context: { correlationId: CORRELATION_ID },
-      })
+      }),
     ).rejects.toThrow();
 
     // The inbound message is still in the DB.
@@ -302,7 +302,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
         sessionId: SESSION_ID,
         currentMessage: 'Hello',
         context: { correlationId: CORRELATION_ID },
-      })
+      }),
     ).rejects.toThrow('Context assembly failed');
 
     // The inbound message is still in the DB.
@@ -331,7 +331,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
         sessionId: SESSION_ID,
         currentMessage: 'Hello',
         context: { correlationId: CORRELATION_ID },
-      })
+      }),
     ).rejects.toThrow();
 
     // The inbound message is still in the DB.
@@ -341,7 +341,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
 
     // The failure should be recorded with TIMEOUT_ERROR type.
     const failureInserts = pool._calls.filter(
-      (c) => c.text.includes('INSERT INTO ai_requests') && c.text.includes("'failed'")
+      (c) => c.text.includes('INSERT INTO ai_requests') && c.text.includes('\'failed\''),
     );
     expect(failureInserts.length).toBeGreaterThan(0);
     expect(failureInserts[0].params).toContain(AIErrorTypes.TIMEOUT_ERROR);
@@ -353,7 +353,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
       `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, processing_status, created_at)
        VALUES ($1, $2, $3, $4, 'inbound', $5, 'text', 'received', NOW())
        ON CONFLICT (external_id) WHERE external_id IS NOT NULL AND deleted_at IS NULL DO NOTHING`,
-      ['msg-uuid-2', WAX_ID, SESSION_ID, 'wamid-dup-1', 'Hello']
+      ['msg-uuid-2', WAX_ID, SESSION_ID, 'wamid-dup-1', 'Hello'],
     );
 
     // Simulate the duplicate webhook: same external_id, different internal UUID.
@@ -361,7 +361,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
       `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, processing_status, created_at)
        VALUES ($1, $2, $3, $4, 'inbound', $5, 'text', 'received', NOW())
        ON CONFLICT (external_id) WHERE external_id IS NOT NULL AND deleted_at IS NULL DO NOTHING`,
-      ['msg-uuid-3', WAX_ID, SESSION_ID, 'wamid-dup-1', 'Hello']
+      ['msg-uuid-3', WAX_ID, SESSION_ID, 'wamid-dup-1', 'Hello'],
     );
 
     // Only one message should exist for the external_id.
@@ -383,8 +383,8 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
 
     // Mark as processing (worker started).
     await pool.query(
-      `UPDATE messages SET processing_status = 'processing' WHERE external_id = $1 AND wax_id = $2`,
-      ['wamid-test-1', WAX_ID]
+      'UPDATE messages SET processing_status = \'processing\' WHERE external_id = $1 AND wax_id = $2',
+      ['wamid-test-1', WAX_ID],
     );
 
     const response = await orchestrator.complete({
@@ -399,7 +399,7 @@ describe('Message Durability: Downstream Failures Preserve Inbound Messages', ()
 
     // The ai_requests table should have a 'success' row (persistMetadata ran).
     const successInserts = pool._calls.filter(
-      (c) => c.text.includes('INSERT INTO ai_requests') && c.text.includes("'success'")
+      (c) => c.text.includes('INSERT INTO ai_requests') && c.text.includes('\'success\''),
     );
     expect(successInserts.length).toBe(1);
 
@@ -423,7 +423,7 @@ describe('Outbound Idempotency: Duplicate Delivery Prevention', () => {
     // Verify the outbound.js source code contains the idempotency check.
     const fs = await import('fs');
     const outboundSource = fs.readFileSync(
-      'src/messaging/outbound.js', 'utf-8'
+      'src/messaging/outbound.js', 'utf-8',
     );
 
     // The INSERT must use ON CONFLICT DO NOTHING.
@@ -431,15 +431,15 @@ describe('Outbound Idempotency: Duplicate Delivery Prevention', () => {
 
     // There must be a SELECT that checks processing_status.
     expect(outboundSource).toContain('SELECT processing_status, external_message_id');
-    expect(outboundSource).toContain("FROM outbound_messages");
-    expect(outboundSource).toContain("WHERE outbound_chunk_id = $1");
+    expect(outboundSource).toContain('FROM outbound_messages');
+    expect(outboundSource).toContain('WHERE outbound_chunk_id = $1');
 
     // There must be a skip-send check.
-    expect(outboundSource).toContain("processing_status === 'sent'");
+    expect(outboundSource).toContain('processing_status === \'sent\'');
     expect(outboundSource).toContain('Chunk already sent on previous attempt');
 
     // The UPDATE must guard against re-updating already-sent rows.
-    expect(outboundSource).toContain("AND processing_status != 'sent'");
+    expect(outboundSource).toContain('AND processing_status != \'sent\'');
   });
 });
 
@@ -468,8 +468,8 @@ describe('Worker: Outbound Failure Does Not Mark as Completed', () => {
     const setupSource = fs.readFileSync('src/workers/setup.js', 'utf-8');
 
     // The worker must mark as 'failed' (not 'completed') on outbound failure.
-    expect(setupSource).toContain("processing_status = 'failed'");
-    expect(setupSource).toContain("AND processing_status NOT IN ('completed', 'failed')");
+    expect(setupSource).toContain('processing_status = \'failed\'');
+    expect(setupSource).toContain('AND processing_status NOT IN (\'completed\', \'failed\')');
 
     // The worker must re-throw so BullMQ retries.
     expect(setupSource).toContain('throw err;');
@@ -479,7 +479,7 @@ describe('Worker: Outbound Failure Does Not Mark as Completed', () => {
     // processing_status = 'failed'. Verify the SET clause in the
     // outbound-failure catch block uses 'failed', not 'completed'.
     const outboundCatchMatch = setupSource.match(
-      /Failed to send response to student[\s\S]*?throw err/
+      /Failed to send response to student[\s\S]*?throw err/,
     );
     expect(outboundCatchMatch).not.toBeNull();
     const outboundCatchBlock = outboundCatchMatch[0];

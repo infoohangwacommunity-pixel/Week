@@ -72,7 +72,7 @@ export function verifyWebhookSignature(rawBody, signatureHeader, appSecret) {
   if (computedBuffer.length !== expectedBuffer.length) {
     log.warn(
       { computedLen: computedBuffer.length, expectedLen: expectedBuffer.length },
-      'Signature length mismatch (expected 32 bytes for SHA-256)'
+      'Signature length mismatch (expected 32 bytes for SHA-256)',
     );
     return false;
   }

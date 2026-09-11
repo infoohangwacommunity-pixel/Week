@@ -190,7 +190,7 @@ async function fetchSerperResults(query, apiKey) {
 async function fetchDuckDuckGoResults(query) {
   try {
     const response = await fetch(
-      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&pretty=1`
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&pretty=1`,
     );
     
     if (!response.ok) {
@@ -355,7 +355,7 @@ async function checkCache({ db, query, waxId }) {
        WHERE query_hash = $1
        AND provider = $2
        AND expires_at > $3`,
-      [queryHash, config.WEB_SEARCH_PROVIDER, new Date()]
+      [queryHash, config.WEB_SEARCH_PROVIDER, new Date()],
     );
 
     if (result.rows.length > 0) {
@@ -390,7 +390,7 @@ async function cacheResults({ db, query, results }) {
         config.WEB_SEARCH_PROVIDER,
         results.length,
         expiresAt,
-      ]
+      ],
     );
   } catch (error) {
     console.warn('Cache write failed:', error.message);

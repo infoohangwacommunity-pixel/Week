@@ -214,7 +214,7 @@ export class CrisisProtocol {
              (outbound_chunk_id, wax_id, triggering_message_id, content, processing_status, delivery_attempts, error_message, created_at)
            VALUES ($1, $2, NULL, $3, 'failed', 0, 'No phone number in crisis context', NOW())
            ON CONFLICT (outbound_chunk_id) DO NOTHING`,
-          [`crisis:${waxId}:${Date.now()}`, waxId]
+          [`crisis:${waxId}:${Date.now()}`, waxId],
         );
       } catch (persistErr) {
         this.logger.error('Failed to persist crisis failed-delivery audit', { error: persistErr.message });
@@ -317,7 +317,7 @@ export class CrisisProtocol {
           deliveredVia,
           operatorNotified ? new Date() : null,
           operatorNotified ? 'email' : null,
-        ]
+        ],
       );
     } catch (error) {
       this.logger.error('Failed to log crisis response', {
@@ -368,7 +368,7 @@ export class CrisisProtocol {
              (outbound_chunk_id, wax_id, triggering_message_id, content, processing_status, delivery_attempts, error_message, created_at)
            VALUES ($1, $2, NULL, $3, 'failed', 1, $4, NOW())
            ON CONFLICT (outbound_chunk_id) DO NOTHING`,
-          [`crisis:${waxId}:${Date.now()}`, waxId, message, `WhatsApp API ${response.status}: ${errText.slice(0, 200)}`]
+          [`crisis:${waxId}:${Date.now()}`, waxId, message, `WhatsApp API ${response.status}: ${errText.slice(0, 200)}`],
         );
       } catch (persistErr) {
         this.logger.error('Failed to persist crisis failed-delivery audit', { error: persistErr.message });
@@ -386,7 +386,7 @@ export class CrisisProtocol {
            (outbound_chunk_id, wax_id, triggering_message_id, content, processing_status, sent_at, external_message_id, created_at)
          VALUES ($1, $2, NULL, $3, 'sent', NOW(), $4, NOW())
          ON CONFLICT (outbound_chunk_id) DO NOTHING`,
-        [`crisis:${waxId}:${messageId || Date.now()}`, waxId, message, messageId]
+        [`crisis:${waxId}:${messageId || Date.now()}`, waxId, message, messageId],
       );
     } catch (persistErr) {
       this.logger.error('Failed to persist crisis sent-delivery audit', { error: persistErr.message });
@@ -408,7 +408,7 @@ export class CrisisProtocol {
          WHERE wax_id = $1
          AND event_type = 'crisis'
          AND created_at > $2`,
-        [waxId, cutoff]
+        [waxId, cutoff],
       );
 
       return parseInt(result.rows[0].count, 10);

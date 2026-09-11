@@ -174,7 +174,7 @@ export class StudentModelContextInterface {
    */
   _prioritizeConcepts(knowledgeStates, activeMisconceptions) {
     const misconceptionConcepts = new Set(
-      activeMisconceptions.map(m => m.concept_tag)
+      activeMisconceptions.map(m => m.concept_tag),
     );
 
     // Sort by priority:

@@ -28,7 +28,7 @@ class MockPool {
       // Check if already exists
       const existing = this.aiRequests.find(req => 
         req.correlation_id === params[2] ||
-        (params[3] && req.triggering_message_id === params[3])
+        (params[3] && req.triggering_message_id === params[3]),
       );
       
       if (existing) {
@@ -48,7 +48,7 @@ class MockPool {
     
     if (text.includes('outbound_messages') && text.includes('ON CONFLICT')) {
       const existing = this.outboundMessages.find(msg => 
-        msg.outbound_chunk_id === params[0]
+        msg.outbound_chunk_id === params[0],
       );
       
       if (existing) {
@@ -87,7 +87,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       expect(result.success).toBe(true);
@@ -107,7 +107,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       // Duplicate call
@@ -120,7 +120,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       // Should still succeed (idempotent)
@@ -142,7 +142,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       // Different correlation, same triggering_message_id
@@ -155,7 +155,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       // Should succeed (idempotent due to triggering_message_id)
@@ -177,7 +177,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       // Different message
@@ -190,7 +190,7 @@ describe('Idempotency', () => {
         'anthropic',
         'claude',
         'v1',
-        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() }
+        { usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 }, startTime: Date.now() },
       );
       
       // Should have two records
@@ -207,7 +207,7 @@ describe('Idempotency', () => {
         'chunk-123',
         'wax-123',
         'msg-123',
-        'Hello, how can I help?'
+        'Hello, how can I help?',
       );
       
       expect(result.success).toBe(true);
@@ -223,7 +223,7 @@ describe('Idempotency', () => {
         'chunk-123',
         'wax-123',
         'msg-123',
-        'Hello'
+        'Hello',
       );
       
       // Duplicate send
@@ -232,7 +232,7 @@ describe('Idempotency', () => {
         'chunk-123',
         'wax-123',
         'msg-123',
-        'Hello'
+        'Hello',
       );
       
       // Should succeed (idempotent)

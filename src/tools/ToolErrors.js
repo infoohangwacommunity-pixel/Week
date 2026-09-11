@@ -71,7 +71,7 @@ export class ToolValidationError extends ToolError {
     super(
       ToolErrorCode.INVALID_ARGUMENTS,
       `Validation failed: ${Array.isArray(errors) ? errors.join(', ') : errors}`,
-      { errors: Array.isArray(errors) ? errors : [errors] }
+      { errors: Array.isArray(errors) ? errors : [errors] },
     );
     this.name = 'ToolValidationError';
   }
@@ -95,7 +95,7 @@ export class ToolTimeoutError extends ToolError {
     super(
       ToolErrorCode.TIMEOUT,
       `Tool ${toolName} timed out after ${timeoutMs}ms`,
-      { toolName, timeoutMs }
+      { toolName, timeoutMs },
     );
     this.name = 'ToolTimeoutError';
   }
@@ -108,7 +108,7 @@ export class ToolLoopError extends ToolError {
   constructor(toolName) {
     super(
       ToolErrorCode.LOOP_DETECTED,
-      `Tool loop detected: ${toolName} called with identical arguments in same turn`
+      `Tool loop detected: ${toolName} called with identical arguments in same turn`,
     );
     this.name = 'ToolLoopError';
   }
@@ -121,7 +121,7 @@ export class StudentIsolationError extends ToolError {
   constructor(message) {
     super(
       ToolErrorCode.STUDENT_ISOLATION_VIOLATION,
-      `Student isolation violation: ${message}`
+      `Student isolation violation: ${message}`,
     );
     this.name = 'StudentIsolationError';
   }
@@ -135,7 +135,7 @@ export class HandlerExecutionError extends ToolError {
     super(
       ToolErrorCode.HANDLER_FAILED,
       `Handler for ${toolName} failed: ${originalError.message}`,
-      { originalError: originalError.message }
+      { originalError: originalError.message },
     );
     this.name = 'HandlerExecutionError';
     this.originalError = originalError;

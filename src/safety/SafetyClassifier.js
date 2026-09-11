@@ -396,7 +396,7 @@ Message: ${this.sanitizeForPrompt(content)}`;
           event.operator_notified,
           event.requires_review,
           event.created_at,
-        ]
+        ],
       );
     } catch (error) {
       this.logger.error({ error: error.message, waxId, eventType: event.event_type, level: event.level }, 'Failed to log safety event');
@@ -445,7 +445,7 @@ Message: ${this.sanitizeForPrompt(content)}`;
     return content
       .replace(/\n/g, ' ')
       .substring(0, 2000)
-      .replace(/"/g, "'");
+      .replace(/"/g, '\'');
   }
 
   /**

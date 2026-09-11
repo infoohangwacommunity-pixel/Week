@@ -101,7 +101,7 @@ export async function executeRecordEvidence({
         'ai_inline',
         0.8, // extraction_confidence
         notes,
-      ]
+      ],
     );
 
     // If the INSERT was a no-op (conflict), result.rows will be empty.
@@ -138,15 +138,15 @@ export async function executeRecordEvidence({
 
 async function ensureConceptExists(db, conceptTag) {
   const result = await db.query(
-    `SELECT id FROM concepts WHERE canonical_tag = $1`,
-    [conceptTag]
+    'SELECT id FROM concepts WHERE canonical_tag = $1',
+    [conceptTag],
   );
   if (result.rows.length === 0) {
     await db.query(
       `INSERT INTO concepts (canonical_tag, display_name, created_by)
        VALUES ($1, $2, 'system')
        ON CONFLICT (canonical_tag) DO NOTHING`,
-      [conceptTag, conceptTag.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())]
+      [conceptTag, conceptTag.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())],
     );
   }
 }
@@ -157,7 +157,7 @@ async function getCurrentMessageId(db, sessionId) {
      WHERE session_id = $1 AND direction = 'inbound'
      ORDER BY created_at DESC
      LIMIT 1`,
-    [sessionId]
+    [sessionId],
   );
   return result.rows[0]?.id || null;
 }

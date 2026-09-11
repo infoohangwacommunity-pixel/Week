@@ -26,7 +26,7 @@ export class MemoryWriter {
       if (!validCategories.includes(factCategory)) {
         throw new MemoryWriterError(
           `Invalid fact category: ${factCategory}. Valid: ${validCategories.join(', ')}`,
-          this.waxId, factKey
+          this.waxId, factKey,
         );
       }
 
@@ -35,7 +35,7 @@ export class MemoryWriter {
       if (!validProvenances.includes(provenance)) {
         throw new MemoryWriterError(
           `Invalid provenance: ${provenance}. Valid: ${validProvenances.join(', ')}`,
-          this.waxId, factKey
+          this.waxId, factKey,
         );
       }
 
@@ -82,7 +82,7 @@ export class MemoryWriter {
         provenance: fact.provenance,
         sessionId, aiRequestId,
       })),
-      sessionId, aiRequestId
+      sessionId, aiRequestId,
     );
   }
 

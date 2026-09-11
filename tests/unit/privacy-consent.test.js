@@ -144,7 +144,7 @@ describe('Privacy and Consent', () => {
           status: 'granted',
           context: '',
           aiReasoning: 'Test',
-        })
+        }),
       ).rejects.toThrow('Invalid WaxID format');
     });
 
@@ -179,7 +179,7 @@ describe('Privacy and Consent', () => {
           pool: buildMockPool(),
           waxId: 'invalid',
           requesterId: 'student',
-        })
+        }),
       ).rejects.toThrow('Invalid WaxID format');
     });
   });
@@ -203,7 +203,7 @@ describe('Privacy and Consent', () => {
           pool: buildMockPool(),
           waxId: 'invalid',
           format: 'json',
-        })
+        }),
       ).rejects.toThrow('Invalid WaxID format');
     });
   });

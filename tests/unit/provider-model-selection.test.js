@@ -121,9 +121,9 @@ describe('MODEL_UNAVAILABLE_ERROR is not retryable', () => {
     const sweeperSource = fs.readFileSync('src/workers/strandedMessageSweeper.js', 'utf-8');
 
     // The sweeper SQL must filter on processing_status = 'received'.
-    expect(sweeperSource).toContain("processing_status = 'received'");
+    expect(sweeperSource).toContain('processing_status = \'received\'');
     // It must NOT look for 'failed' messages.
-    expect(sweeperSource).not.toContain("processing_status = 'failed'");
+    expect(sweeperSource).not.toContain('processing_status = \'failed\'');
   });
 
   it('Worker should mark message as failed on error (not leave it as received)', async () => {
@@ -131,8 +131,8 @@ describe('MODEL_UNAVAILABLE_ERROR is not retryable', () => {
     const setupSource = fs.readFileSync('src/workers/setup.js', 'utf-8');
 
     // The worker catch block must UPDATE messages SET processing_status = 'failed'.
-    expect(setupSource).toContain("processing_status = 'failed'");
-    expect(setupSource).toContain("AND processing_status NOT IN ('completed', 'failed')");
+    expect(setupSource).toContain('processing_status = \'failed\'');
+    expect(setupSource).toContain('AND processing_status NOT IN (\'completed\', \'failed\')');
   });
 });
 

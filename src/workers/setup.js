@@ -179,7 +179,7 @@ export async function setupWorkers({ redis, pool }) {
               await pool.query(
                 `UPDATE messages SET processing_status = 'processing'
                  WHERE external_id = $1 AND wax_id = $2 AND processing_status = 'received'`,
-                [trace.messageId, trace.waxId]
+                [trace.messageId, trace.waxId],
               );
             } catch (markErr) {
               log.warn({ err: markErr.message }, 'Failed to mark message as processing (non-fatal)');
@@ -204,11 +204,34 @@ export async function setupWorkers({ redis, pool }) {
             // Mark the message as 'completed'.
             try {
               await pool.query(
-                `UPDATE messages SET processing_status = 'completed' WHERE external_id = $1 AND wax_id = $2`,
-                [trace.messageId, trace.waxId]
+                'UPDATE messages SET processing_status = \'completed\' WHERE external_id = $1 AND wax_id = $2',
+                [trace.messageId, trace.waxId],
               );
             } catch (markErr) {
               log.warn({ err: markErr.message }, 'Failed to mark message as completed (non-fatal)');
+            }
+
+            // Absorb burst predecessors: when the debounce window collapsed
+            // several rapid student messages into this single job, the earlier
+            // messages stayed 'received' (their jobs were replaced). Their
+            // content was included in the AI context via history, and the
+            // combined reply just went out — so they are handled. Without
+            // this, they would stay 'received' forever and the stranded
+            // sweeper would re-enqueue them, producing confusing delayed
+            // duplicate replies minutes later.
+            try {
+              await pool.query(
+                `UPDATE messages SET processing_status = 'completed'
+                 WHERE wax_id = $1
+                   AND session_id = $2
+                   AND direction = 'inbound'
+                   AND processing_status = 'received'
+                   AND external_id <> $3
+                   AND created_at <= (SELECT created_at FROM messages WHERE external_id = $3 AND wax_id = $1 LIMIT 1)`,
+                [trace.waxId, trace.sessionId, trace.messageId],
+              );
+            } catch (absorbErr) {
+              log.warn({ err: absorbErr.message }, 'Failed to absorb burst predecessors (non-fatal)');
             }
 
             // Log successful response
@@ -252,7 +275,7 @@ export async function setupWorkers({ redis, pool }) {
                     `UPDATE messages SET processing_status = 'failed'
                      WHERE external_id = $1 AND wax_id = $2
                      AND processing_status NOT IN ('completed', 'failed')`,
-                    [trace.messageId, trace.waxId]
+                    [trace.messageId, trace.waxId],
                   );
                 } catch (markErr) {
                   log.warn({ err: markErr.message }, 'Failed to mark message as delivery_failed');
@@ -292,7 +315,7 @@ export async function setupWorkers({ redis, pool }) {
                   `UPDATE messages SET processing_status = 'failed'
                    WHERE external_id = $1 AND wax_id = $2
                    AND processing_status NOT IN ('completed', 'failed')`,
-                  [failTrace.messageId, failTrace.waxId]
+                  [failTrace.messageId, failTrace.waxId],
                 );
               }
             } catch (markErr) {

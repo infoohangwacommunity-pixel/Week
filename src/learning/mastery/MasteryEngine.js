@@ -86,7 +86,7 @@ export class MasteryEngine {
 
     // Add observation metadata
     const mostRecentObs = observations.reduce((latest, obs) => 
-      new Date(obs.observed_at) > new Date(latest.observed_at) ? obs : latest
+      new Date(obs.observed_at) > new Date(latest.observed_at) ? obs : latest,
     );
 
     return {
@@ -96,7 +96,7 @@ export class MasteryEngine {
       evidence_count: observations.length,
       last_evidence_at: mostRecentObs.observed_at,
       first_evidence_at: observations.reduce((earliest, obs) => 
-        new Date(obs.observed_at) < new Date(earliest.observed_at) ? obs : earliest
+        new Date(obs.observed_at) < new Date(earliest.observed_at) ? obs : earliest,
       ).observed_at,
     };
   }
@@ -180,7 +180,7 @@ export class MasteryEngine {
     // Get all concept tags for this student
     const conceptsResult = await this.pool.query(
       'SELECT DISTINCT concept_tag FROM learning_observations WHERE wax_id = $1 AND deleted_at IS NULL',
-      [wax_id]
+      [wax_id],
     );
 
     const conceptTags = conceptsResult.rows.map(row => row.concept_tag);
@@ -203,7 +203,7 @@ export class MasteryEngine {
       `SELECT * FROM learning_observations 
        WHERE wax_id = $1 AND concept_tag = $2 AND deleted_at IS NULL
        ORDER BY observed_at ASC`,
-      [wax_id, concept_tag]
+      [wax_id, concept_tag],
     );
     return result.rows;
   }
@@ -247,11 +247,11 @@ export class MasteryEngine {
     const assessableObs = weightedObservations.filter(obs => obs.correctness !== null);
     
     const successSignal = assessableObs.reduce((sum, obs) => 
-      sum + obs.weight * obs.correctness, 0
+      sum + obs.weight * obs.correctness, 0,
     );
     
     const failureSignal = assessableObs.reduce((sum, obs) => 
-      sum + obs.weight * (1 - obs.correctness), 0
+      sum + obs.weight * (1 - obs.correctness), 0,
     );
 
     // Step 3: Compute net mastery via tanh transform
@@ -263,7 +263,7 @@ export class MasteryEngine {
 
     // Step 4: Apply time-since-last-evidence decay
     const mostRecentObs = observations.reduce((latest, obs) => 
-      new Date(obs.observed_at) > new Date(latest.observed_at) ? obs : latest
+      new Date(obs.observed_at) > new Date(latest.observed_at) ? obs : latest,
     );
     
     const daysSinceLastEvidence = (now - new Date(mostRecentObs.observed_at)) / (1000 * 86400);

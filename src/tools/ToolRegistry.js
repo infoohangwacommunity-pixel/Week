@@ -17,6 +17,7 @@ export const ToolPermission = {
   STUDENT_WRITE: 'STUDENT_WRITE',
   RETRIEVAL: 'RETRIEVAL',
   ASSESSMENT: 'ASSESSMENT',
+  PRIVACY: 'PRIVACY',
   INTERNAL: 'INTERNAL',
 };
 
@@ -459,7 +460,115 @@ const TOOL_REGISTRY = [
     audit_required: true,
   },
 
-  // Category E: Internal Tools (not exposed to AI)
+  // Category E: Privacy Tools (PRIVACY) — student-scoped self-service.
+  // These give the AI REAL privacy capabilities so it never has to invent
+  // them (the root cause of hallucinated support emails and false deletion
+  // claims). waxId is always injected server-side by ToolExecutor; the model
+  // cannot target another student.
+  {
+    name: 'record_consent',
+    description: 'Record the student\'s consent status (granted, withdrawn, or pending) after a natural privacy conversation. Use when the student agrees to data practices or withdraws agreement.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['granted', 'withdrawn', 'pending'],
+          default: 'granted',
+          description: 'The consent status the student expressed',
+        },
+        context: {
+          type: 'string',
+          maxLength: 500,
+          description: 'Optional brief context, e.g. what the student agreed to',
+        },
+      },
+      additionalProperties: false,
+    },
+    output_contract: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        consent_id: { type: 'string', format: 'uuid' },
+        status: { type: 'string' },
+      },
+    },
+    handler: 'recordConsentHandler',
+    permission_level: ToolPermission.PRIVACY,
+    execution_limits: {
+      timeout_ms: 5000,
+      max_arguments_size_bytes: 1024,
+      max_calls_per_session: 3,
+    },
+    requires_student_context: true,
+    audit_required: true,
+  },
+  {
+    name: 'request_data_export',
+    description: 'Export this student\'s own data as a machine-readable bundle (NDPA 2023 data portability). Use when the student asks to see or download their data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          enum: ['json'],
+          default: 'json',
+          description: 'Export format (only json is supported)',
+        },
+      },
+      additionalProperties: false,
+    },
+    output_contract: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        export_id: { type: 'string', format: 'uuid' },
+        data_size_bytes: { type: 'integer' },
+      },
+    },
+    handler: 'requestDataExportHandler',
+    permission_level: ToolPermission.PRIVACY,
+    execution_limits: {
+      timeout_ms: 15000,
+      max_arguments_size_bytes: 128,
+      max_calls_per_session: 2,
+    },
+    requires_student_context: true,
+    audit_required: true,
+  },
+  {
+    name: 'request_data_deletion',
+    description: 'Permanently delete this student\'s own data (NDPA 2023 right to erasure). IRREVERSIBLE. Only call after the student clearly and explicitly confirms they want their data deleted; pass confirmation exactly as "DELETE MY DATA".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        confirmation: {
+          type: 'string',
+          description: 'Must be exactly: DELETE MY DATA',
+        },
+      },
+      required: ['confirmation'],
+      additionalProperties: false,
+    },
+    output_contract: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        audit_log_id: { type: 'string', format: 'uuid' },
+      },
+    },
+    handler: 'requestDataDeletionHandler',
+    permission_level: ToolPermission.PRIVACY,
+    execution_limits: {
+      timeout_ms: 20000,
+      max_arguments_size_bytes: 128,
+      max_calls_per_session: 1,
+    },
+    requires_student_context: true,
+    audit_required: true,
+  },
+
+  // Category F: Internal Tools (not exposed to AI)
   {
     name: 'get_session_context',
     description: 'INTERNAL: Retrieve current session summary and context.',

@@ -132,7 +132,12 @@ describe('AI Provider Abstraction (Stage 15-17)', () => {
       expect(result).toHaveProperty('promptVersion');
       expect(result.systemPrompt).toContain('WAXPREP');
       expect(result.systemPrompt).toContain('Nigerian');
-      expect(result.promptVersion).toBe('v1');
+      // v2 is the default since the anti-scripted-behavior fix: conversational
+      // guardrails + anti-hallucination honesty boundaries.
+      expect(result.promptVersion).toBe('v2');
+      // The v2 guardrails must actually be present.
+      expect(result.systemPrompt).toContain('HONESTY AND CAPABILITIES');
+      expect(result.systemPrompt).toContain('HOW TO CONVERSE');
     });
 
     it('should include current date in prompt', async () => {

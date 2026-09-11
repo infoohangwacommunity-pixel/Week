@@ -78,7 +78,7 @@ export class OpenAIAdapter extends AIProviderInterface {
       // it and aborts the underlying fetch on timeout.
       const response = await this.callWithTimeout(
         (signal) => this.client.chat.completions.create(openaiRequest, { signal }),
-        config.AI_TIMEOUT_MS
+        config.AI_TIMEOUT_MS,
       );
 
       const latencyMs = Date.now() - startTime;
@@ -327,7 +327,7 @@ export class OpenAIAdapter extends AIProviderInterface {
           const retryAfter = Number.isFinite(retryAfterNum) && retryAfterNum > 0 ? retryAfterNum : undefined;
           return createRateLimitError(
             `${this.name} rate limit exceeded`,
-            retryAfter
+            retryAfter,
           );
         }
         case 400:

@@ -42,7 +42,7 @@ export async function executeDocumentFetch({
 
     // Check if domain is approved
     const isApproved = APPROVED_DOMAINS.some((approved) =>
-      domain === approved || domain.endsWith(`.${approved}`)
+      domain === approved || domain.endsWith(`.${approved}`),
     );
 
     if (!isApproved) {

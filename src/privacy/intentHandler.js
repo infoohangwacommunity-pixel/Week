@@ -144,8 +144,8 @@ export async function executeConsentAction(poolOrOpts, p2, p3, p4, p5) {
   assertWaxId(waxId);
 
   const result = await pool.query(
-    `SELECT record_consent_event($1, $2, $3, $4, $5, $6)`,
-    [waxId, 'general', status, '1.0', JSON.stringify({ context, aiReasoning }), 'whatsapp']
+    'SELECT record_consent_event($1, $2, $3, $4, $5, $6)',
+    [waxId, 'general', status, '1.0', JSON.stringify({ context, aiReasoning }), 'whatsapp'],
   );
 
   return {
@@ -177,8 +177,8 @@ export async function executeDeletionAction(poolOrOpts, waxIdOrReq, requesterId)
   assertWaxId(waxId);
 
   const result = await pool.query(
-    `SELECT * FROM queue_data_deletion($1, $2)`,
-    [waxId, requester || 'student']
+    'SELECT * FROM queue_data_deletion($1, $2)',
+    [waxId, requester || 'student'],
   );
 
   // queue_data_deletion RETURNS UUID — the column name matches the function name.
@@ -216,8 +216,8 @@ export async function executeExportAction(poolOrOpts, waxIdOrFmt, format) {
   assertWaxId(waxId);
 
   const result = await pool.query(
-    `SELECT * FROM export_student_data($1, $2)`,
-    [waxId, fmt]
+    'SELECT * FROM export_student_data($1, $2)',
+    [waxId, fmt],
   );
 
   const row = result.rows[0] || {};

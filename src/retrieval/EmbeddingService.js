@@ -198,7 +198,7 @@ export class EmbeddingService {
           outputDimensionality: dimensions,
         }),
         signal: AbortSignal.timeout(30000),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -206,7 +206,7 @@ export class EmbeddingService {
       throw new Error(
         `Gemini API error: ${response.status} ${response.statusText} - ${
           errorData.error?.message || 'Unknown error'
-        }`
+        }`,
       );
     }
 
@@ -247,7 +247,7 @@ export class EmbeddingService {
          SET embedding = $1::vector,
              updated_at = NOW()
          WHERE id = $2`,
-        [vectorLiteral, targetId]
+        [vectorLiteral, targetId],
       );
     } else if (targetType === 'student_episode') {
       await this.db.query(
@@ -255,7 +255,7 @@ export class EmbeddingService {
          SET embedding = $1::vector,
              updated_at = NOW()
          WHERE id = $2`,
-        [vectorLiteral, targetId]
+        [vectorLiteral, targetId],
       );
     } else {
       throw new Error(`Unknown target type: ${targetType}`);
@@ -273,7 +273,7 @@ export class EmbeddingService {
            completed_at = NOW()
        WHERE target_type = $2 AND target_id = $3
        AND status IN ('pending', 'processing')`,
-      [error, targetType, targetId]
+      [error, targetType, targetId],
     );
   }
 
@@ -293,8 +293,8 @@ export class EmbeddingService {
             targetId: record.targetId,
             waxId: record.waxId,
             text: record.text,
-          })
-        )
+          }),
+        ),
       );
 
       results.push(...batchResults.map((r, idx) => ({
@@ -327,7 +327,7 @@ export class EmbeddingService {
        WHERE status = 'pending'
        ORDER BY created_at ASC
        LIMIT $1`,
-      [limit]
+      [limit],
     );
     return result.rows;
   }
