@@ -68,7 +68,7 @@ export async function startStrandedMessageSweeper({ pool, redis }) {
 
   logger.info(
     { sweepIntervalMs: SWEEP_INTERVAL_MS, strandedThresholdMs: STRANDED_THRESHOLD_MS },
-    'Stranded message recovery sweeper started'
+    'Stranded message recovery sweeper started',
   );
 
   // Run immediately, then on interval.
@@ -100,7 +100,7 @@ async function sweepOnce(pool) {
          AND created_at < $1
        ORDER BY created_at ASC
        LIMIT $2`,
-      [cutoff, SWEEP_BATCH_SIZE]
+      [cutoff, SWEEP_BATCH_SIZE],
     );
   } catch (err) {
     logger.warn({ err: err.message }, 'Sweeper: DB query failed');
@@ -113,7 +113,7 @@ async function sweepOnce(pool) {
 
   logger.info(
     { strandedCount: result.rows.length, cutoff: cutoff.toISOString() },
-    'Sweeper: found stranded messages — re-enqueueing'
+    'Sweeper: found stranded messages — re-enqueueing',
   );
 
   for (const msg of result.rows) {
@@ -143,17 +143,17 @@ async function sweepOnce(pool) {
             recoveredBySweeper: true,
           },
         },
-        { jobId: debounceJobId, delay: 0 }
+        { jobId: debounceJobId, delay: 0 },
       );
 
       logger.info(
         { messageId: msg.external_id, waxId: msg.wax_id, createdAt: msg.created_at },
-        'Sweeper: re-enqueued stranded message'
+        'Sweeper: re-enqueued stranded message',
       );
     } catch (err) {
       logger.error(
         { err: err.message, messageId: msg.external_id },
-        'Sweeper: failed to re-enqueue stranded message'
+        'Sweeper: failed to re-enqueue stranded message',
       );
     }
   }

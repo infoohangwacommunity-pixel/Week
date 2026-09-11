@@ -61,7 +61,7 @@ async function getQueue() {
         backoff: 'exponential',
         baseDelay: config.QUEUE_RETRY_DELAY_BASE_MS,
       },
-      'AI processing queue initialized with retry policy'
+      'AI processing queue initialized with retry policy',
     );
     return queue;
   } catch (err) {
@@ -101,9 +101,9 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
 
     // Per-student rate limiting (in-memory; safe for single-instance deployments).
     const rateLimiter = getRateLimiter({
-      messagesPerMinute: config.RATE_LIMIT_MESSAGES_PER_MINUTE || 10,
-      messagesPerDay: config.RATE_LIMIT_MESSAGES_PER_DAY || 200,
-      burstAllowance: config.RATE_LIMIT_BURST_ALLOWANCE || 3,
+      messagesPerMinute: config.RATE_LIMIT_MESSAGES_PER_MINUTE,
+      messagesPerDay: config.RATE_LIMIT_MESSAGES_PER_DAY,
+      burstAllowance: config.RATE_LIMIT_BURST_ALLOWANCE,
     });
 
     // Resolve WaxID BEFORE rate-limiting so the limit is per-student, not per-phone.
@@ -113,7 +113,7 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
     if (!rateLimitResult.allowed) {
       logSafe.warn(
         { waxId, reason: rateLimitResult.reason, retryAfter: rateLimitResult.retryAfter },
-        'Rate limit exceeded in enqueue (safety check)'
+        'Rate limit exceeded in enqueue (safety check)',
       );
       return { success: false, reason: rateLimitResult.reason, retryAfter: rateLimitResult.retryAfter };
     }
@@ -137,7 +137,7 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
       `INSERT INTO messages (id, wax_id, session_id, external_id, direction, content, message_type, processing_status, created_at)
        VALUES ($1, $2, $3, $4, 'inbound', $5, $6, 'received', NOW())
        ON CONFLICT (external_id) WHERE external_id IS NOT NULL AND deleted_at IS NULL DO NOTHING`,
-      [messageUuid, waxId, session.id, messageId, messageContent, messageType]
+      [messageUuid, waxId, session.id, messageId, messageContent, messageType],
     );
 
     // Debounce: cancel any pending job for this student and create a new one.
@@ -174,7 +174,7 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
           currentMessage: messageContent,
         },
       },
-      { jobId: debounceJobId, delay: debounceDelay }
+      { jobId: debounceJobId, delay: debounceDelay },
     );
 
     sessionLog.info({ waxId, messageId, sessionId: session.id }, 'Message enqueued for processing');
@@ -186,7 +186,7 @@ export async function enqueueStudentMessage(from, messageId, message, _databaseU
         from,
         messageId,
       },
-      'Failed to enqueue message'
+      'Failed to enqueue message',
     );
 
     // If the message was already persisted but the queue.add failed,

@@ -53,7 +53,7 @@ export async function setupEmbeddingWorker({ redis, pool }) {
     {
       connection: redis,
       concurrency: 5,
-    }
+    },
   );
 
   // Listen to worker events

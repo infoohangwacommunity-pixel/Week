@@ -45,7 +45,7 @@ const healthServer = http.createServer((req, res) => {
   }
 });
 
-const healthPort = config.WORKER_HEALTH_PORT || 3001;
+const healthPort = config.WORKER_HEALTH_PORT;
 healthServer.listen(healthPort, () => {
   logger.info({ port: healthPort }, 'Worker health server started');
 });

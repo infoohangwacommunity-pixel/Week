@@ -53,7 +53,7 @@ export async function setupDecayWorker({ redis, pool }) {
             // Get all concept tags for this student
             const conceptsResult = await pool.query(
               'SELECT DISTINCT concept_tag FROM learning_observations WHERE wax_id = $1 AND deleted_at IS NULL',
-              [student.wax_id]
+              [student.wax_id],
             );
 
             for (const row of conceptsResult.rows) {
