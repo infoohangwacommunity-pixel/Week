@@ -18,7 +18,6 @@
  * The AI is the intelligence. This provides the infrastructure for safe delivery.
  */
 
-import config from '../config/index.js';
 import { logger } from '../observability/index.js';
 
 /**
@@ -306,7 +305,7 @@ export class ResponseValidator {
           matrix[i][j] = Math.min(
             matrix[i - 1][j - 1] + 1,
             matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
+            matrix[i - 1][j] + 1,
           );
         }
       }
@@ -317,129 +316,64 @@ export class ResponseValidator {
 
   /**
    * Normalize response formatting for WhatsApp
-   * 
+   *
+   * This method was previously dead code (never called by any path) and its
+   * rules actively mangled emphasis: they inserted a space between the
+   * opening marker and the text ("**bold**" → "** bold**"), which breaks
+   * WhatsApp rendering entirely (WhatsApp requires *bold* with no inner
+   * spacing). Now that the orchestrator applies it on the production path,
+   * only safe, order-correct transformations are performed:
+   *
+   * 1. line-ending + whitespace cleanup (safe)
+   * 2. **bold** → *bold* and __italic__ → _italic_ (WhatsApp syntax)
+   * 3. markdown headers → bold lines
+   * 4. markdown bullets (-, +, *) → WhatsApp bullets (• , replacing the marker)
+   *
+   * Spacing AROUND emphasis markers is deliberately left untouched — any
+   * insertion/removal there corrupts the message.
+   *
    * @param {string} response - AI response
    * @returns {string} - Normalized response
    */
   normalizeFormatting(response) {
     let normalized = response;
 
+    if (typeof normalized !== 'string') return normalized;
+
     // Normalize line endings
     normalized = normalized.replace(/\r\n/g, '\n');
 
-    // Normalize multiple blank lines to double newlines
-    normalized = normalized.replace(/\n{3,}/g, '\n\n');
+    // Convert **bold** → *bold* FIRST (before header/list rules),
+    // using a non-greedy match per segment.
+    normalized = normalized.replace(/\*\*([^*]+)\*\*/g, '*$1*');
 
-    // Fix common markdown issues
-    // Remove spaces before bold/italic markers
-    normalized = normalized.replace(/\s(\*\*|__)/g, '$1');
-    normalized = normalized.replace(/\s(\*|_)/g, '$1');
+    // Convert __italic__ → _italic_ (WhatsApp underline-ish/italic syntax).
+    normalized = normalized.replace(/__([^_]+)__/g, '_$1_');
 
-    // Ensure spaces after bold/italic markers when followed by text
-    normalized = normalized.replace(/(\*\*|__)(\w)/g, '$1 $2');
-    normalized = normalized.replace(/(\*)(\w)/g, '$1 $2');
-
-    // Convert double asterisk to single for WhatsApp
-    normalized = normalized.replace(/\*\*(.*?)\*\*/g, '*$1*');
-    normalized = normalized.replace(/__(.*?)__/g, '_$1_');
-
-    // Convert headers to bold
+    // Convert headers to bold lines (after ** conversion so headers made
+    // with ## and bold content don't double-convert).
     normalized = normalized.replace(/^#{1,6}\s+(.*)$/gm, '*$1*');
 
-    // Fix list formatting - ensure proper spacing
-    normalized = normalized.replace(/^(\s*)([-*+]\s)/gm, '$1• $2');
+    // Convert markdown bullets to WhatsApp bullets — REPLACE the marker,
+    // don't prepend (the previous "• $2" rule produced "• - item").
+    normalized = normalized.replace(/^(\s*)[-+*]\s+/gm, '$1• ');
 
-    // Remove excessive trailing spaces
+    // Collapse 3+ consecutive newlines to a double newline
+    normalized = normalized.replace(/\n{3,}/g, '\n\n');
+
+    // Remove excessive trailing spaces (safe; never touches emphasis)
     normalized = normalized.replace(/[ \t]+$/gm, '');
 
-    return normalized;
+    return normalized.trim();
   }
 
   /**
-   * Split response into WhatsApp-compatible chunks
-   * 
-   * Implements intelligent splitting with edge case handling:
-   * - Paragraph-first splitting
-   * - Numbered list preservation
-   * - Monospace block preservation
-   * - Single-character residue prevention
-   * 
-   * @param {string} response - AI response
-   * @returns {Array} - Array of chunks
+   * NOTE: splitResponse() was removed. It was dead, duplicate code — zero
+   * callers, and the real chunking lives in messaging/outbound.js
+   * (splitResponseIntoChunks), which adds WhatsApp hard-limit handling,
+   * sentence-boundary fallback, and dedupe-safe delivery that this copy
+   * lacked. Keeping two splitters guaranteed future drift.
    */
-  splitResponse(response) {
-    const maxChars = config.RESPONSE_MAX_CHUNK_CHARS || 1000;
-    const chunks = [];
-    
-    // Handle single paragraph
-    if (response.length <= maxChars) {
-      return [response];
-    }
-
-    // Split on paragraph boundaries first
-    const paragraphs = response.split(/\n\s*\n/);
-    let currentChunk = '';
-    let chunkCount = 0;
-
-    for (const paragraph of paragraphs) {
-      // Check if paragraph is a numbered list item
-      const isNumberedList = /^(\d+\.\s)/.test(paragraph);
-      
-      // If paragraph exceeds limit, handle specially
-      if (paragraph.length > maxChars) {
-        if (currentChunk) {
-          chunks.push(currentChunk);
-          chunkCount++;
-          currentChunk = '';
-        }
-        
-        // Split at sentence boundary
-        const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [paragraph];
-        
-        for (const sentence of sentences) {
-          if ((currentChunk + sentence).length <= maxChars) {
-            currentChunk += (currentChunk ? '\n\n' : '') + sentence;
-          } else {
-            if (currentChunk) {
-              chunks.push(currentChunk);
-              chunkCount++;
-            }
-            currentChunk = sentence;
-          }
-        }
-      } else {
-        // Paragraph fits within limit
-        if ((currentChunk + paragraph).length <= maxChars) {
-          currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
-        } else {
-          // Check if current chunk would become a single-character residue
-          if (currentChunk && currentChunk.trim().length < 3) {
-            // Merge with next paragraph instead
-            currentChunk += '\n\n' + paragraph;
-          } else {
-            if (currentChunk) {
-              chunks.push(currentChunk);
-              chunkCount++;
-            }
-            currentChunk = paragraph;
-          }
-        }
-      }
-    }
-    
-    // Flush final chunk
-    if (currentChunk && currentChunk.trim().length > 0) {
-      chunks.push(currentChunk);
-      chunkCount++;
-    }
-
-    // Chunk count monitoring (research recommendation)
-    if (chunkCount > 5) {
-      logger.warn({ chunkCount }, 'Response split into many chunks - consider adjusting RESPONSE_MAX_CHUNK_CHARS');
-    }
-
-    return chunks.length > 0 ? chunks : [response];
-  }
 
   /**
    * Create delivery record for tracking
@@ -452,9 +386,10 @@ export class ResponseValidator {
    * @returns {Promise<void>}
    */
   async createDeliveryRecord({ waxId, sessionId, correlationId, state }) {
-    const pool = await this.db.createPool(config);
-
-    await pool.query(
+    // NOTE: `this.db` is the shared pg.Pool (per workers/setup.js wiring).
+    // The previous implementation called `this.db.createPool(config)`, which
+    // does not exist on a Pool instance — this method could never have run.
+    await this.db.query(
       `
       INSERT INTO response_deliveries (
         wax_id,
@@ -469,7 +404,7 @@ export class ResponseValidator {
         state = EXCLUDED.state,
         updated_at = NOW()
       `,
-      [waxId, sessionId, correlationId, state]
+      [waxId, sessionId, correlationId, state],
     );
   }
 
@@ -482,9 +417,7 @@ export class ResponseValidator {
    * @returns {Promise<void>}
    */
   async updateDeliveryState({ correlationId, state }) {
-    const pool = await this.db.createPool(config);
-
-    await pool.query(
+    await this.db.query(
       `
       UPDATE response_deliveries
       SET 
@@ -492,7 +425,7 @@ export class ResponseValidator {
         updated_at = NOW()
       WHERE correlation_id = $2
       `,
-      [state, correlationId]
+      [state, correlationId],
     );
   }
 }
