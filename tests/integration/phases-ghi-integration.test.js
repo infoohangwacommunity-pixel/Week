@@ -139,7 +139,7 @@ describe('AI Provider Pipeline Integration (Fake)', () => {
           sessionId: '00000000-0000-0000-0000-000000000002',
           currentMessage: 'should fail',
           context: { correlationId: '00000000-0000-0000-0000-000000000005' },
-        })
+        }),
       ).rejects.toThrow();
     } finally {
       fakeAdapter.configureFailure(false);

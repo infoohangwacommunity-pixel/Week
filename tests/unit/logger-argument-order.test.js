@@ -65,8 +65,8 @@ describe('Pino logger argument order', () => {
 
     // The orchestrator's Primary provider failed log should use the correct
     // argument order: logger.warn({ ... }, 'msg')
-    expect(source).toContain("}, 'Primary provider failed')");
-    expect(source).toContain("}, 'Fallback provider also failed')");
+    expect(source).toContain('}, \'Primary provider failed\')');
+    expect(source).toContain('}, \'Fallback provider also failed\')');
 
     // It should include the diagnostic fields
     expect(source).toContain('providerStatusCode');
@@ -79,6 +79,6 @@ describe('Pino logger argument order', () => {
     const source = readFileSync('src/workers/setup.js', 'utf-8');
 
     // The AI request failed log should use the correct argument order
-    expect(source).toContain("logger.error(errorInfo, 'AI request failed')");
+    expect(source).toContain('logger.error(errorInfo, \'AI request failed\')');
   });
 });

@@ -65,7 +65,7 @@ describe('Data Deletion Integration', () => {
   it('executeDeletionAction should reject invalid waxId', async () => {
     const { pool } = buildMockPool();
     await expect(
-      executeDeletionAction({ waxId: 'not-a-uuid', pool })
+      executeDeletionAction({ waxId: 'not-a-uuid', pool }),
     ).rejects.toThrow();
   });
 
@@ -85,7 +85,7 @@ describe('Data Deletion Integration', () => {
   it('executeExportAction should reject invalid waxId', async () => {
     const { pool } = buildMockPool();
     await expect(
-      executeExportAction({ waxId: 'not-a-uuid', pool })
+      executeExportAction({ waxId: 'not-a-uuid', pool }),
     ).rejects.toThrow();
   });
 });

@@ -55,20 +55,20 @@ describe('ContextAssembler.fetchConversationHistory burst correctness', () => {
   it('the history SQL excludes processing + failed inbound and failed outbound', () => {
     const source = readFileSync(
       join(__dirname, '../../src/context/ContextAssembler.js'),
-      'utf-8'
+      'utf-8',
     );
-    expect(source).toContain("processing_status NOT IN ('failed', 'processing')");
+    expect(source).toContain('processing_status NOT IN (\'failed\', \'processing\')');
     // The old filter dropped 'received' burst messages entirely.
-    expect(source).not.toContain("NOT IN ('failed', 'received')");
+    expect(source).not.toContain('NOT IN (\'failed\', \'received\')');
   });
 
   it('the worker absorbs burst predecessors into completed after success', () => {
     const source = readFileSync(
       join(__dirname, '../../src/workers/setup.js'),
-      'utf-8'
+      'utf-8',
     );
     expect(source).toContain('Absorb burst predecessors');
-    expect(source).toContain("AND processing_status = 'received'");
+    expect(source).toContain('AND processing_status = \'received\'');
     expect(source).toContain('AND external_id <> $3');
   });
 });

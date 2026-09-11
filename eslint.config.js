@@ -7,6 +7,20 @@ export default [
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
+        // Node.js runtime globals (Node >= 22 is the project baseline).
+        // Declaring them here fixes the long-standing no-undef lint failures
+        // for standard platform APIs the codebase legitimately uses.
+        Buffer: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+        crypto: 'readonly',
+        structuredClone: 'readonly',
+        queueMicrotask: 'readonly',
+        performance: 'readonly',
         console: 'readonly',
         process: 'readonly',
         require: 'readonly',
@@ -21,6 +35,7 @@ export default [
         afterEach: 'readonly',
         expect: 'readonly',
         test: 'readonly',
+        vi: 'readonly',
         setTimeout: 'readonly',
         setInterval: 'readonly',
         clearTimeout: 'readonly',

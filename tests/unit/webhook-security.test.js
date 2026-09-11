@@ -78,10 +78,10 @@ describe('Webhook Security - Payload Validation', () => {
       entry: [{
         changes: [{
           value: {
-            messages: [{ id: 'msg1', type: 'text' }]
-          }
-        }]
-      }]
+            messages: [{ id: 'msg1', type: 'text' }],
+          },
+        }],
+      }],
     };
     
     const result = validateWebhookPayload(payload);

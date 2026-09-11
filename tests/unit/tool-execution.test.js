@@ -174,7 +174,7 @@ describe('ToolExecutor.performToolExecution dispatch', () => {
     expect(result.success).toBe(true);
     // Verify the SELECT was scoped to waxId.
     const selectCalls = mockPool._calls.filter(
-      (c) => c.text.includes('SELECT') && c.text.includes('student_facts')
+      (c) => c.text.includes('SELECT') && c.text.includes('student_facts'),
     );
     expect(selectCalls.length).toBeGreaterThan(0);
     expect(selectCalls[0].text).toContain('wax_id = $2');
@@ -190,7 +190,7 @@ describe('ToolExecutor.performToolExecution dispatch', () => {
         toolName: 'totally_made_up_tool',
         arguments: {},
         turnIndex: 0,
-      })
+      }),
     ).rejects.toThrow();
   });
 
@@ -204,7 +204,7 @@ describe('ToolExecutor.performToolExecution dispatch', () => {
         // missing required 'query' field
         arguments: { max_results: 3 },
         turnIndex: 0,
-      })
+      }),
     ).rejects.toThrow();
   });
 

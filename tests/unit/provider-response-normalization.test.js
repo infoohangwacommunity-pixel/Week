@@ -157,7 +157,7 @@ describe('OpenAIAdapter normalizeError HTTP 402 classification', () => {
       402, // status
       { message: 'Payment required to access this resource. Visit your billing tab.' }, // error body
       'Payment required to access this resource.', // message
-      undefined // headers
+      undefined, // headers
     );
 
     const result = adapter.normalizeError(error, 100);
