@@ -96,7 +96,7 @@ export class ToolExecutor {
       if (!tool) {
         throw new ToolError(
           ToolErrorCode.UNKNOWN_TOOL,
-          `Unknown tool: ${toolName}`
+          `Unknown tool: ${toolName}`,
         );
       }
 
@@ -105,7 +105,7 @@ export class ToolExecutor {
       if (!validation.valid) {
         throw new ToolError(
           ToolErrorCode.INVALID_ARGUMENTS,
-          `Invalid arguments: ${validation.errors.join(', ')}`
+          `Invalid arguments: ${validation.errors.join(', ')}`,
         );
       }
 
@@ -118,7 +118,7 @@ export class ToolExecutor {
       if (argSize > maxArgSize) {
         throw new ToolError(
           ToolErrorCode.SIZE_EXCEEDED,
-          `Arguments exceed limit: ${argSize} > ${maxArgSize} bytes`
+          `Arguments exceed limit: ${argSize} > ${maxArgSize} bytes`,
         );
       }
 
@@ -132,7 +132,7 @@ export class ToolExecutor {
       if (!rateLimitResult.allowed) {
         throw new ToolError(
           ToolErrorCode.RATE_LIMIT_EXCEEDED,
-          rateLimitResult.reason || 'Rate limit exceeded'
+          rateLimitResult.reason || 'Rate limit exceeded',
         );
       }
 
@@ -146,7 +146,7 @@ export class ToolExecutor {
       if (loopResult.isLoop) {
         throw new ToolError(
           ToolErrorCode.LOOP_DETECTED,
-          `Duplicate tool call detected: ${toolName} with identical arguments`
+          `Duplicate tool call detected: ${toolName} with identical arguments`,
         );
       }
 
@@ -230,7 +230,7 @@ export class ToolExecutor {
 
     // Only check current turn (turnIndex)
     const currentTurnCalls = history.filter(
-      call => call.turnIndex === turnIndex
+      call => call.turnIndex === turnIndex,
     );
 
     // Check for identical tool + args
@@ -293,8 +293,8 @@ export class ToolExecutor {
           reject(
             new ToolError(
               ToolErrorCode.TIMEOUT,
-              `Tool ${toolName} timed out after ${timeoutMs}ms`
-            )
+              `Tool ${toolName} timed out after ${timeoutMs}ms`,
+            ),
           );
         }, timeoutMs);
       }),
@@ -316,7 +316,7 @@ export class ToolExecutor {
     if (!handlerEntry) {
       throw new ToolError(
         ToolErrorCode.NO_HANDLER,
-        `No handler registered for tool: ${tool.name}`
+        `No handler registered for tool: ${tool.name}`,
       );
     }
 
@@ -327,17 +327,22 @@ export class ToolExecutor {
     if (handlerEntry.requiresDb && (!db || typeof db.query !== 'function')) {
       throw new ToolError(
         ToolErrorCode.HANDLER_FAILED,
-        `Tool ${tool.name} requires a database pool but none is available`
+        `Tool ${tool.name} requires a database pool but none is available`,
       );
     }
 
     // Build the handler context. Spread the AI-supplied args (snake_case keys)
-    // so handlers can destructure them naturally.
+    // so handlers can destructure them naturally — but ALWAYS with the
+    // server-side context applied last, so a model can never override its
+    // authorized identity (AGENTS.md §8: never trust model-supplied
+    // identifiers for authorization). Defense-in-depth: input schemas with
+    // additionalProperties:false already reject waxId in args; this makes the
+    // invariant hold even if a future schema forgets.
     const handlerContext = {
+      ...args,
       waxId,
       sessionId,
       aiRequestId,
-      ...args,
       db,
       config,
     };
@@ -350,7 +355,7 @@ export class ToolExecutor {
       // sees a consistent error type.
       throw new ToolError(
         ToolErrorCode.HANDLER_FAILED,
-        `Tool ${tool.name} execution failed: ${err.message}`
+        `Tool ${tool.name} execution failed: ${err.message}`,
       );
     }
 
@@ -420,7 +425,7 @@ export class ToolExecutor {
           invocation.latency_ms,
           invocation.was_sanitized,
           invocation.created_at,
-        ]
+        ],
       );
     } catch (dbError) {
       // Log but don't throw - we don't want logging failures to break tool execution
@@ -464,7 +469,7 @@ export class ToolExecutor {
           error.message,
           latencyMs,
           new Date(),
-        ]
+        ],
       );
     } catch (dbError) {
       this.logger.error('Failed to log tool invocation', {

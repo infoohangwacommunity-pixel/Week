@@ -115,7 +115,7 @@ export class WebContentSanitizer {
       // Remove opening and closing tags with content
       html = html.replace(
         new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi'),
-        ''
+        '',
       );
       // Remove self-closing or empty tags
       html = html.replace(new RegExp(`<${tag}[^>]*/?>`, 'gi'), '');
@@ -134,7 +134,7 @@ export class WebContentSanitizer {
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+      .replace(/&#39;/g, '\'');
 
     // Remove multiple newlines
     html = html.replace(/\n{3,}/g, '\n\n');
@@ -152,7 +152,7 @@ export class WebContentSanitizer {
     // Zero-width space, zero-width non-joiner, zero-width joiner, etc.
     return text.replace(
       /[\u200B-\u200D\uFEFF\u2060\uEFFC-\uEFFD]/g,
-      ''
+      '',
     );
   }
 
@@ -163,7 +163,7 @@ export class WebContentSanitizer {
     // LRM, RLM, LRE, RLE, LE, RE, PDF, LRO, RLO, NSM
     return text.replace(
       /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
-      ''
+      '',
     );
   }
 

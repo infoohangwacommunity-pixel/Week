@@ -165,7 +165,7 @@ export class StudentMemoryAccess {
        FROM student_facts
        WHERE id = $1 AND wax_id = $2 AND status = 'active'
        LIMIT 1`,
-      [memoryId, this.waxId]
+      [memoryId, this.waxId],
     );
     return result.rows[0] || null;
   }

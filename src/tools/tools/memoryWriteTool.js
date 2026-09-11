@@ -125,7 +125,7 @@ export async function executeMemoryWrite({
       `SELECT id, evidence_count FROM student_facts
        WHERE wax_id = $1 AND fact_key = $2 AND status = 'active'
        LIMIT 1`,
-      [waxId, fact_key]
+      [waxId, fact_key],
     );
 
     if (existing.rows.length > 0) {
@@ -138,7 +138,7 @@ export async function executeMemoryWrite({
              evidence_count = $2,
              updated_at = NOW()
          WHERE id = $3`,
-        [confidence, row.evidence_count + 1, row.id]
+        [confidence, row.evidence_count + 1, row.id],
       );
 
       return {
@@ -168,7 +168,7 @@ export async function executeMemoryWrite({
         sessionId,
         concept_tag,
         1,
-      ]
+      ],
     );
 
     const newFactId = insertResult.rows[0].id;
@@ -209,7 +209,7 @@ async function queueEmbeddingGeneration({ db, targetType, targetId, waxId, text 
       `INSERT INTO embedding_jobs (target_type, target_id, status)
        VALUES ($1, $2, 'pending')
        ON CONFLICT DO NOTHING`,
-      [targetType, targetId]
+      [targetType, targetId],
     );
 
     // 2. Enqueue a BullMQ job for the embedding worker to process.
