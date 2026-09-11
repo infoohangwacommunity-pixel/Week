@@ -171,14 +171,33 @@ async function sendWhatsAppChunk(phoneNumber, content, trace = {}) {
   // Persist the outbound record as 'pending' before sending.
   // ON CONFLICT DO NOTHING so if this chunk was already persisted (by a
   // previous attempt that crashed before sending), we don't duplicate the row.
+  //
+  // NOTE: trace.messageId is the WhatsApp wamid (e.g. 'wamid.HBgM...'),
+  // NOT a UUID. The outbound_messages.triggering_message_id column is
+  // UUID NOT NULL REFERENCES messages(id). We need to look up the actual
+  // messages.id (UUID) by external_id. If the lookup fails (message not
+  // found or wamid is not a UUID), pass NULL — the column is NOT NULL so
+  // the INSERT will fail, but that's caught and logged as a warning.
   if (trace.pool && typeof trace.pool.query === 'function') {
     try {
+      // Look up the internal messages.id from the external WhatsApp wamid.
+      let triggeringMessageId = null;
+      if (trace.messageId) {
+        const msgResult = await trace.pool.query(
+          `SELECT id FROM messages WHERE external_id = $1 AND wax_id = $2 AND deleted_at IS NULL LIMIT 1`,
+          [trace.messageId, trace.waxId]
+        );
+        if (msgResult.rows.length > 0) {
+          triggeringMessageId = msgResult.rows[0].id;
+        }
+      }
+
       await trace.pool.query(
         `INSERT INTO outbound_messages
            (outbound_chunk_id, wax_id, triggering_message_id, content, processing_status, created_at)
          VALUES ($1, $2, $3, $4, 'pending', NOW())
          ON CONFLICT (outbound_chunk_id) DO NOTHING`,
-        [chunkId, trace.waxId, trace.messageId, content]
+        [chunkId, trace.waxId, triggeringMessageId, content]
       );
 
       // Check if this chunk was ALREADY sent on a previous attempt.

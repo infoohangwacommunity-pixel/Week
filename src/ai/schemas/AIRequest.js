@@ -53,7 +53,13 @@ const AIContentBlockSchema = z.object({
 // Normalized message
 export const AIMessageSchema = z.object({
   role: AIMessageRoleSchema,
-  content: z.string().or(z.array(AIContentBlockSchema)),
+  // Content can be:
+  // - string (normal user/assistant message)
+  // - array of content blocks (multimodal: text, image, audio)
+  // - object (tool result payload — { error: '...' } or structured data)
+  // The .or(z.record(z.unknown())) allows tool-result messages to pass
+  // an object as content without crashing the schema validation.
+  content: z.string().or(z.array(AIContentBlockSchema)).or(z.record(z.unknown())),
   timestamp: z.number().optional(),
   // Internal metadata, not sent to provider
   _source: z.enum(['student', 'ai', 'system']).optional(),
