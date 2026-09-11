@@ -62,7 +62,7 @@ export class AnthropicAdapter extends AIProviderInterface {
       // Pass AbortSignal directly to the Anthropic SDK via the options arg.
       const response = await this.callWithTimeout(
         (signal) => this.client.messages.create(anthropicRequest, { signal }),
-        config.AI_TIMEOUT_MS
+        config.AI_TIMEOUT_MS,
       );
 
       const latencyMs = Date.now() - startTime;
@@ -238,7 +238,7 @@ export class AnthropicAdapter extends AIProviderInterface {
     let toolCalls = null;
     if (finishReason === FinishReason.TOOL_CALL) {
       const toolUseBlocks = response.content.filter(
-        block => block.type === 'tool_use'
+        block => block.type === 'tool_use',
       );
       if (toolUseBlocks.length > 0) {
         toolCalls = toolUseBlocks.map(block => ({

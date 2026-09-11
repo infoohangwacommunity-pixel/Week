@@ -283,7 +283,7 @@ export class HybridSearch {
           bm25Rank ? bm25Rank.rank : null,
           semanticRank ? semanticRank.rank : null,
         ],
-        k
+        k,
       );
 
       if (rrfScore > 0) {

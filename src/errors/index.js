@@ -72,7 +72,7 @@ export function registerGracefulShutdown({ logger, pool, redis, workers, server,
         await Promise.all(
           workers
             .filter((w) => w && typeof w.close === 'function')
-            .map((w) => w.close())
+            .map((w) => w.close()),
         );
         logger.info({ count: workers.length }, 'BullMQ workers closed');
       }

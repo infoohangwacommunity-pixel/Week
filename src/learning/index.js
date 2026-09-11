@@ -38,7 +38,7 @@ export function createLearningModule(pool) {
     pool, 
     evidenceWriter, 
     masteryEngine, 
-    EvidenceTaxonomy
+    EvidenceTaxonomy,
   );
   const contextInterface = new StudentModelContextInterface(pool, studentLearningAccess);
 

@@ -63,7 +63,7 @@ export function createWorker(queueName, jobHandler, redis, concurrency = 1, opts
       concurrency,
       lockDuration: opts.lockDuration || 30000,
       lockRenewalTime: opts.lockRenewalTime || 15000,
-    }
+    },
   );
 }
 

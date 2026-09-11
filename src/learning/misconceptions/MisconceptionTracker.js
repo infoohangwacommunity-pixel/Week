@@ -85,7 +85,7 @@ export class MisconceptionTracker {
        FROM learning_observations
        WHERE wax_id = $1 AND session_id = $2 
        AND possible_misconception = TRUE AND deleted_at IS NULL`,
-      [wax_id, session_id]
+      [wax_id, session_id],
     );
 
     if (observations.rows.length === 0) {
@@ -151,7 +151,7 @@ export class MisconceptionTracker {
       `SELECT * FROM misconceptions 
        WHERE wax_id = $1 AND concept_tag = $2 
        AND status = 'confirmed' AND deleted_at IS NULL`,
-      [wax_id, concept_tag]
+      [wax_id, concept_tag],
     );
 
     let resolved = null;
@@ -185,7 +185,7 @@ export class MisconceptionTracker {
          CASE WHEN m.status = 'confirmed' THEN 0 ELSE 1 END,
          m.confidence DESC,
          m.first_detected_at DESC`,
-      [wax_id]
+      [wax_id],
     );
     return result.rows;
   }
@@ -244,7 +244,7 @@ export class MisconceptionTracker {
        AND deleted_at IS NULL
        ORDER BY created_at DESC
        LIMIT 1`,
-      [wax_id, concept_tag]
+      [wax_id, concept_tag],
     );
     return result.rows[0] || null;
   }
@@ -277,7 +277,7 @@ export class MisconceptionTracker {
     // Get updated misconception
     const misconception = await this.pool.query(
       'SELECT * FROM misconceptions WHERE id = $1',
-      [misconception_id]
+      [misconception_id],
     );
 
     const mc = misconception.rows[0];
@@ -341,7 +341,7 @@ export class MisconceptionTracker {
   async _getObservation(observation_id) {
     const result = await this.pool.query(
       'SELECT * FROM learning_observations WHERE id = $1',
-      [observation_id]
+      [observation_id],
     );
     return result.rows[0] || null;
   }

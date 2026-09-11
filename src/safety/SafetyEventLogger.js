@@ -62,7 +62,7 @@ export class SafetyEventLogger {
           event.operator_notified,
           event.requires_review,
           null, // reviewer_notes
-        ]
+        ],
       );
 
       return { success: true, eventId: true }; // Simplified
@@ -85,7 +85,7 @@ export class SafetyEventLogger {
         `SELECT id, incident_count, last_occurrence_at, action_taken
          FROM adversarial_patterns
          WHERE wax_id = $1 AND pattern_type = $2`,
-        [waxId, patternType]
+        [waxId, patternType],
       );
 
       if (existing.rows.length > 0) {
@@ -97,7 +97,7 @@ export class SafetyEventLogger {
           `UPDATE adversarial_patterns
            SET incident_count = $1, last_occurrence_at = $2
            WHERE wax_id = $3 AND pattern_type = $4`,
-          [count, lastOccurrence, waxId, patternType]
+          [count, lastOccurrence, waxId, patternType],
         );
 
         // Check if tools should be disabled
@@ -111,7 +111,7 @@ export class SafetyEventLogger {
               new Date(Date.now() + 3600000), // 1 hour
               waxId,
               patternType,
-            ]
+            ],
           );
 
           return {
@@ -132,7 +132,7 @@ export class SafetyEventLogger {
           `INSERT INTO adversarial_patterns (
             wax_id, pattern_type, severity, incident_count, last_occurrence_at
           ) VALUES ($1, $2, $3, $4, $5)`,
-          [waxId, patternType, severity, 1, new Date()]
+          [waxId, patternType, severity, 1, new Date()],
         );
 
         return {
@@ -161,7 +161,7 @@ export class SafetyEventLogger {
          WHERE wax_id = $1 
          AND action_taken = 'tools_disabled'
          AND (tools_disabled_until IS NULL OR tools_disabled_until > NOW())`,
-        [waxId]
+        [waxId],
       );
 
       if (result.rows.length > 0) {
@@ -198,7 +198,7 @@ export class SafetyEventLogger {
       const params = [waxId];
 
       if (eventType) {
-        query += ` AND event_type = $2`;
+        query += ' AND event_type = $2';
         params.push(eventType);
       }
 
@@ -225,7 +225,7 @@ export class SafetyEventLogger {
          AND reviewed_at IS NULL
          ORDER BY created_at DESC
          LIMIT $1`,
-        [limit]
+        [limit],
       );
       return result.rows;
     } catch (error) {
@@ -245,7 +245,7 @@ export class SafetyEventLogger {
         `UPDATE safety_events
          SET reviewed_at = $1, reviewer_notes = $2
          WHERE id = $3`,
-        [new Date(), notes, eventId]
+        [new Date(), notes, eventId],
       );
       return { success: true };
     } catch (error) {

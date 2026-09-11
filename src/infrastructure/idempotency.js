@@ -27,7 +27,7 @@ export async function checkAiCallIdempotency(pool, triggeringMessageId) {
       `SELECT id, response_json 
        FROM ai_requests 
        WHERE triggering_message_id = $1 AND status = 'success'`,
-      [triggeringMessageId]
+      [triggeringMessageId],
     );
     
     return {
@@ -91,7 +91,7 @@ export async function recordAiCall(pool, waxId, sessionId, correlationId, trigge
         new Date(completedAt),
         latencyMs,
         JSON.stringify(response),
-      ]
+      ],
     );
 
     return { success: true };
@@ -120,7 +120,7 @@ export async function checkOutboundMessageIdempotency(pool, outboundChunkId) {
       `SELECT processing_status 
        FROM outbound_messages 
        WHERE outbound_chunk_id = $1`,
-      [outboundChunkId]
+      [outboundChunkId],
     );
     
     return {
@@ -157,7 +157,7 @@ export async function markOutboundMessageAsSent(pool, outboundChunkId, waxId, tr
           ELSE outbound_messages.sent_at
         END,
         updated_at = NOW()`,
-      [outboundChunkId, waxId, triggeringMessageId, content]
+      [outboundChunkId, waxId, triggeringMessageId, content],
     );
     
     return { success: true };
@@ -241,7 +241,7 @@ class InMemoryRateLimiter {
         allowed: false, 
         reason: 'minute_limit_exceeded', 
         limit: this.messagesPerMinute,
-        retryAfter: Math.max(1, retryAfter)
+        retryAfter: Math.max(1, retryAfter),
       };
     }
     

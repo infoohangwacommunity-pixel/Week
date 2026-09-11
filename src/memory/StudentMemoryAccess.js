@@ -43,7 +43,7 @@ export class StudentMemoryAccess {
       if (!isValidConfidence(confidence)) throw new ConfidenceBoundsError(confidence, CONFIDENCE_BOUNDS, 'write');
       if (!isConfidenceValidForWrite(confidence)) throw new Error(`Confidence ${confidence} is below minimum for write`);
 
-      const existingQuery = `SELECT id, confidence, evidence_count, contradicted_count, status, fact_value FROM student_facts WHERE wax_id = $1 AND fact_key = $2 AND status = 'active' LIMIT 1`;
+      const existingQuery = 'SELECT id, confidence, evidence_count, contradicted_count, status, fact_value FROM student_facts WHERE wax_id = $1 AND fact_key = $2 AND status = \'active\' LIMIT 1';
       const existingResult = await client.query(existingQuery, [this.waxId, factKey]);
 
       if (existingResult.rows.length > 0) {
@@ -74,10 +74,10 @@ export class StudentMemoryAccess {
   async _reinforceFact(client, params) {
     const { factId, confidence, provenance, sessionId, aiRequestId, evidenceCount, currentConfidence } = params;
     const newConfidence = applyConfidenceTransition(currentConfidence, provenance, CHANGE_REASONS.REINFORCE);
-    const updateQuery = `UPDATE student_facts SET confidence = $1, evidence_count = $2, updated_at = NOW() WHERE id = $3 AND wax_id = $4 AND status = 'active' RETURNING *`;
+    const updateQuery = 'UPDATE student_facts SET confidence = $1, evidence_count = $2, updated_at = NOW() WHERE id = $3 AND wax_id = $4 AND status = \'active\' RETURNING *';
     const updateResult = await client.query(updateQuery, [newConfidence, evidenceCount, factId, this.waxId]);
     if (updateResult.rows.length === 0) throw new FactNotFoundError(factId, this.waxId);
-    const historyRecord = createConfidenceHistoryRecord({ factId, waxId: this.waxId, previousConfidence: currentConfidence, newConfidence, reason: CHANGE_REASONS.REINFORCE, evidence: `Confidence increased`, triggeredBySessionId: sessionId, triggeredByAiRequestId: aiRequestId });
+    const historyRecord = createConfidenceHistoryRecord({ factId, waxId: this.waxId, previousConfidence: currentConfidence, newConfidence, reason: CHANGE_REASONS.REINFORCE, evidence: 'Confidence increased', triggeredBySessionId: sessionId, triggeredByAiRequestId: aiRequestId });
     await client.query('INSERT INTO memory_confidence_history (fact_id, wax_id, previous_confidence, new_confidence, delta, change_reason, change_evidence, triggered_by_session_id, triggered_by_ai_request_id, triggered_by_job) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)', [historyRecord.fact_id, historyRecord.wax_id, historyRecord.previous_confidence, historyRecord.new_confidence, historyRecord.delta, historyRecord.change_reason, historyRecord.change_evidence, historyRecord.triggered_by_session_id, historyRecord.triggered_by_ai_request_id, historyRecord.triggered_by_job]);
     await client.query('COMMIT');
     return updateResult.rows[0];
@@ -114,7 +114,7 @@ export class StudentMemoryAccess {
   async _supersedeFact(client, params) {
     const { oldFact, newFactValue, displayText, provenance, factCategory, factKey, sessionId, messageId, aiRequestId } = params;
     const now = new Date();
-    await client.query(`UPDATE student_facts SET status = 'superseded', superseded_at = $1, valid_until = $1 WHERE id = $2`, [now, oldFact.id]);
+    await client.query('UPDATE student_facts SET status = \'superseded\', superseded_at = $1, valid_until = $1 WHERE id = $2', [now, oldFact.id]);
     const newFactQuery = 'INSERT INTO student_facts (wax_id, fact_key, fact_category, fact_value, display_text, provenance, source_session_id, source_message_id, source_ai_request_id, confidence, evidence_count, contradicted_count, status, valid_from) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *';
     const newFactResult = await client.query(newFactQuery, [this.waxId, factKey, factCategory, newFactValue, displayText, provenance, sessionId, messageId, aiRequestId, getInitialConfidence(provenance), 1, 0, 'active', now]);
     const newFact = newFactResult.rows[0];
@@ -137,7 +137,7 @@ export class StudentMemoryAccess {
 
   async retrieveFacts(params = {}) {
     const { strategy = RETRIEVAL_STRATEGIES.RECENCY, limit = 50, categories = null, minConfidence = CONFIDENCE_BOUNDS.MIN_FOR_RETRIEVAL } = params;
-    let query = `SELECT id, wax_id, fact_key, fact_category, fact_value, display_text, provenance, confidence, evidence_count, contradicted_count, status, valid_from, valid_until, created_at, updated_at FROM student_facts WHERE wax_id = $1 AND status = 'active'  AND confidence >= $2`;
+    let query = 'SELECT id, wax_id, fact_key, fact_category, fact_value, display_text, provenance, confidence, evidence_count, contradicted_count, status, valid_from, valid_until, created_at, updated_at FROM student_facts WHERE wax_id = $1 AND status = \'active\'  AND confidence >= $2';
     const paramsArray = [this.waxId, minConfidence];
     if (categories && categories.length > 0) { query += ' AND fact_category = ANY($3)'; paramsArray.push(categories); }
     if (strategy === RETRIEVAL_STRATEGIES.RECENCY) query += ' ORDER BY created_at DESC';
@@ -176,7 +176,7 @@ export class StudentMemoryAccess {
     try {
       await client.query('BEGIN');
       const cutoffDate = new Date(); cutoffDate.setMonth(cutoffDate.getMonth() - months);
-      const query = `UPDATE student_facts SET status = 'archived', updated_at = NOW() WHERE wax_id = $1 AND status = 'superseded' AND superseded_at < $2 RETURNING id`;
+      const query = 'UPDATE student_facts SET status = \'archived\', updated_at = NOW() WHERE wax_id = $1 AND status = \'superseded\' AND superseded_at < $2 RETURNING id';
       const result = await client.query(query, [this.waxId, cutoffDate]);
       await client.query('COMMIT');
       return result.rowCount;
@@ -188,7 +188,7 @@ export class StudentMemoryAccess {
   }
 
   async getUnresolvedContradictions() {
-    const query = `SELECT mc.*, fa.fact_key, fa.fact_value as fact_a_value, fa.display_text as fact_a_display, fa.confidence as fact_a_confidence, fb.fact_value as fact_b_value, fb.display_text as fact_b_display, fb.confidence as fact_b_confidence FROM memory_contradictions mc JOIN student_facts fa ON mc.fact_a_id = fa.id LEFT JOIN student_facts fb ON mc.fact_b_id = fb.id WHERE mc.wax_id = $1 AND mc.status = 'unresolved'`;
+    const query = 'SELECT mc.*, fa.fact_key, fa.fact_value as fact_a_value, fa.display_text as fact_a_display, fa.confidence as fact_a_confidence, fb.fact_value as fact_b_value, fb.display_text as fact_b_display, fb.confidence as fact_b_confidence FROM memory_contradictions mc JOIN student_facts fa ON mc.fact_a_id = fa.id LEFT JOIN student_facts fb ON mc.fact_b_id = fb.id WHERE mc.wax_id = $1 AND mc.status = \'unresolved\'';
     try {
       const pool = await this._getPool();
       const result = await pool.query(query, [this.waxId]);
