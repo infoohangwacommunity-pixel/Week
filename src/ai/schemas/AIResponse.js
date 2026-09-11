@@ -48,8 +48,13 @@ export const AIResponseSchema = z.object({
   // Usage (always persist this)
   usage: AIUsageSchema,
   
-  // Tool calls (when finishReason is TOOL_CALL)
-  toolCalls: z.array(ToolCallSchema).optional(),
+  // Tool calls (when finishReason is TOOL_CALL).
+  // Uses .nullish() instead of .optional() because provider adapters
+  // initialize toolCalls as null (not undefined) when there are no tool
+  // calls. .optional() only accepts undefined, not null — so a normal
+  // response with no tool calls would fail validation with
+  // "Expected array, received null".
+  toolCalls: z.array(ToolCallSchema).nullish(),
   
   // Tracing
   providerRequestId: z.string().optional(),

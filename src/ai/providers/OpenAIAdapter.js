@@ -205,8 +205,12 @@ export class OpenAIAdapter extends AIProviderInterface {
       total_tokens: 0,
     };
 
-    // Extract tool calls if present
-    let toolCalls = null;
+    // Extract tool calls if present.
+    // Initialize to undefined (NOT null) so that createAIResponse passes
+    // undefined to the schema. The schema uses .nullish() which accepts
+    // null, undefined, or array — but undefined is the cleanest signal
+    // that "no tool calls were present in this response".
+    let toolCalls;
     if (finishReason === FinishReason.TOOL_CALL && choice.message.tool_calls) {
       toolCalls = choice.message.tool_calls.map((tc) => {
         const name = tc.function?.name || tc.name;
@@ -302,6 +306,15 @@ export class OpenAIAdapter extends AIProviderInterface {
       switch (statusCode) {
         case 401:
           return createAuthenticationError(`Invalid ${this.name} API key`);
+        case 402:
+          // HTTP 402 Payment Required — the account has insufficient credits
+          // or billing is not set up. This is a permanent (non-retryable)
+          // account-level failure, NOT a malformed response.
+          return createAIError({
+            errorType: AIErrorTypes.AUTHENTICATION_ERROR,
+            providerMessage: `${this.name} payment required: ${error.message}`,
+            providerStatusCode: statusCode,
+          });
         case 404:
           return createAIError({
             errorType: AIErrorTypes.MODEL_UNAVAILABLE_ERROR,
