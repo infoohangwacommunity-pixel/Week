@@ -19,6 +19,32 @@ import { logger } from '../observability/index.js';
 import { MemoryRetriever } from '../memory/index.js';
 import { createLearningModule } from '../learning/index.js';
 import ToolRegistry, { ToolPermission } from '../tools/ToolRegistry.js';
+import { OnboardingHandler } from '../onboarding/OnboardingHandler.js';
+
+/**
+ * Marker prefix for the infrastructure-injected context evidence message.
+ *
+ * The evidence block is attached as a `user`-role message (provider-safe),
+ * but it is NOT a student turn. The marker lets the alternation validator,
+ * truncation logic, and the model itself distinguish it from real student
+ * messages. Keep in sync with _formatContextEvidence.
+ */
+export const CONTEXT_EVIDENCE_MARKER = '[WaxPrep context';
+
+/**
+ * Detect the infrastructure-injected context evidence message.
+ *
+ * Checks the explicit `_contextBlock` flag first, falling back to the text
+ * marker for messages that lost the flag (e.g. after serialization).
+ *
+ * @param {Object} msg - Message object
+ * @returns {boolean}
+ */
+export function isContextEvidenceBlock(msg) {
+  if (!msg) return false;
+  if (msg._contextBlock === true) return true;
+  return typeof msg.content === 'string' && msg.content.startsWith(CONTEXT_EVIDENCE_MARKER);
+}
 
 /**
  * Token budget slot constants (from research document)
@@ -70,6 +96,12 @@ export class ContextAssembler {
         currentMessage,
       });
 
+      // Resolve conversation state (Stage 21 onboarding + privacy consent).
+      // Per AGENTS.md §5 / WAXPREP_PHILOSOPHY §9, infrastructure exposes STATE
+      // only — the AI decides how (or whether) to act on it. Failures here are
+      // non-fatal: a missing state flag must never block a tutoring reply.
+      const conversationState = await this.resolveConversationState({ waxId, sessionId });
+
       // Get student model context (Stage 34)
       // this.db IS the pool (per workers/setup.js wiring); we don't need .pool.
       const learningModule = createLearningModule(this.db);
@@ -97,6 +129,7 @@ export class ContextAssembler {
         currentMessage,
         memories,
         studentModelContext,
+        conversationState,
       });
       const messages = messagesResult.messages;
 
@@ -131,12 +164,75 @@ export class ContextAssembler {
         tokenCount: contextWithBudget.tokens,
         memory: memories,
         studentModel: studentModelContext,
+        conversationState, // Expose resolved state for observability
         toolDefinitions, // Expose tools to AI orchestrator
       };
     } catch (error) {
       log.error({ error: error.message, ...trace }, 'Context assembly failed');
       throw error;
     }
+  }
+
+  /**
+   * Resolve the conversation state that infrastructure owes the AI.
+   *
+   * Returns a plain, serializable state object:
+   *   { onboardingState, hasConsent, consentStatus }
+   *
+   * - onboardingState: 'first_contact' | 'returning' | 'post_onboarding'
+   * - consentStatus:   'granted' | 'withdrawn' | 'pending' | null (never asked)
+   *
+   * Every lookup is individually non-fatal: if a query fails, the field is
+   * simply omitted and the AI works from the remaining context. Per the
+   * Newborn AI philosophy, this method exposes STATE — it never scripts how
+   * the AI should open the conversation.
+   */
+  async resolveConversationState({ waxId, sessionId }) {
+    const state = {};
+
+    // 1. Onboarding state (first contact detection).
+    try {
+      if (!this._onboardingHandler) {
+        this._onboardingHandler = new OnboardingHandler(this.db);
+      }
+      const isNew = await this._onboardingHandler.isNewStudent(waxId);
+      if (isNew) {
+        // Check whether a previous session already completed onboarding
+        // (student returning after a long break with cleared messages).
+        let complete = false;
+        try {
+          complete = await this._onboardingHandler.isOnboardingComplete(waxId, sessionId);
+        } catch {
+          complete = false;
+        }
+        state.onboardingState = complete ? 'post_onboarding' : 'first_contact';
+      }
+      // Returning students get no onboarding flag — the presence of history
+      // already tells the AI this is an ongoing relationship.
+    } catch (error) {
+      logger.warn({ error: error.message }, 'Failed to resolve onboarding state (non-fatal)');
+    }
+
+    // 2. Privacy consent state (latest general consent record).
+    try {
+      const consentResult = await this.db.query(
+        `SELECT status FROM consents
+         WHERE wax_id = $1 AND consent_type = 'general'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [waxId],
+      );
+      const consentStatus = consentResult.rows[0]?.status ?? null;
+      if (consentStatus) {
+        state.consentStatus = consentStatus;
+        state.hasConsent = consentStatus === 'granted';
+      }
+    } catch (error) {
+      // consents table may not exist in older deployments — non-fatal.
+      logger.warn({ error: error.message }, 'Failed to resolve consent state (non-fatal)');
+    }
+
+    return state;
   }
 
   /**
@@ -165,7 +261,7 @@ export class ContextAssembler {
 
     // Check 2: Non-empty messages
     const emptyMessages = messages.filter(m => 
-      (!m.content || (typeof m.content === 'string' && m.content.trim().length === 0))
+      (!m.content || (typeof m.content === 'string' && m.content.trim().length === 0)),
     );
     
     if (emptyMessages.length > 0) {
@@ -180,7 +276,7 @@ export class ContextAssembler {
     // Check 3: Maximum single message length
     const largeMessages = messages.filter(m => 
       typeof m.content === 'string' && 
-      this.estimateTokenCount([{ role: m.role, content: m.content }]) > 2000
+      this.estimateTokenCount([{ role: m.role, content: m.content }]) > 2000,
     );
 
     if (largeMessages.length > 0) {
@@ -204,6 +300,12 @@ export class ContextAssembler {
 
     for (let i = 1; i < messages.length; i++) {
       if (messages[i].role === messages[i - 1].role) {
+        // The injected context evidence block is deliberately a consecutive
+        // `user` turn (provider-safe injection of memory/student-model/state
+        // evidence). It is not a conversation violation.
+        if (isContextEvidenceBlock(messages[i]) || isContextEvidenceBlock(messages[i - 1])) {
+          continue;
+        }
         return {
           hasError: true,
           error: 'Consecutive same-role messages detected',
@@ -230,8 +332,18 @@ export class ContextAssembler {
     // Fetch recent messages for this student and session
     // Order: oldest first (for context building). Fetch BOTH inbound and
     // outbound so the AI sees its own prior responses, not just the student's.
-    // Filter 'received' out of inbound (that's the current message which we
-    // re-add explicitly) and 'failed' (don't surface failed AI turns).
+    //
+    // Inbound status handling (burst correctness):
+    // - 'received' messages are INCLUDED. When a student sends several
+    //   messages in a burst, the debounce window collapses them into ONE AI
+    //   job for the LAST message. The earlier burst messages stay 'received'
+    //   (their job was replaced) — excluding them made the AI ignore parts
+    //   of what the student said (a major contributor to the robotic,
+    //   non-sequitur replies this fix addresses). The worker absorbs them
+    //   into 'completed' after the combined reply succeeds.
+    // - 'processing' is excluded: that is the CURRENT message, which the
+    //   orchestrator passes explicitly as the final turn.
+    // - 'failed' is excluded (don't surface failed AI turns).
     const result = await this.db.query(
       `
       SELECT
@@ -248,14 +360,14 @@ export class ContextAssembler {
         AND deleted_at IS NULL
         AND message_type = 'text'
         AND (
-          (direction = 'inbound' AND processing_status NOT IN ('failed', 'received'))
+          (direction = 'inbound' AND processing_status NOT IN ('failed', 'processing'))
           OR
           (direction = 'outbound' AND processing_status NOT IN ('failed'))
         )
       ORDER BY created_at ASC
       LIMIT $3
       `,
-      [waxId, sessionId, maxHistoryMessages]
+      [waxId, sessionId, maxHistoryMessages],
     );
 
     return result.rows.map(row => ({
@@ -285,24 +397,25 @@ export class ContextAssembler {
    * @param {Object} [options.studentModelContext] - { formattedText, ... }
    * @returns {Object} - Messages object with messages array and metadata
    */
-  buildMessagesArray({ conversationHistory, currentMessage, memories = null, studentModelContext = null }) {
+  buildMessagesArray({ conversationHistory, currentMessage, memories = null, studentModelContext = null, conversationState = null }) {
     const messages = [];
     let historyTurnCount = 0;
     let currentMessageCount = 0;
 
-    // Inject memory + student-model evidence as a single user-role "context"
-    // message at the front. Per AGENTS.md §22 the AI may use this evidence
-    // but is free to reason about it (NOT forced to act on it).
-    //
-    // We use role: 'user' (not 'system') because OpenAI/Groq/Cerebras require
-    // the messages array to start with a user or system message — and the
-    // system message is already reserved for the WaxPrep identity prompt.
-    // The model treats this as context evidence, not as a system instruction.
-    const contextBlock = this._formatContextEvidence({ memories, studentModelContext });
+    // Inject conversation state + memory + student-model evidence as a single
+    // user-role "context" message at the front. Per AGENTS.md §22 the AI may
+    // use this evidence but is free to reason about it (NOT forced to act on
+    // it). We use role: 'user' (not 'system') because OpenAI/Groq/Cerebras
+    // require the messages array to start with a user or system message — and
+    // the system message is already reserved for the WaxPrep identity prompt.
+    // The message is marked with the CONTEXT_EVIDENCE_MARKER so validators and
+    // truncation logic can distinguish it from real student turns.
+    const contextBlock = this._formatContextEvidence({ memories, studentModelContext, conversationState });
     if (contextBlock) {
       messages.push({
         role: 'user',
         content: contextBlock,
+        _contextBlock: true,
       });
     }
 
@@ -345,21 +458,45 @@ export class ContextAssembler {
   }
 
   /**
-   * Format memory facts + student-model evidence into a single context block
-   * suitable for injection at the front of the messages array.
+   * Format conversation state + memory facts + student-model evidence into a
+   * single context block suitable for injection at the front of the messages
+   * array.
    *
-   * Returns null if there's no evidence to inject (so no spurious empty
+   * Returns null if there's nothing to inject (so no spurious empty
    * messages get sent to the provider).
    *
-   * Memory facts come from MemoryRetriever (which fetches via HybridSearch
-   * or recency). Student model context comes from
-   * StudentModelContextInterface.getStudentModelContext.
+   * Sections:
+   * - Conversation state (onboarding/first-contact, consent status) — STATE
+   *   only, per WAXPREP_PHILOSOPHY §9. Never scripted wording.
+   * - Memory facts from MemoryRetriever.
+   * - Student model context from StudentModelContextInterface.
    */
-  _formatContextEvidence({ memories = null, studentModelContext = null }) {
+  _formatContextEvidence({ memories = null, studentModelContext = null, conversationState = null }) {
     const parts = [];
 
-    // memories is typically { facts: [...], episodes: [...], ... } but the
-    // recency/hybrid path may also return a flat array — support both.
+    // 1. Conversation state (infrastructure-resolved facts about where the
+    //    conversation stands). The AI reasons over these; it is not told what
+    //    to say. This is the anti-scripted-behavior counterpart to prompt v2:
+    //    the AI finally KNOWS when it is talking to a first-time student.
+    const stateLines = [];
+    if (conversationState?.onboardingState === 'first_contact') {
+      stateLines.push(
+        'onboarding_state=first_contact (this is the student\'s very first message to WaxPrep — there is no prior conversation; respond to what they actually wrote, naturally)',
+      );
+    } else if (conversationState?.onboardingState === 'post_onboarding') {
+      stateLines.push('onboarding_state=post_onboarding (returning student whose onboarding completed earlier)');
+    }
+    if (conversationState?.consentStatus) {
+      stateLines.push(`consent_status=${conversationState.consentStatus}${conversationState.hasConsent ? '' : ' (no granted consent on record; the record_consent tool is available if the conversation calls for it)'}`);
+    }
+    if (stateLines.length > 0) {
+      parts.push(
+        '[Conversation state — infrastructure-resolved facts about this conversation. Use as background; do not reply to this block itself.]\n' +
+        stateLines.join('\n'),
+      );
+    }
+
+    // 2. Memory facts.
     let facts = [];
     if (Array.isArray(memories)) {
       facts = memories;
@@ -375,15 +512,16 @@ export class ContextAssembler {
         return `• ${f.display_text || '(empty fact)'}${conf}`;
       });
       parts.push(
-        `[Student memory evidence — use this to personalize the response, but reason about whether each fact is relevant to the current question.]\n` +
-        factLines.join('\n')
+        '[Student memory evidence — use this to personalize the response, but reason about whether each fact is relevant to the current question.]\n' +
+        factLines.join('\n'),
       );
     }
 
+    // 3. Student model evidence.
     if (studentModelContext && studentModelContext.formattedText) {
       parts.push(
-        `[Student model evidence — mastery estimates, misconceptions, and learning signals. Use these as evidence about the student's current state, NOT as instructions on what to teach.]\n` +
-        studentModelContext.formattedText
+        '[Student model evidence — mastery estimates, misconceptions, and learning signals. Use these as evidence about the student\'s current state, NOT as instructions on what to teach.]\n' +
+        studentModelContext.formattedText,
       );
     }
 
@@ -590,15 +728,28 @@ export class ContextAssembler {
       keepFromStart = i + 1;
     }
 
-    // Keep at least 1 complete turn if possible
-    if (turns.length - keepFromStart >= 1) {
-      keepFromStart = Math.max(0, turns.length - 1);
+    // The previous implementation overrode the computed fit with
+    // `keepFromStart = turns.length - 1`, silently discarding far more history
+    // than necessary. Keep the computed prefix instead; only if NOTHING fits,
+    // keep the most recent turn so the AI always has at least one exchange.
+    if (keepFromStart === 0 && turns.length > 0) {
+      keepFromStart = turns.length - 1;
     }
 
     // Flatten remaining turns
     const remainingTurns = turns.slice(keepFromStart);
     const truncated = remainingTurns.flat();
     removedTurns = keepFromStart;
+
+    // The infrastructure-injected context evidence block (memory, student
+    // model, conversation state) must survive truncation — it is not part of
+    // the turn history. Re-prepend it if it was dropped.
+    const contextBlocks = messageTokens.filter((m) => isContextEvidenceBlock(m));
+    for (const block of contextBlocks) {
+      if (!truncated.includes(block)) {
+        truncated.unshift(block);
+      }
+    }
 
     const finalTokens = truncated.reduce((sum, m) => sum + m.tokens, 0);
 

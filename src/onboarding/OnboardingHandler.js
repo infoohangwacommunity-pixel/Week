@@ -17,8 +17,6 @@
  * The AI is the intelligence. This provides the infrastructure for onboarding detection.
  */
 
-import config from '../config/index.js';
-
 /**
  * Onboarding states
  */
@@ -38,24 +36,27 @@ export class OnboardingHandler {
 
   /**
    * Check if student is new (first message)
-   * 
+   *
    * @param {string} waxId - Student identifier
    * @returns {Promise<boolean>} - Whether student is new
    */
   async isNewStudent(waxId) {
-    const pool = await this.db.createPool(config);
-    
-    const result = await pool.query(
+    // NOTE: `this.db` is the shared pg.Pool (per workers/setup.js wiring),
+    // NOT a db module. The previous implementation called
+    // `this.db.createPool(config)` which would throw on a Pool instance —
+    // one of the reasons this handler was never wired into the pipeline.
+    const result = await this.db.query(
       `
       SELECT COUNT(*) as message_count
       FROM messages
       WHERE wax_id = $1
         AND deleted_at IS NULL
       `,
-      [waxId]
+      [waxId],
     );
-    
-    return parseInt(result.rows[0].message_count, 10) === 0;
+
+    const count = parseInt(result.rows[0]?.message_count ?? '0', 10);
+    return count === 0;
   }
 
   /**
@@ -66,9 +67,7 @@ export class OnboardingHandler {
    * @returns {Promise<boolean>} - Whether onboarding is complete
    */
   async isOnboardingComplete(waxId, sessionId) {
-    const pool = await this.db.createPool(config);
-    
-    const result = await pool.query(
+    const result = await this.db.query(
       `
       SELECT 
         metadata->>'onboarding_complete' as is_complete
@@ -77,7 +76,7 @@ export class OnboardingHandler {
         AND id = $2
         AND ended_at IS NULL
       `,
-      [waxId, sessionId]
+      [waxId, sessionId],
     );
     
     if (result.rows.length === 0 || !result.rows[0].is_complete) {
@@ -95,10 +94,8 @@ export class OnboardingHandler {
    * @returns {Promise<void>}
    */
   async completeOnboarding(waxId, sessionId) {
-    const pool = await this.db.createPool(config);
-    
     // Store onboarding completion in metadata
-    await pool.query(
+    await this.db.query(
       `
       UPDATE sessions
       SET 
@@ -112,7 +109,7 @@ export class OnboardingHandler {
         AND id = $2
         AND ended_at IS NULL
       `,
-      [waxId, sessionId]
+      [waxId, sessionId],
     );
   }
 
